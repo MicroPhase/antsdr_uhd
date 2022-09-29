@@ -1,0 +1,22 @@
+#
+# RFNoC configuration
+#
+menu "RFNoC Support"
+
+config RFNOC
+	tristate "RFNOC Framework"
+	help
+	  Say Y here if you want support for configuring RFNOC based devices
+	  from the kernel.
+
+if RFNOC
+
+config RFNOC_CROSSBAR
+	tristate "RFNOC Crossbar"
+	depends on RFNOC
+	help
+	  RFNOC Crossbar allows configuring routing in RFNOC crossbars from
+          the kernel.
+endif
+
+endmenu

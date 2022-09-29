@@ -1,0 +1,265 @@
+--- zynq-e3xx.dtsi
++++ zynq-e3xx.dtsi
+@@ -0,0 +1,139 @@
++/*
++ *  Copyright (C) 2011 - 2014 Xilinx
++ *  Copyright (C) 2012 National Instruments Corp.
++ *  Copyright (C) 2018 Kurt Kiefer
++ *
++ * This software is licensed under the terms of the GNU General Public
++ * License version 2, as published by the Free Software Foundation, and
++ * may be copied, distributed, and modified under those terms.
++ *
++ * This program is distributed in the hope that it will be useful,
++ * but WITHOUT ANY WARRANTY; without even the implied warranty of
++ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
++ * GNU General Public License for more details.
++ */
++/dts-v1/;
++/include/ "zynq-7000.dtsi"
++
++/ {
++	aliases {
++		ethernet0 = &gem0;
++		i2c0 = &i2c0;
++		serial0 = &uart0;
++		serial1 = &uart1;
++		spi0 = &spi0;
++		spi1 = &spi1;
++	};
++
++	memory@0 {
++		device_type = "memory";
++		reg = <0x0 0x40000000>;
++	};
++
++	chosen {
++		bootargs = "console=ttyPS0,115200 earlyprintk";
++		stdout-path = "serial0:115200n8";
++	};
++
++	pps {
++		compatible = "pps-gpio";
++		gpios = <&gpio0 62 0>;
++	};
++
++	button {
++		compatible = "ettus,e3x0-button";
++		interrupt-parent = <&intc>;
++		interrupts = <0 30 1>, <0 31 1>;
++		interrupt-names = "press", "release";
++	};
++
++	usb_phy0: phy0@e0002000 {
++		compatible = "ulpi-phy";
++		#phy-cells = <0>;
++		reg = <0xe0002000 0x1000>;
++		view-port = <0x0170>;
++		drv-vbus;
++	};
++};
++
++&clkc {
++	ps-clk-frequency = <33333333>;
++	fclk-enable = <0xf>;
++};
++
++&gem0 {
++	status = "okay";
++	phy-mode = "rgmii-id";
++	phy-handle = <&phy0>;
++
++	nvmem-cells = <&eth0_addr>;
++	nvmem-cell-names = "mac-address";
++
++
++	phy0: phy@0 { /* Marvell 88e1512 */
++		reg = <0>;
++		compatible = "ethernet-phy-ieee802.3-c22";
++		reset-gpios = <&gpio0 11 1>;
++	};
++};
++
++&i2c0 {
++	status = "okay";
++	clock-frequency = <400000>;
++
++	ds1339: rtc@68 {
++		compatible = "dallas,ds1339";
++		reg = <0x68>;
++	};
++
++	adt7408: temp@19 {
++		compatible = "jedec,jc-42.4-temp";
++		reg = <0x19>;
++	};
++
++	mpu6050@69 {
++		compatible = "invensense,mpu6050";
++		reg = <0x69>;
++	};
++
++	eeprom@51 {
++		compatible = "at24,24c02";
++		reg = <0x51>;
++		#address-cells = <1>;
++		#size-cells = <0>;
++		read-only;
++		eth0_addr: eth-addr@4 {
++			reg = <0x4 0x6>;
++		};
++	};
++
++	eeprom@50 {
++		compatible = "at24,24c256";
++		reg = <0x50>;
++		#address-cells = <1>;
++		#size-cells = <0>;
++		read-only;
++	};
++};
++
++&sdhci0 {
++	status = "okay";
++};
++
++&spi0 {
++	status = "disabled";
++};
++
++&uart0 {
++	status = "okay";
++};
++
++&uart1 {
++	status = "okay";
++};
++
++&usb0 {
++	status = "okay";
++	dr_mode = "host";
++	usb-phy = <&usb_phy0>;
++};
+--- zynq-ni-e31x-sg1.dts
++++ zynq-ni-e31x-sg1.dts
+@@ -0,0 +1,20 @@
++/*
++ *  Copyright (C) 2011 - 2014 Xilinx
++ *  Copyright (C) 2012 National Instruments Corp.
++ *
++ * This software is licensed under the terms of the GNU General Public
++ * License version 2, as published by the Free Software Foundation, and
++ * may be copied, distributed, and modified under those terms.
++ *
++ * This program is distributed in the hope that it will be useful,
++ * but WITHOUT ANY WARRANTY; without even the implied warranty of
++ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
++ * GNU General Public License for more details.
++ */
++/dts-v1/;
++/include/ "zynq-e3xx.dtsi"
++
++/ {
++	model = "NI Ettus Research USRP E31x-1";
++	compatible = "ettus,e31x", "xlnx,zynq-7000";
++};
+--- zynq-ni-e31x-sg3.dts
++++ zynq-ni-e31x-sg3.dts
+@@ -0,0 +1,20 @@
++/*
++ *  Copyright (C) 2011 - 2014 Xilinx
++ *  Copyright (C) 2012 National Instruments Corp.
++ *
++ * This software is licensed under the terms of the GNU General Public
++ * License version 2, as published by the Free Software Foundation, and
++ * may be copied, distributed, and modified under those terms.
++ *
++ * This program is distributed in the hope that it will be useful,
++ * but WITHOUT ANY WARRANTY; without even the implied warranty of
++ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
++ * GNU General Public License for more details.
++ */
++/dts-v1/;
++/include/ "zynq-e3xx.dtsi"
++
++/ {
++	model = "NI Ettus Research USRP E31x-3";
++	compatible = "ettus,e31x", "xlnx,zynq-7000";
++};
+--- zynq-ni-e33x-sg1.dts
++++ zynq-ni-e33x-sg1.dts
+@@ -0,0 +1,20 @@
++/*
++ *  Copyright (C) 2011 - 2014 Xilinx
++ *  Copyright (C) 2012 National Instruments Corp.
++ *
++ * This software is licensed under the terms of the GNU General Public
++ * License version 2, as published by the Free Software Foundation, and
++ * may be copied, distributed, and modified under those terms.
++ *
++ * This program is distributed in the hope that it will be useful,
++ * but WITHOUT ANY WARRANTY; without even the implied warranty of
++ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
++ * GNU General Public License for more details.
++ */
++/dts-v1/;
++/include/ "zynq-e3xx.dtsi"
++
++/ {
++	model = "NI Ettus Research USRP E33x-1";
++	compatible = "ettus,e33x", "xlnx,zynq-7000";
++};
+--- zynq-ni-e33x-sg3.dts
++++ zynq-ni-e33x-sg3.dts
+@@ -0,0 +1,20 @@
++/*
++ *  Copyright (C) 2011 - 2014 Xilinx
++ *  Copyright (C) 2012 National Instruments Corp.
++ *
++ * This software is licensed under the terms of the GNU General Public
++ * License version 2, as published by the Free Software Foundation, and
++ * may be copied, distributed, and modified under those terms.
++ *
++ * This program is distributed in the hope that it will be useful,
++ * but WITHOUT ANY WARRANTY; without even the implied warranty of
++ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
++ * GNU General Public License for more details.
++ */
++/dts-v1/;
++/include/ "zynq-e3xx.dtsi"
++
++/ {
++	model = "NI Ettus Research USRP E33x-3";
++	compatible = "ettus,e33x", "xlnx,zynq-7000";
++};
+--- zynq-ni-e3xx-factory.dts
++++ zynq-ni-e3xx-factory.dts
+@@ -0,0 +1,28 @@
++/*
++ *  Copyright (C) 2011 - 2014 Xilinx
++ *  Copyright (C) 2012 National Instruments Corp.
++ *
++ * This software is licensed under the terms of the GNU General Public
++ * License version 2, as published by the Free Software Foundation, and
++ * may be copied, distributed, and modified under those terms.
++ *
++ * This program is distributed in the hope that it will be useful,
++ * but WITHOUT ANY WARRANTY; without even the implied warranty of
++ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
++ * GNU General Public License for more details.
++ */
++/dts-v1/;
++/include/ "zynq-e3xx.dtsi"
++
++/ {
++	model = "NI Ettus Research USRP E3xx-unknown";
++	compatible = "ettus,e31x", "xlnx,zynq-7000";
++
++	chosen {
++		/delete-property/ bootargs;
++	};
++};
++
++&adt7408 {
++	status = "disabled";
++};

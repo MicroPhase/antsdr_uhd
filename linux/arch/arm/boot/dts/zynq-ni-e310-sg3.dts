@@ -1,0 +1,122 @@
+/*
+ *  Copyright (C) 2011 - 2014 Xilinx
+ *  Copyright (C) 2012 National Instruments Corp.
+ *  Copyright (C) 2018 Kurt Kiefer
+ *
+ * This software is licensed under the terms of the GNU General Public
+ * License version 2, as published by the Free Software Foundation, and
+ * may be copied, distributed, and modified under those terms.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ */
+/dts-v1/;
+/include/ "zynq-7000.dtsi"
+
+/ {
+	aliases {
+		ethernet0 = &gem0;
+		i2c0 = &i2c0;
+		serial0 = &uart1;
+		serial1 = &uart0;
+		spi0 = &spi0;
+		spi1 = &spi1;
+	};
+
+	memory@0 {
+		device_type = "memory";
+		reg = <0x0 0x40000000>;
+	};
+
+	chosen {
+		bootargs = "console=ttyPS0,115200 earlyprintk";
+		stdout-path = "serial0:115200n8";
+	};
+
+	usb_phy0: phy0@e0002000 {
+		compatible = "ulpi-phy";
+		#phy-cells = <0>;
+		reg = <0xe0002000 0x1000>;
+		view-port = <0x0170>;
+		drv-vbus;
+	};
+};
+
+&clkc {
+	ps-clk-frequency = <33333333>;
+	fclk-enable = <0xf>;
+};
+
+&gem0 {
+	status = "okay";
+	phy-mode = "rgmii-id";
+	phy-handle = <&phy0>;
+
+	// nvmem-cells = <&eth0_addr>;
+	// nvmem-cell-names = "mac-address";
+
+
+	phy0: phy@0 { /* Marvell 88e1512 */
+		reg = <0>;
+		compatible = "ethernet-phy-ieee802.3-c22";
+		// reset-gpios = <&gpio0 11 1>;
+	};
+};
+
+&sdhci0 {
+	status = "okay";
+};
+
+&spi0 {
+	status = "disabled";
+};
+
+&uart0 {
+	status = "okay";
+};
+
+&uart1 {
+	status = "okay";
+};
+
+&usb0 {
+	status = "okay";
+	dr_mode = "host";
+	usb-phy = <&usb_phy0>;
+};
+
+
+&fpga_full {
+	nixge_internal: ethernet@40020000 {
+		#address-cells = <1>;
+		#size-cells = <1>;
+		compatible = "ni,xge-enet-3.00";
+		reg = <0x40020000 0x4000
+				0x40030000 0x2000>;
+		reg-names = "dma", "ctrl";
+		clocks = <&clkc 15>;
+		clock-names = "bus_clk";
+
+		interrupts = <0 52 4>, <0 53 4>;
+		interrupt-names = "rx", "tx";
+		interrupt-parent = <&intc>;
+		status = "okay";
+
+		phy-mode = "internal";
+		local-mac-address = <0x00 0x01 0x02 0x03 0x04 0x05>;
+
+		fixed-link {
+			speed = <1000>;
+			full-duplex;
+		};
+	};
+
+	uio@40032000 {
+		compatible = "usrp-uio";
+		reg = <0x40032000 0x2000>;
+		reg-names = "misc-enet-int-regs";
+		status = "okay";
+	};
+};
