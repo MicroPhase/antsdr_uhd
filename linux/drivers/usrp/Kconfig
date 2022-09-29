@@ -1,0 +1,30 @@
+#
+# USRP Framework configuration
+#
+
+menuconfig USRP
+       bool "USRP Framework"
+       help
+         Say Y here if you want support for the National Instruments
+         USRP Framework.
+
+if USRP
+
+config USRP_QUEUE
+       tristate "USRP DMA Queue"
+       depends on ARCH_ZYNQ && HAS_DMA
+       select DMADEVICES
+       select DMA_OF
+       select MEDIA_SUPPORT
+       select VIDEOBUF2_DMA_SG
+       select VIDEOBUF2_DMA_CONTIG
+       help
+         USRP queue support
+
+config USRP_QUEUE_TEST
+       tristate "USRP DMA Queue Test"
+       depends on ARCH_ZYNQ && USRP_QUEUE
+       help
+         USRP queue test creates /dev/tx-dma and /dev/rx-dma
+
+endif # USRP
