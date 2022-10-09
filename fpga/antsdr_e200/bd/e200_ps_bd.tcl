@@ -123,6 +123,7 @@ if { $bCheckIPs == 1 } {
    set list_check_ips "\ 
 xilinx.com:ip:axi_dma:7.1\
 user.org:user:deepfifo_module:1.0\
+user.org:user:get_dna:1.0\
 xilinx.com:ip:processing_system7:5.5\
 xilinx.com:ip:xlconcat:2.1\
 xilinx.com:ip:xlconstant:1.1\
@@ -304,7 +305,7 @@ proc create_root_design { parentCell } {
   set bus_clk [ create_bd_port -dir I -type clk bus_clk ]
   set_property -dict [ list \
    CONFIG.ASSOCIATED_BUSIF {m_axis_dma:s_axis_dma:arm_eth_rx:arm_eth_tx:h2c_fifo_pre:h2c_fifo_post} \
-   CONFIG.ASSOCIATED_RESET {bus_rstn:clk40_rstn} \
+   CONFIG.ASSOCIATED_RESET {bus_rstn} \
    CONFIG.FREQ_HZ {100000000} \
  ] $bus_clk
   set bus_rstn [ create_bd_port -dir I -type rst bus_rstn ]
@@ -353,7 +354,7 @@ proc create_root_design { parentCell } {
   set axi_interconnect_0 [ create_bd_cell -type ip -vlnv xilinx.com:ip:axi_interconnect:2.1 axi_interconnect_0 ]
   set_property -dict [ list \
    CONFIG.ENABLE_ADVANCED_OPTIONS {0} \
-   CONFIG.NUM_MI {4} \
+   CONFIG.NUM_MI {5} \
  ] $axi_interconnect_0
 
   # Create instance: axi_interconnect_1, and set properties
@@ -384,6 +385,9 @@ proc create_root_design { parentCell } {
    CONFIG.C_M_AXI_TARGET_SLAVE_BASE_ADDR {0x18000000} \
    CONFIG.log2_ram_size_addr {26} \
  ] $deepfifo_module_0
+
+  # Create instance: get_dna, and set properties
+  set get_dna [ create_bd_cell -type ip -vlnv user.org:user:get_dna:1.0 get_dna ]
 
   # Create instance: processing_system7_0, and set properties
   set processing_system7_0 [ create_bd_cell -type ip -vlnv xilinx.com:ip:processing_system7:5.5 processing_system7_0 ]
@@ -1223,6 +1227,7 @@ proc create_root_design { parentCell } {
   connect_bd_intf_net -intf_net axi_interconnect_0_M01_AXI [get_bd_intf_ports m_axi_net] [get_bd_intf_pins axi_interconnect_0/M01_AXI]
   connect_bd_intf_net -intf_net axi_interconnect_0_M02_AXI [get_bd_intf_pins axi_dma_eth_internal/S_AXI_LITE] [get_bd_intf_pins axi_interconnect_0/M02_AXI]
   connect_bd_intf_net -intf_net axi_interconnect_0_M03_AXI [get_bd_intf_ports m_axi_eth_internal] [get_bd_intf_pins axi_interconnect_0/M03_AXI]
+  connect_bd_intf_net -intf_net axi_interconnect_0_M04_AXI [get_bd_intf_pins axi_interconnect_0/M04_AXI] [get_bd_intf_pins get_dna/s00_axi]
   connect_bd_intf_net -intf_net axi_interconnect_1_M00_AXI [get_bd_intf_pins axi_interconnect_1/M00_AXI] [get_bd_intf_pins processing_system7_0/S_AXI_HP2]
   connect_bd_intf_net -intf_net axi_mem_intercon_M00_AXI [get_bd_intf_pins axi_mem_intercon/M00_AXI] [get_bd_intf_pins processing_system7_0/S_AXI_HP1]
   connect_bd_intf_net -intf_net axi_protocol_converter_hp0_M_AXI [get_bd_intf_pins axi_interconnect_hp0/M00_AXI] [get_bd_intf_pins processing_system7_0/S_AXI_HP0]
@@ -1240,8 +1245,8 @@ proc create_root_design { parentCell } {
   connect_bd_net -net axi_dma_0_s2mm_introut [get_bd_pins axi_dma_net/s2mm_introut] [get_bd_pins xlconcat_0/In0]
   connect_bd_net -net bus_clk [get_bd_ports bus_clk] [get_bd_pins axi_dma_eth_internal/m_axi_mm2s_aclk] [get_bd_pins axi_dma_eth_internal/m_axi_s2mm_aclk] [get_bd_pins axi_dma_eth_internal/m_axi_sg_aclk] [get_bd_pins axi_dma_net/m_axi_mm2s_aclk] [get_bd_pins axi_dma_net/m_axi_s2mm_aclk] [get_bd_pins axi_dma_net/m_axi_sg_aclk] [get_bd_pins axi_interconnect_1/ACLK] [get_bd_pins axi_interconnect_1/M00_ACLK] [get_bd_pins axi_interconnect_1/S00_ACLK] [get_bd_pins axi_interconnect_hp0/ACLK] [get_bd_pins axi_interconnect_hp0/M00_ACLK] [get_bd_pins axi_interconnect_hp0/S00_ACLK] [get_bd_pins axi_interconnect_hp0/S01_ACLK] [get_bd_pins axi_interconnect_hp0/S02_ACLK] [get_bd_pins axi_mem_intercon/ACLK] [get_bd_pins axi_mem_intercon/M00_ACLK] [get_bd_pins axi_mem_intercon/S00_ACLK] [get_bd_pins axi_mem_intercon/S01_ACLK] [get_bd_pins axi_mem_intercon/S02_ACLK] [get_bd_pins deepfifo_module_0/M_AXI_ACLK] [get_bd_pins deepfifo_module_0/fifo_clk] [get_bd_pins processing_system7_0/S_AXI_HP0_ACLK] [get_bd_pins processing_system7_0/S_AXI_HP1_ACLK] [get_bd_pins processing_system7_0/S_AXI_HP2_ACLK]
   connect_bd_net -net bus_rstn [get_bd_ports bus_rstn] [get_bd_pins axi_interconnect_1/ARESETN] [get_bd_pins axi_interconnect_1/M00_ARESETN] [get_bd_pins axi_interconnect_1/S00_ARESETN] [get_bd_pins axi_interconnect_hp0/ARESETN] [get_bd_pins axi_interconnect_hp0/M00_ARESETN] [get_bd_pins axi_interconnect_hp0/S00_ARESETN] [get_bd_pins axi_interconnect_hp0/S01_ARESETN] [get_bd_pins axi_interconnect_hp0/S02_ARESETN] [get_bd_pins axi_mem_intercon/ARESETN] [get_bd_pins axi_mem_intercon/M00_ARESETN] [get_bd_pins axi_mem_intercon/S00_ARESETN] [get_bd_pins axi_mem_intercon/S01_ARESETN] [get_bd_pins axi_mem_intercon/S02_ARESETN] [get_bd_pins deepfifo_module_0/M_AXI_ARESETN] [get_bd_pins deepfifo_module_0/sys_rst_n]
-  connect_bd_net -net clk40 [get_bd_ports clk40] [get_bd_pins axi_dma_eth_internal/s_axi_lite_aclk] [get_bd_pins axi_dma_net/s_axi_lite_aclk] [get_bd_pins axi_interconnect_0/ACLK] [get_bd_pins axi_interconnect_0/M00_ACLK] [get_bd_pins axi_interconnect_0/M01_ACLK] [get_bd_pins axi_interconnect_0/M02_ACLK] [get_bd_pins axi_interconnect_0/M03_ACLK] [get_bd_pins axi_interconnect_0/S00_ACLK] [get_bd_pins processing_system7_0/M_AXI_GP0_ACLK]
-  connect_bd_net -net clk40_rstn [get_bd_ports clk40_rstn] [get_bd_pins axi_dma_eth_internal/axi_resetn] [get_bd_pins axi_dma_net/axi_resetn] [get_bd_pins axi_interconnect_0/ARESETN] [get_bd_pins axi_interconnect_0/M00_ARESETN] [get_bd_pins axi_interconnect_0/M01_ARESETN] [get_bd_pins axi_interconnect_0/M02_ARESETN] [get_bd_pins axi_interconnect_0/M03_ARESETN] [get_bd_pins axi_interconnect_0/S00_ARESETN]
+  connect_bd_net -net clk40 [get_bd_ports clk40] [get_bd_pins axi_dma_eth_internal/s_axi_lite_aclk] [get_bd_pins axi_dma_net/s_axi_lite_aclk] [get_bd_pins axi_interconnect_0/ACLK] [get_bd_pins axi_interconnect_0/M00_ACLK] [get_bd_pins axi_interconnect_0/M01_ACLK] [get_bd_pins axi_interconnect_0/M02_ACLK] [get_bd_pins axi_interconnect_0/M03_ACLK] [get_bd_pins axi_interconnect_0/M04_ACLK] [get_bd_pins axi_interconnect_0/S00_ACLK] [get_bd_pins get_dna/s00_axi_aclk] [get_bd_pins processing_system7_0/M_AXI_GP0_ACLK]
+  connect_bd_net -net clk40_rstn [get_bd_ports clk40_rstn] [get_bd_pins axi_dma_eth_internal/axi_resetn] [get_bd_pins axi_dma_net/axi_resetn] [get_bd_pins axi_interconnect_0/ARESETN] [get_bd_pins axi_interconnect_0/M00_ARESETN] [get_bd_pins axi_interconnect_0/M01_ARESETN] [get_bd_pins axi_interconnect_0/M02_ARESETN] [get_bd_pins axi_interconnect_0/M03_ARESETN] [get_bd_pins axi_interconnect_0/M04_ARESETN] [get_bd_pins axi_interconnect_0/S00_ARESETN] [get_bd_pins get_dna/s00_axi_aresetn]
   connect_bd_net -net deepfifo_module_0_fifo_post_rd_count [get_bd_ports h2c_fifo_post_rd_count] [get_bd_pins deepfifo_module_0/fifo_post_rd_count]
   connect_bd_net -net deepfifo_module_0_fifo_pre_wr_count [get_bd_ports h2c_fifo_pre_wr_count] [get_bd_pins deepfifo_module_0/fifo_pre_wr_count]
   connect_bd_net -net dma_rx_irq [get_bd_pins axi_dma_eth_internal/s2mm_introut] [get_bd_pins xlconcat_0/In2]
@@ -1273,6 +1278,7 @@ proc create_root_design { parentCell } {
   create_bd_addr_seg -range 0x00040000 -offset 0xFFFC0000 [get_bd_addr_spaces deepfifo_module_0/M_AXI] [get_bd_addr_segs processing_system7_0/S_AXI_HP2/HP2_HIGH_OCM] SEG_processing_system7_0_HP2_HIGH_OCM
   create_bd_addr_seg -range 0x00004000 -offset 0x40000000 [get_bd_addr_spaces processing_system7_0/Data] [get_bd_addr_segs axi_dma_net/S_AXI_LITE/Reg] SEG_axi_dma_0_Reg
   create_bd_addr_seg -range 0x00004000 -offset 0x40020000 [get_bd_addr_spaces processing_system7_0/Data] [get_bd_addr_segs axi_dma_eth_internal/S_AXI_LITE/Reg] SEG_axi_dma_eth_internal_Reg
+  create_bd_addr_seg -range 0x00010000 -offset 0x43C00000 [get_bd_addr_spaces processing_system7_0/Data] [get_bd_addr_segs get_dna/s00_axi/reg0] SEG_get_dna_v1_0_0_reg0
   create_bd_addr_seg -range 0x00004000 -offset 0x40030000 [get_bd_addr_spaces processing_system7_0/Data] [get_bd_addr_segs m_axi_eth_internal/Reg] SEG_m_axi_eth_internal_Reg
   create_bd_addr_seg -range 0x00004000 -offset 0x40004000 [get_bd_addr_spaces processing_system7_0/Data] [get_bd_addr_segs m_axi_net/Reg] SEG_m_axi_net_Reg
 
@@ -1280,7 +1286,6 @@ proc create_root_design { parentCell } {
   # Restore current instance
   current_bd_instance $oldCurInst
 
-  validate_bd_design
   save_bd_design
 }
 # End of create_root_design()
@@ -1292,4 +1297,6 @@ proc create_root_design { parentCell } {
 
 create_root_design ""
 
+
+common::send_msg_id "BD_TCL-1000" "WARNING" "This Tcl script was generated from a block design that has not been validated. It is possible that design <$design_name> may result in errors during validation."
 
