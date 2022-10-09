@@ -42,9 +42,7 @@ iseconfig
 xlnx_auto*
 _ngo
 _xmsgs
-component.xml
 *.jou
-xgui
 *.runs
 *.srcs
 *.sdk
@@ -75,7 +73,6 @@ reconfig_mif
 *.pin
 *.os
 *webtalk*
-*.xml
 *.hw
 gui
 .timestamp_intel
