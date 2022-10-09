@@ -1,15 +1,48 @@
-///////////////////////////////////////////////////////////////////
+// --------------------------------------------------------------------------------
+// Copyright (c) 2019 ~ 2022 by MicroPhase Technologies Inc. 
+// --------------------------------------------------------------------------------
 //
-// Copyright 2018 Ettus Research, A National Instruments Company
+// Disclaimer:
 //
-// SPDX-License-Identifier: LGPL-3.0
+//  This VHDL/Verilog or C/C++ source code is intended as a design reference
+//  which illustrates how these types of functions can be implemented.
+//  It is the user's responsibility to verify their design for
+//  consistency and functionality through the use of formal
+//  verification methods.  MicroPhase provides no warranty regarding the use 
+//  or functionality of this code.
 //
-// Module: e320_mgt_io_core
-// Description:
-//   Encapsulates the PSC/PMA, the MAC layer and the control interface
-//   for 1GbE, 10GbE and Aurora
+// --------------------------------------------------------------------------------
+// --------------------------------------------------------------------------------
+//           
+//                     MicroPhase Technologies Inc
+//                     Shanghai, China
 //
-//////////////////////////////////////////////////////////////////////
+//                     web: http://www.microphase.cn/   
+//                     email: support@microphase.cn
+//
+// --------------------------------------------------------------------------------
+// --------------------------------------------------------------------------------
+//
+// Major Functions:	
+//  Control interface for 1gige rgmii ethernet interface. This file is based on 
+//  Ettus.
+//
+// --------------------------------------------------------------------------------
+// --------------------------------------------------------------------------------
+//
+// License: LGPL-3.0-or-later
+// 
+// --------------------------------------------------------------------------------
+// --------------------------------------------------------------------------------
+//
+// Revision History:
+// Date          By            Revision    Change Description
+//---------------------------------------------------------------------
+// 2022-10-09     Chaochen Wei  1.0         Original
+// 
+// 
+// --------------------------------------------------------------------------------
+// --------------------------------------------------------------------------------
 
 module e200_eth_if_core #(
   parameter        PROTOCOL     = "1GbE",    // Must be {10GbE, 1GbE, Aurora, Disabled}

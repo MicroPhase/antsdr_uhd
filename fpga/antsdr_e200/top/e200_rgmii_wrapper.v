@@ -1,16 +1,49 @@
-///////////////////////////////////////////////////////////////////
+// --------------------------------------------------------------------------------
+// Copyright (c) 2019 ~ 2022 by MicroPhase Technologies Inc. 
+// --------------------------------------------------------------------------------
 //
-// Copyright 2017 Ettus Research, A National Instruments Company
+// Disclaimer:
 //
-// SPDX-License-Identifier: LGPL-3.0-or-later
+//  This VHDL/Verilog or C/C++ source code is intended as a design reference
+//  which illustrates how these types of functions can be implemented.
+//  It is the user's responsibility to verify their design for
+//  consistency and functionality through the use of formal
+//  verification methods.  MicroPhase provides no warranty regarding the use 
+//  or functionality of this code.
 //
-// Module: n3xx_sfp_wrapper
-// Description:
-//   Reduces clutter at top level.
-//   - Aurora: wraps up sfpp_io, axil_regport and axi_dummy
-//   - 1/10G: wrapper around network interface
+// --------------------------------------------------------------------------------
+// --------------------------------------------------------------------------------
+//           
+//                     MicroPhase Technologies Inc
+//                     Shanghai, China
 //
-//////////////////////////////////////////////////////////////////////
+//                     web: http://www.microphase.cn/   
+//                     email: support@microphase.cn
+//
+// --------------------------------------------------------------------------------
+// --------------------------------------------------------------------------------
+//
+// Major Functions:	
+//  Reduces clutter at top level.
+//  - wrapper around network interface
+//  This file is based on Ettus
+//
+// --------------------------------------------------------------------------------
+// --------------------------------------------------------------------------------
+//
+// License: LGPL-3.0-or-later
+// 
+// --------------------------------------------------------------------------------
+// --------------------------------------------------------------------------------
+//
+// Revision History:
+// Date          By            Revision    Change Description
+//---------------------------------------------------------------------
+// 2022-10-09     Chaochen Wei  1.0         Original
+// 
+// 
+// --------------------------------------------------------------------------------
+// --------------------------------------------------------------------------------
 
 module e200_rgmii_wrapper #(
   parameter        PROTOCOL     = "1GbE",    // Must be {10GbE, 1GbE, Aurora, Disabled}

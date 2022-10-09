@@ -1,16 +1,49 @@
-// -----------------------------------------------------------------------------
-// Copyright (c) 2019-2022 All rights reserved
-// -----------------------------------------------------------------------------
-// Author 	 : WCC 1530604142@qq.com
-// File   	 : xport2user
-// Create 	 : 2022-08-31
-// Revise 	 : 2022-
-// Editor 	 : Vscode, tab size (4)
-// Functions : xport to user module, generate a key:value map, if this key_value
-//             is not store in the kv_map, then write this key:value into kv_map
-// 			   pass throgh the axis to downstream module, the tuser will be the 
-//             local udp port
-// -----------------------------------------------------------------------------
+// --------------------------------------------------------------------------------
+// Copyright (c) 2019 ~ 2022 by MicroPhase Technologies Inc. 
+// --------------------------------------------------------------------------------
+//
+// Disclaimer:
+//
+//  This VHDL/Verilog or C/C++ source code is intended as a design reference
+//  which illustrates how these types of functions can be implemented.
+//  It is the user's responsibility to verify their design for
+//  consistency and functionality through the use of formal
+//  verification methods.  MicroPhase provides no warranty regarding the use 
+//  or functionality of this code.
+//
+// --------------------------------------------------------------------------------
+// --------------------------------------------------------------------------------
+//           
+//                     MicroPhase Technologies Inc
+//                     Shanghai, China
+//
+//                     web: http://www.microphase.cn/   
+//                     email: support@microphase.cn
+//
+// --------------------------------------------------------------------------------
+// --------------------------------------------------------------------------------
+//
+// Major Functions:	
+//  xport to user module, generate a key:value map, if this key_value
+//  is not store in the kv_map, then write this key:value into kv_map.
+//  The tuser signal to the downstream module is the udp port.
+//
+// --------------------------------------------------------------------------------
+// --------------------------------------------------------------------------------
+//
+// License: LGPL-3.0-or-later
+// 
+// --------------------------------------------------------------------------------
+// --------------------------------------------------------------------------------
+//
+// Revision History:
+// Date          By            Revision    Change Description
+//---------------------------------------------------------------------
+// 2022-10-09     Chaochen Wei  1.0         Original
+// 
+// 
+// --------------------------------------------------------------------------------
+// --------------------------------------------------------------------------------
 module xport2user#(
     parameter        CHDR_W       = 64,
     parameter        VAL_W     = 112,
