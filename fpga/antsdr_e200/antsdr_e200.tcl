@@ -2,7 +2,7 @@
 create_project antsdr_e200 ./antsdr_e200 -part xc7z020clg400-2
 
 # add custom ip to the project
-set_property  ip_repo_paths  { ./ip/deep_fifo } [current_project]
+set_property  ip_repo_paths  { ./ip/deep_fifo ./ip/get_dna} [current_project]
 update_ip_catalog
 
 # create the block design
@@ -163,4 +163,4 @@ wait_on_run impl_1
 
 # copy hdf to .sdk folder
 file mkdir ./antsdr_e200/antsdr_e200.sdk
-file copy -force ./antsdr_e200/antsdr_e200.runs/impl_1/e200.sysdef ./antsdr_e200/antsdr_e200.sdk/e200.hdf
+file copy -force ./antsdr_e200/antsdr_e200.runs/impl_1/antsdr_e200.sysdef ./antsdr_e200/antsdr_e200.sdk/antsdr_e200.hdf
