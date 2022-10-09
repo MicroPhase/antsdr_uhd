@@ -1,3 +1,50 @@
+// --------------------------------------------------------------------------------
+// Copyright (c) 2019 ~ 2022 by MicroPhase Technologies Inc. 
+// --------------------------------------------------------------------------------
+//
+// Disclaimer:
+//
+//  This VHDL/Verilog or C/C++ source code is intended as a design reference
+//  which illustrates how these types of functions can be implemented.
+//  It is the user's responsibility to verify their design for
+//  consistency and functionality through the use of formal
+//  verification methods.  MicroPhase provides no warranty regarding the use 
+//  or functionality of this code.
+//
+// --------------------------------------------------------------------------------
+// --------------------------------------------------------------------------------
+//           
+//                     MicroPhase Technologies Inc
+//                     Shanghai, China
+//
+//                     web: http://www.microphase.cn/   
+//                     email: support@microphase.cn
+//
+// --------------------------------------------------------------------------------
+// --------------------------------------------------------------------------------
+//
+// Major Functions:	
+//  This module stores the route information of input stream to a kv_map, when
+//  local data want to be sent to remote, by lookup the kv_map, this module can
+//  get the route information, so that we can know which is ethernet remote address 
+//
+// --------------------------------------------------------------------------------
+// --------------------------------------------------------------------------------
+//
+// License: LGPL-3.0-or-later
+// 
+// --------------------------------------------------------------------------------
+// --------------------------------------------------------------------------------
+//
+// Revision History:
+// Date          By            Revision    Change Description
+//---------------------------------------------------------------------
+// 2022-10-09     Chaochen Wei  1.0         Original
+// 
+// 
+// --------------------------------------------------------------------------------
+// --------------------------------------------------------------------------------
+
 // -----------------------------------------------------------------------------
 // Copyright (c) 2019-2022 All rights reserved
 // -----------------------------------------------------------------------------

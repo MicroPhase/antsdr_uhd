@@ -1,67 +1,94 @@
-/////////////////////////////////////////////////////////////////////
+// --------------------------------------------------------------------------------
+// Copyright (c) 2019 ~ 2022 by MicroPhase Technologies Inc. 
+// --------------------------------------------------------------------------------
 //
-// Copyright 2018 Ettus Research, A National Instruments Company
+// Disclaimer:
 //
-// SPDX-License-Identifier: LGPL-3.0-or-later
+//  This VHDL/Verilog or C/C++ source code is intended as a design reference
+//  which illustrates how these types of functions can be implemented.
+//  It is the user's responsibility to verify their design for
+//  consistency and functionality through the use of formal
+//  verification methods.  MicroPhase provides no warranty regarding the use 
+//  or functionality of this code.
 //
-// Module: e320
-// Description:
-//   E320 Top Level
+/// --------------------------------------------------------------------------------
+// --------------------------------------------------------------------------------
+//           
+//                     MicroPhase Technologies Inc
+//                     Shanghai, China
 //
-/////////////////////////////////////////////////////////////////////
+//                     web: http://www.microphase.cn/   
+//                     email: support@microphase.cn
+//
+// --------------------------------------------------------------------------------
+// --------------------------------------------------------------------------------
+//
+// Major Functions:	
+//  This is the top level of antsdr e200 fpga project, which is
+//  compatible to usrp b205mini.
+//
+//
+// --------------------------------------------------------------------------------
+// --------------------------------------------------------------------------------
+//
+// License: LGPL-3.0-or-later
+// 
+// --------------------------------------------------------------------------------
+// --------------------------------------------------------------------------------
+//
+// Revision History:
+// Date          By            Revision    Change Description
+//---------------------------------------------------------------------
+// 2022-10-09     Chaochen Wei  1.0         Original
+// 
+// 
+// --------------------------------------------------------------------------------
+// --------------------------------------------------------------------------------
 
 `default_nettype none
 module antsdr_e200 (
-        // AD9364 - SPI Interface:
-        output wire 	 		CAT_SPI_EN,   // Enable
-        input  wire	 			CAT_SPI_DO,   // MISO
-        output wire 	 		CAT_SPI_DI,   // MOSI
-        output wire 	 		CAT_SPI_CLK,  // SPI Clk
-        // input   clk_50M     ,
+        // AD936x - SPI Interface:
+        output wire 	 		CAT_SPI_EN      ,  // Enable
+        input  wire	 			CAT_SPI_DO      ,  // MISO
+        output wire 	 		CAT_SPI_DI      ,  // MOSI
+        output wire 	 		CAT_SPI_CLK     ,  // SPI Clk
 
-        // AD9364 - Control:
-        output wire  	     	CAT_EN,
-        output wire  	     	CAT_EN_AGC,
-        output wire  	     	CAT_RESETn,
-        output wire  	     	CAT_TXnRX,
-        output wire [3:0] 		CAT_CTL_IN,  // These should be outputs
-        input  wire [7:0]	 	CAT_CTL_OUT, // MUST BE INPUT
+        // AD936x - Control:
+        output wire  	     	CAT_EN          ,
+        output wire  	     	CAT_EN_AGC      ,
+        output wire  	     	CAT_RESETn      ,
+        output wire  	     	CAT_TXnRX       ,
+        output wire [3:0] 		CAT_CTL_IN      , // These should be outputs
+        input  wire [7:0]	 	CAT_CTL_OUT     , // MUST BE INPUT
 
-        // AD9364 - Data:
-        input  wire	 			CAT_DCLK_P,  // Clock from AD9364 (RX)
-        output wire 	 		CAT_FBCLK_P, // Clock to AD9364 (TX)
-        output wire    			CAT_FBCLK_N,
-        input  wire [11:0]  	CAT_P0_D,  // RX data is on Port 0
-        output wire [11:0] 		CAT_P1_D,  // TX data is on Port 1
-        input  wire	 			CAT_RX_FR_P,
-        output wire 	 		CAT_TX_FR_P,
-        output wire    			CAT_TX_FR_N,
+        // AD936x - Data:
+        input  wire	 			CAT_DCLK_P      , // Clock from AD936x (RX)
+        output wire 	 		CAT_FBCLK_P     , // Clock to AD936x (TX)
+        output wire    			CAT_FBCLK_N     ,
+        input  wire [11:0]  	CAT_P0_D        , // RX data is on Port 0
+        output wire [11:0] 		CAT_P1_D        , // TX data is on Port 1
+        input  wire	 			CAT_RX_FR_P     ,
+        output wire 	 		CAT_TX_FR_P     ,
+        output wire    			CAT_TX_FR_N     ,
 
-        // AD9364 - Always on 40MHz clock:
-        input  wire	 			CLK_40MHz_FPGA,
-
-
-        // output wire       cLED_S1,   // pps signal led
+        // AD936x - Always on 40MHz clock:
+        input  wire	 			CLK_40MHz_FPGA  ,
 
         // GPIO
         // output wire       clk_sel,
 
         // PPS or 10 MHz (need to choose from SW)
-        input  wire       PPS_IN,
-        input  wire       CLKIN_10MHz,
-        output wire       CLKIN_10MHz_REQ,
+        input  wire             PPS_IN          ,
+        input  wire             CLKIN_10MHz     ,
+        output wire             CLKIN_10MHz_REQ ,
 
         // Clock disciplining / AD5662 controls
-        output wire       CLK_40M_DAC_nSYNC,
-        output wire       CLK_40M_DAC_SCLK,
-        output wire       CLK_40M_DAC_DIN,
+        output wire             CLK_40M_DAC_nSYNC,
+        output wire             CLK_40M_DAC_SCLK ,
+        output wire             CLK_40M_DAC_DIN ,
 
         // RF Hardware Control
-        // output wire       cFE_SEL_TRX_TX, // Select TX/RX port for Tx
-        // output wire       cFE_SEL_TRX_RX, // Select TX/RX port for Rx
-        // output wire       cFE_SEL_RX_TRX, // Select TX/RX port for Rx
-        // output wire       cFE_SEL_RX_RX2, // Select RX2 port for Rx
-        output wire       cTXDRV_PWEN   ,  // Tx PA enable
+        output wire             cTXDRV_PWEN     ,  // Tx PA enable
 
         // rgmii interface
         output  wire          	mdc 			,
@@ -75,36 +102,29 @@ module antsdr_e200 (
         output  wire          	eth_phy_rst_n  	,
 
         // PS Connections
-        inout   wire    [14:0]  PS_DDR3_addr,
-        inout   wire    [2:0]   PS_DDR3_ba,
-        inout   wire            PS_DDR3_cas_n,
-        inout   wire            PS_DDR3_ck_n,
-        inout   wire            PS_DDR3_ck_p,
-        inout   wire            PS_DDR3_cke,
-        inout   wire            PS_DDR3_cs_n,
-        inout   wire    [3:0]   PS_DDR3_dm,
-        inout   wire    [31:0]  PS_DDR3_dq,
-        inout   wire    [3:0]   PS_DDR3_dqs_n,
-        inout   wire    [3:0]   PS_DDR3_dqs_p,
-        inout   wire            PS_DDR3_odt,
-        inout   wire            PS_DDR3_ras_n,
-        inout   wire            PS_DDR3_reset_n,
-        inout   wire            PS_DDR3_we_n,
-        inout   wire            PS_MIO_ddr_vrn,
-        inout   wire            PS_MIO_ddr_vrp,
-        inout   wire    [53:0]  PS_MIO_mio,
-        inout   wire            PS_MIO_ps_clk,
-        inout   wire            PS_MIO_ps_porb,
+        inout   wire    [14:0]  PS_DDR3_addr    ,
+        inout   wire    [2:0]   PS_DDR3_ba      ,
+        inout   wire            PS_DDR3_cas_n   ,
+        inout   wire            PS_DDR3_ck_n    ,
+        inout   wire            PS_DDR3_ck_p    ,
+        inout   wire            PS_DDR3_cke     ,
+        inout   wire            PS_DDR3_cs_n    ,
+        inout   wire    [3:0]   PS_DDR3_dm      ,
+        inout   wire    [31:0]  PS_DDR3_dq      ,
+        inout   wire    [3:0]   PS_DDR3_dqs_n   ,
+        inout   wire    [3:0]   PS_DDR3_dqs_p   ,
+        inout   wire            PS_DDR3_odt     ,
+        inout   wire            PS_DDR3_ras_n   ,
+        inout   wire            PS_DDR3_reset_n ,
+        inout   wire            PS_DDR3_we_n    ,
+        inout   wire            PS_MIO_ddr_vrn  ,
+        inout   wire            PS_MIO_ddr_vrp  ,
+        inout   wire    [53:0]  PS_MIO_mio      ,
+        inout   wire            PS_MIO_ps_clk   ,
+        inout   wire            PS_MIO_ps_porb  ,
         inout   wire            PS_MIO_ps_srstb
 
-
-        // LEDs
-        // output wire LED_LINK1,
-        // output wire LED_ACT1
     );
-    
-    localparam CHDR_W         = 64;
-    localparam RFNOC_PROTOVER = { 8'd1, 8'd0 };
 
 
     parameter PROTOCOL = "1GbE";
@@ -116,10 +136,6 @@ module antsdr_e200 (
     // Constants
     localparam REG_AWIDTH = 14; // log2(0x4000)
     localparam REG_DWIDTH = 32;
-    localparam DB_GPIO_WIDTH = 32;
-    localparam FP_GPIO_OFFSET = 32; // Offset within ps_gpio_*
-    localparam FP_GPIO_WIDTH = 8;
-
     //If bus_clk freq ever changes, update this parameter accordingly.
     localparam BUS_CLK_RATE = 32'd200000000; //200 MHz bus_clk rate.
     localparam SFP_PORTNUM = 8'b0; // Only one SFP port
@@ -260,24 +276,9 @@ module antsdr_e200 (
     wire        e2v_tvalid;
     wire        e2v_tready;
 
-
-    // Vita to Ethernet
-    wire [63:0] toe_v2e_tdata;
-    wire [15:0] toe_v2e_tuser;
-    wire        toe_v2e_tlast;
-    wire        toe_v2e_tvalid;
-    wire        toe_v2e_tready;
-
-    // Ethernet to Vita
-    wire [63:0] toe_e2v_tdata;
-    wire [15:0] toe_e2v_tuser;
-    wire        toe_e2v_tlast;
-    wire        toe_e2v_tvalid;
-    wire        toe_e2v_tready;
-
     // Misc
-    wire [31:0] sfp_port_info;
-    wire        sfp_link_up;
+    wire [31:0] port_info;
+    wire        link_up;
     wire [15:0] device_id;
     wire        clocks_locked;
 
@@ -409,7 +410,7 @@ module antsdr_e200 (
     assign CLKIN_10MHz_REQ = ref_sel;
 
     ///////////////////////////////////////////////////////////////////////
-    // AD9364 I/O
+    // AD936x I/O
     ///////////////////////////////////////////////////////////////////////
     wire [31:0] rx_data;
     wire [31:0] tx_data;
@@ -450,23 +451,6 @@ module antsdr_e200 (
     );
 
 
-    // wire [255:0] probe0;
-    // assign  probe0 = {
-    //     tx_stb,
-    //     tx_i,
-    //     tx_q,
-    //     rx_stb,
-    //     rx_i,
-    //     rx_q
-
-    // };
-    // ila_v2e_e2v u_ila_antsdr_u205_io (
-    //     .clk(radio_clk), // input wire clk
-    
-    
-    //     .probe0(probe0) // input wire [255:0] probe0
-    // );
-
     assign {rx_data[19:16],rx_data[3:0]} = 8'h0;
     assign CAT_FBCLK_N = 1'b0;
     assign CAT_TX_FR_N = 1'b0;
@@ -477,7 +461,7 @@ module antsdr_e200 (
     wire mosi,  miso, sclk;
     wire [7:0]  sen;
 
-    // AD9364 Slave (it's the only slave for B205)
+    // AD936x Slave (it's the only slave for B205)
     assign CAT_SPI_EN   =  sen[0];
     assign CAT_SPI_DI   = ~sen[0] & mosi;
     assign CAT_SPI_CLK  = ~sen[0] & sclk;
@@ -503,14 +487,6 @@ module antsdr_e200 (
 
     wire cFE_SEL_RX_RX2, cFE_SEL_TRX_TX, cFE_SEL_RX_TRX, cFE_SEL_TRX_RX;
     assign {cTXDRV_PWEN, cFE_SEL_RX_RX2, cFE_SEL_TRX_TX, cFE_SEL_RX_TRX, cFE_SEL_TRX_RX} = fe_gpio_reg[7:3];
-    // assign cLED_TRX_R = ~fe_gpio_reg[0];
-    // assign cLED_TRX_G = ~fe_gpio_reg[1];
-    // assign cLED_TRX_B = 1'b1;
-    // assign cLED_RX2_R = 1'b1;
-    // assign cLED_RX2_G = ~fe_gpio_reg[2];
-    // assign cLED_RX2_B = 1'b1;
-    // assign cLED_S0 = ~ext_ref_locked;
-    // assign cLED_S1 = PPS_IN;
 
     wire [31:0] misc_outs;
     reg [31:0] misc_outs_r;
@@ -600,7 +576,7 @@ module antsdr_e200 (
 
 
     /////////////////////////////////////////////////////////////////////
-    //
+    //SFP_PORTNUM
     // SFP Wrapper: All protocols (1G/XG/AA) + eth_switch
     //
     /////////////////////////////////////////////////////////////////////
@@ -702,17 +678,17 @@ module antsdr_e200 (
         .c2e_tready(arm_eth_tx_tready_b),
 
         // Misc
-        .port_info(sfp_port_info),
+        .port_info(port_info),
         .device_id(device_id),
 
         // LED
-        .link_up(sfp_link_up),
+        .link_up(link_up),
         .activity()
     );
 
-    // assign ps_gpio_in[60] = ps_gpio_tri[60] ? sfp_link_up : ps_gpio_out[60];
+    // assign ps_gpio_in[60] = ps_gpio_tri[60] ? link_up : ps_gpio_out[60];
 
-    // assign LED_LINK1 = sfp_link_up;
+    // assign LED_LINK1 = link_up;
 
 
     axi_fifo_2clk #(.WIDTH(1+8+64), .SIZE(5)) eth_tx_fifo_2clk_i (
@@ -830,7 +806,7 @@ module antsdr_e200 (
     wire [63:0] gpio_t;
 
 
-    assign gpio_i[60] = sfp_link_up;
+    assign gpio_i[60] = link_up;
 
     e200_ps_bd_wrapper u_e200_ps_bd_wrapper(
         .FCLK_CLK0                  ( FCLK_CLK0                  ),
@@ -879,7 +855,6 @@ module antsdr_e200 (
         .gpio_i                     ( gpio_i                     ),
         .gpio_o                     ( gpio_o                     ),
         .gpio_t                     ( gpio_t                     ),
-
 
         .h2c_fifo_post_tdata        (  h2c_fifo_post_tdata       ),
         .h2c_fifo_post_tready       (  h2c_fifo_post_tready      ),
