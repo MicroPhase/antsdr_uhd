@@ -1,0 +1,23 @@
+/*
+ * Copyright 2015,2016 Ettus Research LLC
+ * Copyright 2018 Ettus Research, a National Instruments Company
+ *
+ * SPDX-License-Identifier: GPL-3.0-or-later
+ */
+
+#cmakedefine HAVE_LOG2
+
+/* Version macros */
+#define UHD_VERSION_MAJOR ${UHD_VERSION_MAJOR}
+#define UHD_VERSION_API   ${UHD_VERSION_API}
+#define UHD_VERSION_ABI   ${UHD_VERSION_ABI}
+#define UHD_VERSION_PATCH ${UHD_VERSION_PATCH}
+#cmakedefine ENABLE_USB
+#cmakedefine ENABLE_LIBERIO
+#ifndef UHD_VERSION
+#cmakedefine UHD_VERSION @UHD_VERSION_ADDED@
+#endif
+
+/* Config file path macros */
+#cmakedefine UHD_SYS_CONF_FILE "${UHD_SYS_CONF_FILE}"
+#cmakedefine UHD_USER_CONF_FILE "${UHD_USER_CONF_FILE}"
