@@ -21,7 +21,7 @@ VSUBDIRS = hdl buildroot linux u-boot-xlnx
 
 VERSION=$(shell git describe --abbrev=4 --dirty --always --tags)
 LATEST_TAG=$(shell git describe --abbrev=0 --tags)
-UBOOT_VERSION=$(shell echo -n "ANTSDR " && cd u-boot-xlnx && git describe --abbrev=0 --dirty --always --tags)
+UBOOT_VERSION=$(shell echo -n "e200 " && cd u-boot-xlnx && git describe --abbrev=0 --dirty --always --tags)
 HAVE_VIVADO= $(shell bash -c "source $(VIVADO_SETTINGS) > /dev/null 2>&1 && vivado -version > /dev/null 2>&1 && echo 1 || echo 0")
 
 ifeq (1, ${HAVE_VIVADO})
@@ -37,7 +37,7 @@ endif
 
 TARGET ?= e200
 
-all : build build/uImage build/device_tree.dtb
+all : build build/u-boot.elf build/uboot-env.txt build/uImage build/device_tree.dtb 
 
 #生成的所有可用文件均存在build文件夹
 build:
@@ -48,9 +48,20 @@ build:
 
 .PHONY: build
 
+## uboot编译
+u-boot-xlnx/u-boot u-boot-xlnx/tools/mkimage:
+	make -C u-boot-xlnx ARCH=arm zynq_$(TARGET)_defconfig
+	make -C u-boot-xlnx  -j $(NCORES) ARCH=arm CROSS_COMPILE=$(CROSS_COMPILE) UBOOTVERSION="$(UBOOT_VERSION)"
+
+.PHONY: u-boot-xlnx/u-boot
+
+build/u-boot.elf: u-boot-xlnx/u-boot | build
+	cp $< $@
+
 # ## uboot 默认环境
-# build/uboot-env.txt: u-boot-xlnx/u-boot | build
-# 	CROSS_COMPILE=$(CROSS_COMPILE) scripts/get_default_envs.sh > $@
+build/uboot-env.txt: u-boot-xlnx/u-boot | build
+	CROSS_COMPILE=$(CROSS_COMPILE) scripts/get_default_envs.sh > $@
+
 
 ## linux 镜像设备树生成
 linux/arch/arm/boot/uImage: 
@@ -76,3 +87,6 @@ clean-build:
 clean: clean-build
 	make -C linux ARCH=arm CROSS_COMPILE=$(CROSS_COMPILE) clean
 	make -C linux ARCH=arm CROSS_COMPILE=$(CROSS_COMPILE) distclean
+	make -C u-boot-xlnx ARCH=arm CROSS_COMPILE=$(CROSS_COMPILE) clean
+	make -C u-boot-xlnx ARCH=arm CROSS_COMPILE=$(CROSS_COMPILE) distclean
+
