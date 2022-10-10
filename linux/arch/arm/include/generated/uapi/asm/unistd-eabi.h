@@ -1,5 +1,0 @@
-#ifndef _UAPI_ASM_ARM_UNISTD_EABI_H
-#define _UAPI_ASM_ARM_UNISTD_EABI_H 1
-
-
-#endif /* _UAPI_ASM_ARM_UNISTD_EABI_H */
