@@ -1,0 +1,89 @@
+if TEGRA
+
+config TEGRA_COMMON
+	bool "Tegra common options"
+	select DM
+	select DM_ETH
+	select DM_GPIO
+	select DM_I2C
+	select DM_KEYBOARD
+	select DM_PCI
+	select DM_PCI_COMPAT
+	select DM_PWM
+	select DM_SERIAL
+	select DM_SPI
+	select DM_SPI_FLASH
+	select OF_CONTROL
+	select VIDCONSOLE_AS_LCD if DM_VIDEO
+
+config TEGRA_ARMV7_COMMON
+	bool "Tegra 32-bit common options"
+	select CPU_V7
+	select SPL
+	select SUPPORT_SPL
+	select TEGRA_COMMON
+	select TEGRA_GPIO
+
+config TEGRA_ARMV8_COMMON
+	bool "Tegra 64-bit common options"
+	select ARM64
+	select TEGRA_COMMON
+
+choice
+	prompt "Tegra SoC select"
+	optional
+
+config TEGRA20
+	bool "Tegra20 family"
+	select TEGRA_ARMV7_COMMON
+
+config TEGRA30
+	bool "Tegra30 family"
+	select TEGRA_ARMV7_COMMON
+
+config TEGRA114
+	bool "Tegra114 family"
+	select TEGRA_ARMV7_COMMON
+
+config TEGRA124
+	bool "Tegra124 family"
+	select TEGRA_ARMV7_COMMON
+
+config TEGRA210
+	bool "Tegra210 family"
+	select TEGRA_GPIO
+	select TEGRA_ARMV8_COMMON
+
+config TEGRA186
+	bool "Tegra186 family"
+	select DM_MAILBOX
+	select TEGRA186_GPIO
+	select TEGRA_ARMV8_COMMON
+	select TEGRA_HSP
+
+endchoice
+
+config TEGRA_DISCONNECT_UDC_ON_BOOT
+	bool "Disconnect USB device mode controller on boot"
+	default y
+	help
+	  When loading U-Boot into RAM over USB protocols using tools such as
+	  tegrarcm or L4T's exec-uboot.sh/tegraflash.py, Tegra's USB device
+	  mode controller is initialized and enumerated by the host PC running
+	  the tool. Unfortunately, these tools do not shut down the USB
+	  controller before executing the downloaded code, and so the host PC
+	  does not "de-enumerate" the USB device. This option shuts down the
+	  USB controller when U-Boot boots to avoid leaving a stale USB device
+	  present.
+
+config SYS_MALLOC_F_LEN
+	default 0x1800
+
+source "arch/arm/mach-tegra/tegra20/Kconfig"
+source "arch/arm/mach-tegra/tegra30/Kconfig"
+source "arch/arm/mach-tegra/tegra114/Kconfig"
+source "arch/arm/mach-tegra/tegra124/Kconfig"
+source "arch/arm/mach-tegra/tegra210/Kconfig"
+source "arch/arm/mach-tegra/tegra186/Kconfig"
+
+endif

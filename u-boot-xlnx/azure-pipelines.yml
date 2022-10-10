@@ -1,0 +1,20 @@
+
+pool:
+  vmImage: 'ubuntu-latest'
+
+jobs:
+- job: 'ADALM'
+  strategy:
+    matrix:
+      zynq_m2k_defconfig:
+        CI_DEFCONFIG: 'zynq_m2k_defconfig'
+        ARCH: arm
+      zynq_pluto_defconfig:
+        CI_DEFCONFIG: 'zynq_pluto_defconfig'
+        ARCH: arm
+  steps:
+  - checkout: self
+    fetchDepth: 1
+    clean: true
+  - script: ./ci/run_build.sh
+    displayName: "Build for $(CI_DEFCONFIG)"
