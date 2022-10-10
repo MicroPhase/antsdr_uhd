@@ -1,0 +1,416 @@
+#
+# Video configuration
+#
+
+menu "Graphics support"
+
+config DM_VIDEO
+	bool "Enable driver model support for LCD/video"
+	depends on DM
+	help
+	  This enables driver model for LCD and video devices. These support
+	  a bitmap display of various sizes and depths which can be drawn on
+	  to display a command-line console or splash screen. Enabling this
+	  option compiles in the video uclass and routes all LCD/video access
+	  through this.
+
+config VIDEO_BPP8
+	bool "Support 8-bit-per-pixel displays"
+	depends on DM_VIDEO
+	default y if DM_VIDEO
+	help
+	  Support drawing text and bitmaps onto a 8-bit-per-pixel display.
+	  Enabling this will include code to support this display. Without
+	  this option, such displays will not be supported and console output
+	  will be empty.
+
+config VIDEO_BPP16
+	bool "Support 16-bit-per-pixel displays"
+	depends on DM_VIDEO
+	default y if DM_VIDEO
+	help
+	  Support drawing text and bitmaps onto a 16-bit-per-pixel display.
+	  Enabling this will include code to support this display. Without
+	  this option, such displays will not be supported and console output
+	  will be empty.
+
+config VIDEO_BPP32
+	bool "Support 32-bit-per-pixel displays"
+	depends on DM_VIDEO
+	default y if DM_VIDEO
+	help
+	  Support drawing text and bitmaps onto a 32-bit-per-pixel display.
+	  Enabling this will include code to support this display. Without
+	  this option, such displays will not be supported and console output
+	  will be empty.
+
+config CONSOLE_NORMAL
+	bool "Support a simple text console"
+	depends on DM_VIDEO
+	default y if DM_VIDEO
+	help
+	  Support drawing text on the frame buffer console so that it can be
+	  used as a console. Rotation is not supported by this driver (see
+	  CONFIG_CONSOLE_ROTATION for that). A built-in 8x16 font is used
+	  for the display.
+
+config CONSOLE_ROTATION
+	bool "Support rotated displays"
+	depends on DM_VIDEO
+	help
+	  Sometimes, for example if the display is mounted in portrait
+	  mode or even if it's mounted landscape but rotated by 180degree,
+	  we need to rotate our content of the display relative to the
+	  framebuffer, so that user can read the messages which are
+	  printed out. Enable this option to include a text driver which can
+	  support this. The rotation is set by the 'rot' parameter in
+	  struct video_priv: 0=unrotated, 1=90 degrees clockwise, 2=180
+	  degrees, 3=270 degrees.
+
+config CONSOLE_TRUETYPE
+	bool "Support a console that uses TrueType fonts"
+	depends on DM_VIDEO
+	help
+	  TrueTrype fonts can provide outline-drawing capability rather than
+	  needing to provide a bitmap for each font and size that is needed.
+	  With this option you can adjust the text size and use a variety of
+	  fonts. Note that this is noticeably slower than with normal console.
+
+config CONSOLE_TRUETYPE_SIZE
+	int "TrueType font size"
+	depends on CONSOLE_TRUETYPE
+	default 18
+	help
+	  This sets the font size for the console. The size is measured in
+	  pixels and is the nominal height of a character. Note that fonts
+	  are commonly measured in 'points', being 1/72 inch (about 3.52mm).
+	  However that measurement depends on the size of your display and
+	  there is no standard display density. At present there is not a
+	  method to select the display's physical size, which would allow
+	  U-Boot to calculate the correct font size.
+
+source "drivers/video/fonts/Kconfig"
+
+config VIDCONSOLE_AS_LCD
+	bool "Use 'vidconsole' when 'lcd' is seen in stdout"
+	depends on DM_VIDEO
+	help
+	  This is a work-around for boards which have 'lcd' in their stdout
+	  environment variable, but have moved to use driver model for video.
+	  In this case the console will no-longer work. While it is possible
+	  to update the environment, the breakage may be confusing for users.
+	  This option will be removed around the end of 2016.
+
+config VIDEO_VESA
+	bool "Enable VESA video driver support"
+	default n
+	help
+	  Turn on this option to enable a very simple driver which uses vesa
+	  to discover the video mode and then provides a frame buffer for use
+	  by U-Boot. This can in principle be used with any platform that
+	  supports PCI and video cards that support VESA BIOS Extension (VBE).
+
+config FRAMEBUFFER_SET_VESA_MODE
+	bool "Set framebuffer graphics resolution"
+	depends on VIDEO_VESA || VIDEO_BROADWELL_IGD
+	help
+	  Set VESA/native framebuffer mode (needed for bootsplash and graphical
+	  framebuffer console)
+
+choice
+	prompt "framebuffer graphics resolution"
+	default FRAMEBUFFER_VESA_MODE_117
+	depends on FRAMEBUFFER_SET_VESA_MODE
+	help
+	  This option sets the resolution used for the U-Boot framebuffer (and
+	  bootsplash screen).
+
+config FRAMEBUFFER_VESA_MODE_100
+	bool "640x400 256-color"
+
+config FRAMEBUFFER_VESA_MODE_101
+	bool "640x480 256-color"
+
+config FRAMEBUFFER_VESA_MODE_102
+	bool "800x600 16-color"
+
+config FRAMEBUFFER_VESA_MODE_103
+	bool "800x600 256-color"
+
+config FRAMEBUFFER_VESA_MODE_104
+	bool "1024x768 16-color"
+
+config FRAMEBUFFER_VESA_MODE_105
+	bool "1024x768 256-color"
+
+config FRAMEBUFFER_VESA_MODE_106
+	bool "1280x1024 16-color"
+
+config FRAMEBUFFER_VESA_MODE_107
+	bool "1280x1024 256-color"
+
+config FRAMEBUFFER_VESA_MODE_108
+	bool "80x60 text"
+
+config FRAMEBUFFER_VESA_MODE_109
+	bool "132x25 text"
+
+config FRAMEBUFFER_VESA_MODE_10A
+	bool "132x43 text"
+
+config FRAMEBUFFER_VESA_MODE_10B
+	bool "132x50 text"
+
+config FRAMEBUFFER_VESA_MODE_10C
+	bool "132x60 text"
+
+config FRAMEBUFFER_VESA_MODE_10D
+	bool "320x200 32k-color (1:5:5:5)"
+
+config FRAMEBUFFER_VESA_MODE_10E
+	bool "320x200 64k-color (5:6:5)"
+
+config FRAMEBUFFER_VESA_MODE_10F
+	bool "320x200 16.8M-color (8:8:8)"
+
+config FRAMEBUFFER_VESA_MODE_110
+	bool "640x480 32k-color (1:5:5:5)"
+
+config FRAMEBUFFER_VESA_MODE_111
+	bool "640x480 64k-color (5:6:5)"
+
+config FRAMEBUFFER_VESA_MODE_112
+	bool "640x480 16.8M-color (8:8:8)"
+
+config FRAMEBUFFER_VESA_MODE_113
+	bool "800x600 32k-color (1:5:5:5)"
+
+config FRAMEBUFFER_VESA_MODE_114
+	bool "800x600 64k-color (5:6:5)"
+
+config FRAMEBUFFER_VESA_MODE_115
+	bool "800x600 16.8M-color (8:8:8)"
+
+config FRAMEBUFFER_VESA_MODE_116
+	bool "1024x768 32k-color (1:5:5:5)"
+
+config FRAMEBUFFER_VESA_MODE_117
+	bool "1024x768 64k-color (5:6:5)"
+
+config FRAMEBUFFER_VESA_MODE_118
+	bool "1024x768 16.8M-color (8:8:8)"
+
+config FRAMEBUFFER_VESA_MODE_119
+	bool "1280x1024 32k-color (1:5:5:5)"
+
+config FRAMEBUFFER_VESA_MODE_11A
+	bool "1280x1024 64k-color (5:6:5)"
+
+config FRAMEBUFFER_VESA_MODE_11B
+	bool "1280x1024 16.8M-color (8:8:8)"
+
+config FRAMEBUFFER_VESA_MODE_USER
+	bool "Manually select VESA mode"
+
+endchoice
+
+# Map the config names to an integer (KB).
+config FRAMEBUFFER_VESA_MODE
+	prompt "VESA mode" if FRAMEBUFFER_VESA_MODE_USER
+	hex
+	default 0x100 if FRAMEBUFFER_VESA_MODE_100
+	default 0x101 if FRAMEBUFFER_VESA_MODE_101
+	default 0x102 if FRAMEBUFFER_VESA_MODE_102
+	default 0x103 if FRAMEBUFFER_VESA_MODE_103
+	default 0x104 if FRAMEBUFFER_VESA_MODE_104
+	default 0x105 if FRAMEBUFFER_VESA_MODE_105
+	default 0x106 if FRAMEBUFFER_VESA_MODE_106
+	default 0x107 if FRAMEBUFFER_VESA_MODE_107
+	default 0x108 if FRAMEBUFFER_VESA_MODE_108
+	default 0x109 if FRAMEBUFFER_VESA_MODE_109
+	default 0x10A if FRAMEBUFFER_VESA_MODE_10A
+	default 0x10B if FRAMEBUFFER_VESA_MODE_10B
+	default 0x10C if FRAMEBUFFER_VESA_MODE_10C
+	default 0x10D if FRAMEBUFFER_VESA_MODE_10D
+	default 0x10E if FRAMEBUFFER_VESA_MODE_10E
+	default 0x10F if FRAMEBUFFER_VESA_MODE_10F
+	default 0x110 if FRAMEBUFFER_VESA_MODE_110
+	default 0x111 if FRAMEBUFFER_VESA_MODE_111
+	default 0x112 if FRAMEBUFFER_VESA_MODE_112
+	default 0x113 if FRAMEBUFFER_VESA_MODE_113
+	default 0x114 if FRAMEBUFFER_VESA_MODE_114
+	default 0x115 if FRAMEBUFFER_VESA_MODE_115
+	default 0x116 if FRAMEBUFFER_VESA_MODE_116
+	default 0x117 if FRAMEBUFFER_VESA_MODE_117
+	default 0x118 if FRAMEBUFFER_VESA_MODE_118
+	default 0x119 if FRAMEBUFFER_VESA_MODE_119
+	default 0x11A if FRAMEBUFFER_VESA_MODE_11A
+	default 0x11B if FRAMEBUFFER_VESA_MODE_11B
+	default 0x117 if FRAMEBUFFER_VESA_MODE_USER
+
+config VIDEO_LCD_ANX9804
+	bool "ANX9804 bridge chip"
+	default n
+	---help---
+	Support for the ANX9804 bridge chip, which can take pixel data coming
+	from a parallel LCD interface and translate it on the fy into a DP
+	interface for driving eDP TFT displays. It uses I2C for configuration.
+
+config VIDEO_LCD_SSD2828
+	bool "SSD2828 bridge chip"
+	default n
+	---help---
+	Support for the SSD2828 bridge chip, which can take pixel data coming
+	from a parallel LCD interface and translate it on the fly into MIPI DSI
+	interface for driving a MIPI compatible LCD panel. It uses SPI for
+	configuration.
+
+config VIDEO_LCD_SSD2828_TX_CLK
+	int "SSD2828 TX_CLK frequency (in MHz)"
+	depends on VIDEO_LCD_SSD2828
+	default 0
+	---help---
+	The frequency of the crystal, which is clocking SSD2828. It may be
+	anything in the 8MHz-30MHz range and the exact value should be
+	retrieved from the board schematics. Or in the case of Allwinner
+	hardware, it can be usually found as 'lcd_xtal_freq' variable in
+	FEX files. It can be also set to 0 for selecting PCLK from the
+	parallel LCD interface instead of TX_CLK as the PLL clock source.
+
+config VIDEO_LCD_SSD2828_RESET
+	string "RESET pin of SSD2828"
+	depends on VIDEO_LCD_SSD2828
+	default ""
+	---help---
+	The reset pin of SSD2828 chip. This takes a string in the format
+	understood by 'name_to_gpio' function, e.g. PH1 for pin 1 of port H.
+
+config VIDEO_LCD_HITACHI_TX18D42VM
+	bool "Hitachi tx18d42vm LVDS LCD panel support"
+	depends on VIDEO
+	default n
+	---help---
+	Support for Hitachi tx18d42vm LVDS LCD panels, these panels have a
+	lcd controller which needs to be initialized over SPI, once that is
+	done they work like a regular LVDS panel.
+
+config VIDEO_LCD_SPI_CS
+	string "SPI CS pin for LCD related config job"
+	depends on VIDEO_LCD_SSD2828 || VIDEO_LCD_HITACHI_TX18D42VM
+	default ""
+	---help---
+	This is one of the SPI communication pins, involved in setting up a
+	working LCD configuration. The exact role of SPI may differ for
+	different hardware setups. The option takes a string in the format
+	understood by 'name_to_gpio' function, e.g. PH1 for pin 1 of port H.
+
+config VIDEO_LCD_SPI_SCLK
+	string "SPI SCLK pin for LCD related config job"
+	depends on VIDEO_LCD_SSD2828 || VIDEO_LCD_HITACHI_TX18D42VM
+	default ""
+	---help---
+	This is one of the SPI communication pins, involved in setting up a
+	working LCD configuration. The exact role of SPI may differ for
+	different hardware setups. The option takes a string in the format
+	understood by 'name_to_gpio' function, e.g. PH1 for pin 1 of port H.
+
+config VIDEO_LCD_SPI_MOSI
+	string "SPI MOSI pin for LCD related config job"
+	depends on VIDEO_LCD_SSD2828 || VIDEO_LCD_HITACHI_TX18D42VM
+	default ""
+	---help---
+	This is one of the SPI communication pins, involved in setting up a
+	working LCD configuration. The exact role of SPI may differ for
+	different hardware setups. The option takes a string in the format
+	understood by 'name_to_gpio' function, e.g. PH1 for pin 1 of port H.
+
+config VIDEO_LCD_SPI_MISO
+	string "SPI MISO pin for LCD related config job (optional)"
+	depends on VIDEO_LCD_SSD2828
+	default ""
+	---help---
+	This is one of the SPI communication pins, involved in setting up a
+	working LCD configuration. The exact role of SPI may differ for
+	different hardware setups. If wired up, this pin may provide additional
+	useful functionality. Such as bi-directional communication with the
+	hardware and LCD panel id retrieval (if the panel can report it). The
+	option takes a string in the format understood by 'name_to_gpio'
+	function, e.g. PH1 for pin 1 of port H.
+
+config VIDEO_MVEBU
+	bool "Armada XP LCD controller"
+	default n
+	---help---
+	Support for the LCD controller integrated in the Marvell
+	Armada XP SoC.
+
+config I2C_EDID
+	bool "Enable EDID library"
+	depends on DM_I2C
+	default n
+	help
+	   This enables library for accessing EDID data from an LCD panel.
+
+config DISPLAY
+	bool "Enable Display support"
+	depends on DM
+	default n
+	select I2C_EDID
+	help
+	   This supports drivers that provide a display, such as eDP (Embedded
+	   DisplayPort) and HDMI (High Definition Multimedia Interface).
+	   The devices provide a simple interface to start up the display,
+	   read display information and enable it.
+
+config VIDEO_BROADWELL_IGD
+	bool "Enable Intel Broadwell integrated graphics device"
+	depends on X86
+	help
+	  This enabled support for integrated graphics on Intel broadwell
+	  devices. Initialisation is mostly performed by a VGA boot ROM, with
+	  some setup handled by U-Boot itself. The graphics adaptor works as
+	  a VESA device and supports LCD panels, eDP and LVDS outputs.
+	  Configuration of most aspects of device operation is performed using
+	  a special tool which configures the VGA ROM, but the graphics
+	  resolution can be selected in U-Boot.
+
+config VIDEO_ROCKCHIP
+	bool "Enable Rockchip video support"
+	depends on DM_VIDEO
+	help
+	   Rockchip SoCs provide video output capabilities for High-Definition
+	   Multimedia Interface (HDMI), Low-voltage Differential Signalling
+	   (LVDS), embedded DisplayPort (eDP) and Display Serial Interface
+	   (DSI). This driver supports the on-chip video output device, and
+	   targets the Rockchip RK3288.
+
+config VIDEO_SANDBOX_SDL
+	bool "Enable sandbox video console using SDL"
+	depends on SANDBOX
+	help
+	  When using sandbox you can enable an emulated LCD display which
+	  appears as an SDL (Simple DirectMedia Layer) window. This is a
+	  console device and can display stdout output. Within U-Boot is is
+	  a normal bitmap display and can display images as well as text.
+
+config VIDEO_TEGRA20
+	bool "Enable LCD support on Tegra20"
+	depends on OF_CONTROL
+	help
+	   Tegra20 supports video output to an attached LCD panel as well as
+	   other options such as HDMI. Only the LCD is supported in U-Boot.
+	   This option enables this support which can be used on devices which
+	   have an LCD display connected.
+
+config VIDEO_TEGRA124
+	bool "Enable video support on Tegra124"
+	depends on DM_VIDEO
+	help
+	   Tegra124 supports many video output options including eDP and
+	   HDMI. At present only eDP is supported by U-Boot. This option
+	   enables this support which can be used on devices which
+	   have an eDP display connected.
+
+source "drivers/video/bridge/Kconfig"
+
+endmenu
