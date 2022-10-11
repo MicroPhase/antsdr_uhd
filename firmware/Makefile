@@ -104,7 +104,14 @@ build/boot.bif : build/u-boot.elf build/fsbl.elf
 build/BOOT.bin : build/boot.bif
 	bash -c "source $(VIVADO_SETTINGS) && bootgen -image build/boot.bif -o i build/BOOT.bin"
 
-
+SDIMGDIR=$(CURDIR)/build_sdimg
+sdimg: build/
+	mkdir $(SDIMGDIR)
+	cp build/BOOT.bin $(SDIMGDIR)/
+	cp build/antsdr_$(TARGET).bit $(SDIMGDIR)/
+	cp build/uImage $(SDIMGDIR)/
+	cp build/uboot-env.txt $(SDIMGDIR)/uEnv.txt
+	cp build/device_tree.dtb $(SDIMGDIR)/devicetree.dtb
 
 clean-build:
 	rm -rf build

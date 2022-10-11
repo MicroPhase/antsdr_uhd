@@ -278,13 +278,12 @@
 			"run uenvcmd; " \
 		"fi\0" \
 	"sdboot=if mmcinfo; then " \
-			"run uenvboot; " \
 			"echo Copying Linux from SD to RAM... && " \
 			"fatload mmc 0 ${loadbit_addr} ${bitstream_image} && " \
 			"fpga loadb 0 ${loadbit_addr} ${bitstream_size}  &&" \
 			"load mmc 0 ${fit_load_address} ${kernel_image} && " \
 			"load mmc 0 ${devicetree_load_address} ${devicetree_image} && " \
-			"bootm ${fit_load_address} ${devicetree_load_address}; " \
+			"bootm ${fit_load_address} - ${devicetree_load_address}; " \
 		"fi\0" \
 	"usbboot=if usb start; then " \
 			"run uenvboot; " \
