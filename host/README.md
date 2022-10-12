@@ -37,9 +37,9 @@ After connecting the netword port and powering the e200, run the command uhd_usr
 
 ```sh
 jcc@jcc:~$ uhd_usrp_probe 
-[INFO] [UHD] linux; GNU C++ version 8.4.0; Boost_106501; UHD_3.15.0.dev-0-9d2062d9
+[INFO] [UHD] linux; GNU C++ version 8.4.0; Boost_106501; UHD_3.15.0.dev-0-8b82588b
 [INFO] [ANTSDR] Search Microphase ANTSDR E200.
-[INFO] [E200] Detected Device: Detected Device: ANTSDR
+[INFO] [E200] Detected Device: ANTSDR
 [INFO] [E200] Initialize CODEC control...
 [INFO] [E200] _Product B205MINI(COMPATIBLE)...
 [INFO] [E200] Initialize Radio control...
