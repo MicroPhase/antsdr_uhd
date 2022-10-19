@@ -61,42 +61,26 @@
 
 
 typedef enum{
+    MICROPHASE_CHECK = '1',
+
     MICROPHASE_CTRL_ID_WAZZUP_BR0 = 'm',
     MICROPHASE_CTRL_ID_WAZZUP_DUDE = 'M',
+
+    MICROPHASE_SERIAL_BR0 = '9',
+    MICROPHASE_SERIAL_DUDE = '0',
+
+    MICROPHASE_AUTHOR_BR0 = 'j',
+    MICROPHASE_AUTHOR_DUDE = 'c',
 
     MICROPHASE_DATA_RX_WAZZUP_BR0 = 'r',
 } microphase_e310_ctrl_id_e;
 
-typedef struct{
-    uint32_t proto_ver;
+typedef struct {
+    uint32_t check;
     uint32_t id;
-    uint32_t seq;
-    union {
-        uint32_t ip_addr;
-        struct{
-            uint32_t dev;
-            uint32_t data;
-            uint8_t miso_dege;
-            uint8_t mosi_edge;
-            uint8_t num_bits;
-            uint8_t readback;
-        } spi_args;
-        struct {
-            uint8_t addr;
-            uint8_t bytes;
-            uint8_t data[20];
-        } i2c_args;
-        struct {
-            uint32_t addr;
-            uint32_t data;
-            uint8_t action;
-        } reg_args;
-        struct {
-            uint32_t len;
-        } echo_args;
-    } data;
-    uint32_t len;
-} microphase_e310_ctrl_data_t;
+    uint32_t serial;
+    uint32_t auth;
+} microphase_exxx_ctrl_data_t;
 
 static const uint8_t E200_FW_COMPAT_NUM_MAJOR = 8;
 static const uint8_t E200_FW_COMPAT_NUM_MINOR = 0;
