@@ -157,10 +157,10 @@ update_compile_order -fileset sources_1
 add_files -fileset constrs_1 -norecurse ./xdc/e200.xdc
 
 # generate bit stream
-launch_runs impl_1 -to_step write_bitstream -jobs 12
+launch_runs impl_1 -to_step write_bitstream -jobs 6
 wait_on_run impl_1 
 
 
 # copy hdf to .sdk folder
 file mkdir ./antsdr_e200/antsdr_e200.sdk
-file copy -force ./antsdr_e200/antsdr_e200.runs/impl_1/antsdr_e200.sysdef ./antsdr_e200/antsdr_e200.sdk/antsdr_e200.hdf
+file copy -force ./antsdr_e200/antsdr_e200.runs/impl_1/antsdr_e200.sysdef ./antsdr_e200/antsdr_e200.sdk/system_top.hdf

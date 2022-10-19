@@ -1,8 +1,8 @@
-hsi open_hw_design build/antsdr_e200.hdf
+hsi open_hw_design build/system_top.hdf
 set cpu_name [lindex [hsi get_cells -filter {IP_TYPE==PROCESSOR}] 0]
 
 sdk setws ./build/sdk
-sdk createhw -name hw_0 -hwspec build/antsdr_e200.hdf
+sdk createhw -name hw_0 -hwspec build/system_top.hdf
 
 # Workaround for broken write_sysdev in vivado 2018.2
 catch {
