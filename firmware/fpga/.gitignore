@@ -3,6 +3,7 @@ ipcache
 *.cache
 *.data
 *.xpr
+*.dcp
 *.log
 *.bld
 *.chk
