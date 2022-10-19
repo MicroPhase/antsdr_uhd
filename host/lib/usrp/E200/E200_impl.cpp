@@ -40,7 +40,7 @@ using namespace uhd::usrp::gpio_atr;
 using namespace uhd::transport;
 
 namespace {
-constexpr int64_t REENUMERATION_TIMEOUT_MS = 3000;
+    constexpr int64_t REENUMERATION_TIMEOUT_MS = 3000;
 }
 
 // B200 + B210:
@@ -158,13 +158,13 @@ public:
  * Helpers
  **********************************************************************/
 std::string check_e200_option_valid(const std::string& name,
-    const std::vector<std::string>& valid_options,
-    const std::string& option)
+                                    const std::vector<std::string>& valid_options,
+                                    const std::string& option)
 {
     if (std::find(valid_options.begin(), valid_options.end(), option)
         == valid_options.end()) {
         throw uhd::runtime_error(
-            str(boost::format("Invalid option chosen for: %s") % name));
+                str(boost::format("Invalid option chosen for: %s") % name));
     }
 
     return option;
@@ -177,7 +177,7 @@ std::string check_e200_option_valid(const std::string& name,
 //  Throws a uhd::runtime_error if the USB PID and the product ID stored
 //  in the MB EEPROM are invalid,
 e200_product_t get_e200_product(
-    const usb_device_handle::sptr& handle, const mboard_eeprom_t& mb_eeprom)
+        const usb_device_handle::sptr& handle, const mboard_eeprom_t& mb_eeprom)
 {
     // Try USB PID first
     uint16_t product_id = handle->get_product_id();
@@ -191,7 +191,7 @@ e200_product_t get_e200_product(
     product_id = boost::lexical_cast<uint16_t>(mb_eeprom["product"]);
     if (not E2XX_PRODUCT_ID.has_key(product_id)) {
         throw uhd::runtime_error(
-            str(boost::format("B200 unknown product code: 0x%04x") % product_id));
+                str(boost::format("B200 unknown product code: 0x%04x") % product_id));
     }
     return E2XX_PRODUCT_ID[product_id];
 }
@@ -203,8 +203,8 @@ std::vector<usb_device_handle::sptr> get_e200_device_handles(const device_addr_t
     if (hint.has_key("vid") && hint.has_key("pid") && hint.has_key("type")
         && hint["type"] == "b200") {
         vid_pid_pair_list.push_back(usb_device_handle::vid_pid_pair_t(
-            uhd::cast::hexstr_cast<uint16_t>(hint.get("vid")),
-            uhd::cast::hexstr_cast<uint16_t>(hint.get("pid"))));
+                uhd::cast::hexstr_cast<uint16_t>(hint.get("vid")),
+                uhd::cast::hexstr_cast<uint16_t>(hint.get("pid"))));
     } else {
         vid_pid_pair_list = b200_vid_pid_pairs;
     }
@@ -225,17 +225,19 @@ static device_addrs_t e200_find(const device_addr_t& hint)
     find_e310["addr"] = "192.168.1.10";
     try {
         udp_transport = udp_simple::make_broadcast(
-            find_e310["addr"], BOOST_STRINGIZE(MICROPHASE_E310_UDP_FIND_PORT));
+                find_e310["addr"], BOOST_STRINGIZE(MICROPHASE_E310_UDP_FIND_PORT));
     } catch (const std::exception &e) {
-        UHD_LOGGER_ERROR("Microphase E310")
-            << "Cannot open UDP transport on" << find_e310["addr"] << ":" << e.what();
+        UHD_LOGGER_ERROR("Microphase E200")
+                << "Cannot open UDP transport on" << find_e310["addr"] << ":" << e.what();
         return b200_addrs;
     }
 
     //send a hello control packet
-    microphase_e310_ctrl_data_t ctrl_data_out = microphase_e310_ctrl_data_t();
-    ctrl_data_out.proto_ver = uhd::htonx<uint32_t>(MICROPHASE_E310_FW_COMPAT_NUM);
-    ctrl_data_out.id = uhd::htonx<uint32_t>(MICROPHASE_CTRL_ID_WAZZUP_BR0);
+    microphase_exxx_ctrl_data_t ctrl_data_out = microphase_exxx_ctrl_data_t();
+    ctrl_data_out.check = uhd::htonx<uint32_t>(MICROPHASE_CHECK);
+    ctrl_data_out.id = uhd::htonx<uint32_t >(MICROPHASE_CTRL_ID_WAZZUP_BR0);
+    ctrl_data_out.serial = uhd::htonx<uint32_t >(MICROPHASE_SERIAL_BR0);
+    ctrl_data_out.auth = uhd::htonx<uint32_t >(MICROPHASE_AUTHOR_BR0);
     try {
         udp_transport->send(boost::asio::buffer(&ctrl_data_out, sizeof(ctrl_data_out)));
     } catch (const std::exception &ex) {
@@ -245,29 +247,36 @@ static device_addrs_t e200_find(const device_addr_t& hint)
     }
     //loop and recieve until the timeout
     uint8_t microphase_e310_ctrl_data_in_mem[udp_simple::mtu];
-    const microphase_e310_ctrl_data_t *ctrl_data_in =
-        reinterpret_cast<const microphase_e310_ctrl_data_t *>(microphase_e310_ctrl_data_in_mem);
+
+    const microphase_exxx_ctrl_data_t *ctrl_data_in =
+            reinterpret_cast<const microphase_exxx_ctrl_data_t *>(microphase_e310_ctrl_data_in_mem);
 
     while (true) {
         size_t len = udp_transport->recv(boost::asio::buffer(microphase_e310_ctrl_data_in_mem));
-        if (len > offsetof(microphase_e310_ctrl_data_t, data)
-            and ntohl(ctrl_data_in->id) == MICROPHASE_CTRL_ID_WAZZUP_DUDE) {
+        if (len > offsetof(microphase_exxx_ctrl_data_t, serial)
+            and ntohl(ctrl_data_in->id) == MICROPHASE_CTRL_ID_WAZZUP_DUDE
+            and ntohl(ctrl_data_in->check) == MICROPHASE_CHECK
+            and ntohl(ctrl_data_in->serial) == MICROPHASE_SERIAL_DUDE
+            and ntohl(ctrl_data_in->auth) == MICROPHASE_AUTHOR_DUDE) {
             // make a boost asio ipv4 with the raw addr in host byte order1
 
             device_addr_t mp_addr;
-            mp_addr["type"] = "e310";
+            mp_addr["type"] = "e200";
             mp_addr["addr"] = udp_transport->get_recv_addr();
 
             udp_simple::sptr ctrl_xport = udp_simple::make_connected(
-                mp_addr["addr"], BOOST_STRINGIZE(MICROPHASE_E310_UDP_FIND_PORT)
+                    mp_addr["addr"], BOOST_STRINGIZE(MICROPHASE_E310_UDP_FIND_PORT)
             );
             udp_transport->send(boost::asio::buffer(&ctrl_data_out, sizeof(ctrl_data_out)));
             size_t len = udp_transport->recv(boost::asio::buffer(microphase_e310_ctrl_data_in_mem));
-            if (len > offsetof(microphase_e310_ctrl_data_t, data)
-                and ntohl(ctrl_data_in->id) == MICROPHASE_CTRL_ID_WAZZUP_DUDE) {
+            if (len > offsetof(microphase_exxx_ctrl_data_t, serial)
+                and ntohl(ctrl_data_in->id) == MICROPHASE_CTRL_ID_WAZZUP_DUDE
+                and ntohl(ctrl_data_in->check) == MICROPHASE_CHECK
+                and ntohl(ctrl_data_in->serial) == MICROPHASE_SERIAL_DUDE
+                and ntohl(ctrl_data_in->auth) == MICROPHASE_AUTHOR_DUDE) {
                 mp_addr["serial"] = "19991030";
-                mp_addr["name"] = "ANTSDR-E310";
-                mp_addr["product"] = "E310";
+                mp_addr["name"] = "ANTSDR-E200";
+                mp_addr["product"] = "E200";
                 // found the device,open up for communication!
                 b200_addrs.push_back(mp_addr);
             } else {
@@ -308,13 +317,13 @@ static device::sptr e200_make(const device_addr_t& device_addr)
     try {
         return device::sptr(new e200_impl(device_addr, handle));
     } catch (const uhd::usb_error&) {
-        UHD_LOGGER_INFO("E200") << "Detected bad USB state; resetting.";
+        UHD_LOGGER_INFO("E200") << "Detected bad net state; resetting.";
         libusb::device_handle::sptr dev_handle(libusb::device_handle::get_cached_handle(
-            boost::static_pointer_cast<libusb::special_handle>(handle)->get_device()));
+                boost::static_pointer_cast<libusb::special_handle>(handle)->get_device()));
         dev_handle->clear_endpoints(
-            E200_USB_CTRL_RECV_ENDPOINT, E200_USB_CTRL_SEND_ENDPOINT);
+                E200_USB_CTRL_RECV_ENDPOINT, E200_USB_CTRL_SEND_ENDPOINT);
         dev_handle->clear_endpoints(
-            E200_USB_DATA_RECV_ENDPOINT, E200_USB_DATA_SEND_ENDPOINT);
+                E200_USB_DATA_RECV_ENDPOINT, E200_USB_DATA_SEND_ENDPOINT);
         dev_handle->reset_device();
     }
 
@@ -330,13 +339,13 @@ UHD_STATIC_BLOCK(register_e200_device)
  * Structors
  **********************************************************************/
 e200_impl::e200_impl(
-    const uhd::device_addr_t& device_addr, usb_device_handle::sptr& handle)
-    : _product(B200_)
-    , // Some safe value
-    _revision(0)
-    , _enable_user_regs(device_addr.has_key("enable_user_regs"))
-    , _time_source(UNKNOWN)
-    , _tick_rate(0.0) // Forces a clock initialization at startup
+        const uhd::device_addr_t& device_addr, usb_device_handle::sptr& handle)
+        : _product(B200_)
+        , // Some safe value
+          _revision(0)
+        , _enable_user_regs(device_addr.has_key("enable_user_regs"))
+        , _time_source(UNKNOWN)
+        , _tick_rate(0.0) // Forces a clock initialization at startup
 {
     _tree                 = property_tree::make();
     _type                 = device::USRP;
@@ -347,7 +356,7 @@ e200_impl::e200_impl(
      * then run udp interface not usb interface
      * change if(microphase write) else{ettus write}
      * */
-    if(device_addr.has_key("type") && device_addr["type"] == "e310"){
+    if(device_addr.has_key("type") && (device_addr["type"] == "e310" || device_addr["type"] == "e200")){
         /* Microphase not use usb
          * and not eeprom
          * so there is no iface
@@ -357,9 +366,9 @@ e200_impl::e200_impl(
          * because the e310 is using b200_driver
          * */
         // try to match the given device address with something on the USB bus
-       _product = B205MINI;
+        _product = B205MINI;
         _product_mp = E310;
-       const std::string addr = device_addr["addr"];
+        const std::string addr = device_addr["addr"];
         UHD_LOGGER_INFO("E200") << "Detected Device: ANTSDR";
 
         _gpsdo_capable = 0;
@@ -403,8 +412,8 @@ e200_impl::e200_impl(
         udp_zero_copy::buff_params ignored_params;
 
         _ctrl_transport = udp_zero_copy::make(
-            addr, BOOST_STRINGIZE(MICROPHASE_E310_UDP_CTRL_PORT), default_buff_args, ignored_params,
-            filtered_hints);
+                addr, BOOST_STRINGIZE(MICROPHASE_E310_UDP_CTRL_PORT), default_buff_args, ignored_params,
+                filtered_hints);
         while (_ctrl_transport->get_recv_buff(0.0)) {
         } // flush ctrl xport
 
@@ -415,18 +424,18 @@ e200_impl::e200_impl(
         _async_task_data->async_md.reset(new async_md_type(1000 /*messages deep*/));
         if (_gpsdo_capable) {
             _async_task_data->gpsdo_uart =
-                e200_uart::make(_ctrl_transport, E200_TX_GPS_UART_SID);
+                    e200_uart::make(_ctrl_transport, E200_TX_GPS_UART_SID);
         }
         _async_task = uhd::msg_task::make(boost::bind(
-            &e200_impl::handle_async_task, this, _ctrl_transport, _async_task_data));
+                &e200_impl::handle_async_task, this, _ctrl_transport, _async_task_data));
 
         ////////////////////////////////////////////////////////////////////
         // Local control endpoint
         ////////////////////////////////////////////////////////////////////
         _local_ctrl = radio_ctrl_core_3000::make(false /*lilE*/,
-            _ctrl_transport,
-            zero_copy_if::sptr() /*null*/,
-            E200_LOCAL_CTRL_SID);
+                                                 _ctrl_transport,
+                                                 zero_copy_if::sptr() /*null*/,
+                                                 E200_LOCAL_CTRL_SID);
         _local_ctrl->hold_task(_async_task);
         _async_task_data->local_ctrl = _local_ctrl; // weak
         this->check_fpga_compat();
@@ -446,13 +455,13 @@ e200_impl::e200_impl(
                     _gps = gps_ctrl::make(_async_task_data->gpsdo_uart);
                 } catch (std::exception& e) {
                     UHD_LOGGER_ERROR("E200")
-                        << "An error occurred making GPSDO control: " << e.what();
+                            << "An error occurred making GPSDO control: " << e.what();
                 }
                 if (_gps and _gps->gps_detected()) {
                     for (const std::string& name : _gps->get_sensors()) {
                         _tree->create<sensor_value_t>(mb_path / "sensors" / name)
-                            .set_publisher(
-                                boost::bind(&gps_ctrl::get_sensor, _gps, name));
+                                .set_publisher(
+                                        boost::bind(&gps_ctrl::get_sensor, _gps, name));
                     }
                 } else {
                     _local_ctrl->poke32(TOREG(SR_CORE_GPSDO_ST), E200_GPSDO_ST_NONE);
@@ -460,14 +469,15 @@ e200_impl::e200_impl(
             }
         }
 
+
         ////////////////////////////////////////////////////////////////////
         // Initialize the properties tree
         ////////////////////////////////////////////////////////////////////
-        std::string product_name = "ANTSDR-EXXX";
+        std::string product_name = "ANTSDR-E200";
         _tree->create<std::string>("/name").set("ANT-E-Series Device");
         _tree->create<std::string>(mb_path / "name").set(product_name);
         _tree->create<std::string>(mb_path / "codename")
-            .set((_product == B200MINI or _product == B205MINI) ? "Pixie" : "Sasquatch");
+                .set((_product == B200MINI or _product == B205MINI) ? "Pixie" : "Sasquatch");
 
         ////////////////////////////////////////////////////////////////////
         // Create data transport
@@ -479,19 +489,19 @@ e200_impl::e200_impl(
         device_addr_t data_xport_args;
         const int max_transfer = usb_speed == 3 ? 1024 : 512;
         int recv_frame_size =
-            device_addr.cast<int>("recv_frame_size", E200_USB_DATA_DEFAULT_FRAME_SIZE);
+                device_addr.cast<int>("recv_frame_size", E200_USB_DATA_DEFAULT_FRAME_SIZE);
         // Check that recv_frame_size limits.
         if (recv_frame_size < E200_USB_DATA_MIN_RECV_FRAME_SIZE) {
             UHD_LOGGER_WARNING("E200")
-                << "Requested recv_frame_size of " << recv_frame_size
-                << " is too small. It will be set to "
-                << E200_USB_DATA_MIN_RECV_FRAME_SIZE << ".";
+                    << "Requested recv_frame_size of " << recv_frame_size
+                    << " is too small. It will be set to "
+                    << E200_USB_DATA_MIN_RECV_FRAME_SIZE << ".";
             recv_frame_size = E200_USB_DATA_MIN_RECV_FRAME_SIZE;
         } else if (recv_frame_size > E200_USB_DATA_MAX_RECV_FRAME_SIZE) {
             UHD_LOGGER_WARNING("E200")
-                << "Requested recv_frame_size of " << recv_frame_size
-                << " is too large. It will be set to "
-                << E200_USB_DATA_MAX_RECV_FRAME_SIZE << ".";
+                    << "Requested recv_frame_size of " << recv_frame_size
+                    << " is too large. It will be set to "
+                    << E200_USB_DATA_MAX_RECV_FRAME_SIZE << ".";
             recv_frame_size = E200_USB_DATA_MAX_RECV_FRAME_SIZE;
         } else if (recv_frame_size % max_transfer == 0 or recv_frame_size % 8 != 0) {
             // The Cypress FX3 does not properly handle recv_frame_sizes that are
@@ -508,22 +518,22 @@ e200_impl::e200_impl(
                 recv_frame_size = (((recv_frame_size - 16) / 24) * 24) + 16;
             }
             UHD_LOGGER_WARNING("E200")
-                << "The recv_frame_size must be a multiple of 8 bytes and not a multiple of "
-                << max_transfer << " bytes.  Requested recv_frame_size of "
-                << device_addr["recv_frame_size"] << " coerced to " << recv_frame_size
-                << ".";
+                    << "The recv_frame_size must be a multiple of 8 bytes and not a multiple of "
+                    << max_transfer << " bytes.  Requested recv_frame_size of "
+                    << device_addr["recv_frame_size"] << " coerced to " << recv_frame_size
+                    << ".";
         }
         data_xport_args["recv_frame_size"] = std::to_string(recv_frame_size);
         data_xport_args["num_recv_frames"] = device_addr.get("num_recv_frames", "32");
         data_xport_args["send_frame_size"] = device_addr.get(
-            "send_frame_size", std::to_string(E200_USB_DATA_DEFAULT_FRAME_SIZE));
+                "send_frame_size", std::to_string(E200_USB_DATA_DEFAULT_FRAME_SIZE));
         data_xport_args["num_send_frames"] = device_addr.get("num_send_frames", "32");
 
         udp_zero_copy::buff_params ignored_out_params;
         device_addr_t fi_hints;
         _data_rx_transport = udp_zero_copy::make(
-            addr, BOOST_STRINGIZE(MICROPHASE_E310_UDP_DATA_RX_PORT), default_buff_args,
-            ignored_out_params, fi_hints);
+                addr, BOOST_STRINGIZE(MICROPHASE_E310_UDP_DATA_RX_PORT), default_buff_args,
+                ignored_out_params, fi_hints);
         if(_data_rx_transport.get()){
             _program_dispatcher(*_data_rx_transport);
         }
@@ -568,13 +578,13 @@ e200_impl::e200_impl(
         {
             const fs_path codec_path = mb_path / ("rx_codecs") / "A";
             _tree->create<std::string>(codec_path / "name")
-                .set(product_name + " RX dual ADC");
+                    .set(product_name + " RX dual ADC");
             _tree->create<int>(codec_path / "gains"); // empty cuz gains are in frontend
         }
         {
             const fs_path codec_path = mb_path / ("tx_codecs") / "A";
             _tree->create<std::string>(codec_path / "name")
-                .set(product_name + " TX dual DAC");
+                    .set(product_name + " TX dual DAC");
             _tree->create<int>(codec_path / "gains"); // empty cuz gains are in frontend
         }
 
@@ -582,9 +592,9 @@ e200_impl::e200_impl(
         // create clock control objects
         ////////////////////////////////////////////////////////////////////
         _tree->create<double>(mb_path / "tick_rate")
-            .set_coercer(boost::bind(&e200_impl::set_tick_rate, this, _1))
-            .set_publisher(boost::bind(&e200_impl::get_tick_rate, this))
-            .add_coerced_subscriber(boost::bind(&e200_impl::update_tick_rate, this, _1));
+                .set_coercer(boost::bind(&e200_impl::set_tick_rate, this, _1))
+                .set_publisher(boost::bind(&e200_impl::get_tick_rate, this))
+                .add_coerced_subscriber(boost::bind(&e200_impl::update_tick_rate, this, _1));
         _tree->create<meta_range_t>(mb_path / "tick_rate/range").set_publisher([this]() {
             return this->_codec_ctrl->get_clock_rate_range();
         });
@@ -595,7 +605,7 @@ e200_impl::e200_impl(
         // and do the misc mboard sensors
         ////////////////////////////////////////////////////////////////////
         _tree->create<sensor_value_t>(mb_path / "sensors" / "ref_locked")
-            .set_publisher(boost::bind(&e200_impl::get_ref_locked, this));
+                .set_publisher(boost::bind(&e200_impl::get_ref_locked, this));
 
         ////////////////////////////////////////////////////////////////////
         // create frontend mapping
@@ -603,26 +613,26 @@ e200_impl::e200_impl(
         std::vector<size_t> default_map(2, 0);
         default_map[1] = 1; // Set this to A->0 B->1 even if there's only A
         _tree->create<std::vector<size_t>>(mb_path / "rx_chan_dsp_mapping")
-            .set(default_map);
+                .set(default_map);
         _tree->create<std::vector<size_t>>(mb_path / "tx_chan_dsp_mapping")
-            .set(default_map);
+                .set(default_map);
         _tree->create<subdev_spec_t>(mb_path / "rx_subdev_spec")
-            .set_coercer(boost::bind(&e200_impl::coerce_subdev_spec, this, _1))
-            .set(subdev_spec_t())
-            .add_coerced_subscriber(
-                boost::bind(&e200_impl::update_subdev_spec, this, "rx", _1));
+                .set_coercer(boost::bind(&e200_impl::coerce_subdev_spec, this, _1))
+                .set(subdev_spec_t())
+                .add_coerced_subscriber(
+                        boost::bind(&e200_impl::update_subdev_spec, this, "rx", _1));
         _tree->create<subdev_spec_t>(mb_path / "tx_subdev_spec")
-            .set_coercer(boost::bind(&e200_impl::coerce_subdev_spec, this, _1))
-            .set(subdev_spec_t())
-            .add_coerced_subscriber(
-                boost::bind(&e200_impl::update_subdev_spec, this, "tx", _1));
+                .set_coercer(boost::bind(&e200_impl::coerce_subdev_spec, this, _1))
+                .set(subdev_spec_t())
+                .add_coerced_subscriber(
+                        boost::bind(&e200_impl::update_subdev_spec, this, "tx", _1));
 
         ////////////////////////////////////////////////////////////////////
         // setup radio control
         ////////////////////////////////////////////////////////////////////
         UHD_LOGGER_INFO("E200") << "Initialize Radio control...";
         const size_t num_radio_chains =
-            ((_local_ctrl->peek32(RB32_CORE_STATUS) >> 8) & 0xff);
+                ((_local_ctrl->peek32(RB32_CORE_STATUS) >> 8) & 0xff);
         UHD_ASSERT_THROW(num_radio_chains > 0);
         UHD_ASSERT_THROW(num_radio_chains <= 2);
         _radio_perifs.resize(num_radio_chains);
@@ -634,104 +644,104 @@ e200_impl::e200_impl(
         // now test each radio module's connection to the codec interface
         for (radio_perifs_t& perif : _radio_perifs) {
             _codec_mgr->loopback_self_test(
-                [&perif](const uint32_t value) {
-                    perif.ctrl->poke32(TOREG(SR_CODEC_IDLE), value);
-                },
-                [&perif]() { return perif.ctrl->peek64(RB64_CODEC_READBACK); });
+                    [&perif](const uint32_t value) {
+                        perif.ctrl->poke32(TOREG(SR_CODEC_IDLE), value);
+                    },
+                    [&perif]() { return perif.ctrl->peek64(RB64_CODEC_READBACK); });
         }
 
         // register time now and pps onto available radio cores
         _tree->create<time_spec_t>(mb_path / "time" / "now")
-            .set_publisher(
-                boost::bind(&time_core_3000::get_time_now, _radio_perifs[0].time64))
-            .add_coerced_subscriber(boost::bind(&e200_impl::set_time, this, _1))
-            .set(0.0);
+                .set_publisher(
+                        boost::bind(&time_core_3000::get_time_now, _radio_perifs[0].time64))
+                .add_coerced_subscriber(boost::bind(&e200_impl::set_time, this, _1))
+                .set(0.0);
         // re-sync the times when the tick rate changes
         _tree->access<double>(mb_path / "tick_rate")
-            .add_coerced_subscriber(boost::bind(&e200_impl::sync_times, this));
+                .add_coerced_subscriber(boost::bind(&e200_impl::sync_times, this));
         _tree->create<time_spec_t>(mb_path / "time" / "pps")
-            .set_publisher(
-                boost::bind(&time_core_3000::get_time_last_pps, _radio_perifs[0].time64));
+                .set_publisher(
+                        boost::bind(&time_core_3000::get_time_last_pps, _radio_perifs[0].time64));
         for (radio_perifs_t& perif : _radio_perifs) {
             _tree->access<time_spec_t>(mb_path / "time" / "pps")
-                .add_coerced_subscriber(
-                    boost::bind(&time_core_3000::set_time_next_pps, perif.time64, _1));
+                    .add_coerced_subscriber(
+                            boost::bind(&time_core_3000::set_time_next_pps, perif.time64, _1));
         }
 
         // setup time source props
         const std::vector<std::string> time_sources =
-            (_gpsdo_capable)
+                (_gpsdo_capable)
                 ? std::vector<std::string>{"none", "internal", "external", "gpsdo"}
                 : std::vector<std::string>{"none", "internal", "external"};
         _tree->create<std::vector<std::string>>(mb_path / "time_source" / "options")
-            .set(time_sources);
+                .set(time_sources);
         _tree->create<std::string>(mb_path / "time_source" / "value")
-            .set_coercer(
-                boost::bind(&check_e200_option_valid, "time source", time_sources, _1))
-            .add_coerced_subscriber(
-                boost::bind(&e200_impl::update_time_source, this, _1));
+                .set_coercer(
+                        boost::bind(&check_e200_option_valid, "time source", time_sources, _1))
+                .add_coerced_subscriber(
+                        boost::bind(&e200_impl::update_time_source, this, _1));
         // setup reference source props
         const std::vector<std::string> clock_sources =
-            (_gpsdo_capable) ? std::vector<std::string>{"internal", "external", "gpsdo"}
-                             : std::vector<std::string>{"internal", "external"};
+                (_gpsdo_capable) ? std::vector<std::string>{"internal", "external", "gpsdo"}
+                                 : std::vector<std::string>{"internal", "external"};
         _tree->create<std::vector<std::string>>(mb_path / "clock_source" / "options")
-            .set(clock_sources);
+                .set(clock_sources);
         _tree->create<std::string>(mb_path / "clock_source" / "value")
-            .set_coercer(
-                boost::bind(&check_e200_option_valid, "clock source", clock_sources, _1))
-            .add_coerced_subscriber(
-                boost::bind(&e200_impl::update_clock_source, this, _1));
+                .set_coercer(
+                        boost::bind(&check_e200_option_valid, "clock source", clock_sources, _1))
+                .add_coerced_subscriber(
+                        boost::bind(&e200_impl::update_clock_source, this, _1));
 
         ////////////////////////////////////////////////////////////////////
         // front panel gpio
         ////////////////////////////////////////////////////////////////////
         _radio_perifs[0].fp_gpio =
-            gpio_atr_3000::make(_radio_perifs[0].ctrl, TOREG(SR_FP_GPIO), RB32_FP_GPIO);
+                gpio_atr_3000::make(_radio_perifs[0].ctrl, TOREG(SR_FP_GPIO), RB32_FP_GPIO);
         for (const gpio_attr_map_t::value_type& attr : gpio_attr_map) {
             switch (attr.first) {
                 case usrp::gpio_atr::GPIO_SRC:
                     _tree
-                        ->create<std::vector<std::string>>(
-                            mb_path / "gpio" / "FP0" / attr.second)
-                        .set(std::vector<std::string>(
-                            32, usrp::gpio_atr::default_attr_value_map.at(attr.first)))
-                        .add_coerced_subscriber([this](const std::vector<std::string>&) {
-                            throw uhd::runtime_error(
-                                "This device does not support setting "
-                                "the GPIO_SRC attribute.");
-                        });
+                            ->create<std::vector<std::string>>(
+                                    mb_path / "gpio" / "FP0" / attr.second)
+                            .set(std::vector<std::string>(
+                                    32, usrp::gpio_atr::default_attr_value_map.at(attr.first)))
+                            .add_coerced_subscriber([this](const std::vector<std::string>&) {
+                                throw uhd::runtime_error(
+                                        "This device does not support setting "
+                                        "the GPIO_SRC attribute.");
+                            });
                     break;
                 case usrp::gpio_atr::GPIO_CTRL:
                 case usrp::gpio_atr::GPIO_DDR:
                     _tree
-                        ->create<std::vector<std::string>>(
-                            mb_path / "gpio" / "FP0" / attr.second)
-                        .set(std::vector<std::string>(
-                            32, usrp::gpio_atr::default_attr_value_map.at(attr.first)))
-                        .add_coerced_subscriber(
-                            [this, attr](const std::vector<std::string> str_val) {
-                                uint32_t val = 0;
-                                for (size_t i = 0; i < str_val.size(); i++) {
-                                    val += usrp::gpio_atr::gpio_attr_value_pair
-                                               .at(attr.second)
-                                               .at(str_val[i])
-                                           << i;
-                                }
-                                _radio_perifs[0].fp_gpio->set_gpio_attr(attr.first, val);
-                            });
+                            ->create<std::vector<std::string>>(
+                                    mb_path / "gpio" / "FP0" / attr.second)
+                            .set(std::vector<std::string>(
+                                    32, usrp::gpio_atr::default_attr_value_map.at(attr.first)))
+                            .add_coerced_subscriber(
+                                    [this, attr](const std::vector<std::string> str_val) {
+                                        uint32_t val = 0;
+                                        for (size_t i = 0; i < str_val.size(); i++) {
+                                            val += usrp::gpio_atr::gpio_attr_value_pair
+                                                    .at(attr.second)
+                                                    .at(str_val[i])
+                                                    << i;
+                                        }
+                                        _radio_perifs[0].fp_gpio->set_gpio_attr(attr.first, val);
+                                    });
                     break;
                 case usrp::gpio_atr::GPIO_READBACK:
                     _tree->create<uint32_t>(mb_path / "gpio" / "FP0" / "READBACK")
-                        .set_publisher(boost::bind(
-                            &gpio_atr_3000::read_gpio, _radio_perifs[0].fp_gpio));
+                            .set_publisher(boost::bind(
+                                    &gpio_atr_3000::read_gpio, _radio_perifs[0].fp_gpio));
                     break;
                 default:
                     _tree->create<uint32_t>(mb_path / "gpio" / "FP0" / attr.second)
-                        .set(0)
-                        .add_coerced_subscriber(boost::bind(&gpio_atr_3000::set_gpio_attr,
-                            _radio_perifs[0].fp_gpio,
-                            attr.first,
-                            _1));
+                            .set(0)
+                            .add_coerced_subscriber(boost::bind(&gpio_atr_3000::set_gpio_attr,
+                                                                _radio_perifs[0].fp_gpio,
+                                                                attr.first,
+                                                                _1));
             }
         }
 
@@ -740,11 +750,11 @@ e200_impl::e200_impl(
         ////////////////////////////////////////////////////////////////////
         dboard_eeprom_t db_eeprom;
         _tree->create<dboard_eeprom_t>(mb_path / "dboards" / "A" / "rx_eeprom")
-            .set(db_eeprom);
+                .set(db_eeprom);
         _tree->create<dboard_eeprom_t>(mb_path / "dboards" / "A" / "tx_eeprom")
-            .set(db_eeprom);
+                .set(db_eeprom);
         _tree->create<dboard_eeprom_t>(mb_path / "dboards" / "A" / "gdb_eeprom")
-            .set(db_eeprom);
+                .set(db_eeprom);
 
         ////////////////////////////////////////////////////////////////////
         // do some post-init tasks
@@ -752,23 +762,23 @@ e200_impl::e200_impl(
         // Init the clock rate and the auto mcr appropriately
         if (not device_addr.has_key("master_clock_rate")) {
             UHD_LOGGER_INFO("E200")
-                << "Setting master clock rate selection to 'automatic'.";
+                    << "Setting master clock rate selection to 'automatic'.";
         }
         // We can automatically choose a master clock rate, but not if the user specifies one
         const double default_tick_rate = device_addr.cast<double>(
-            "master_clock_rate", ad936x_manager::DEFAULT_TICK_RATE);
+                "master_clock_rate", ad936x_manager::DEFAULT_TICK_RATE);
         _tree->access<double>(mb_path / "tick_rate").set(default_tick_rate);
         _tree->access<bool>(mb_path / "auto_tick_rate")
-            .set(not device_addr.has_key("master_clock_rate"));
+                .set(not device_addr.has_key("master_clock_rate"));
 
         // subdev spec contains full width of selections
         subdev_spec_t rx_spec, tx_spec;
         for (const std::string& fe :
-            _tree->list(mb_path / "dboards" / "A" / "rx_frontends")) {
+                _tree->list(mb_path / "dboards" / "A" / "rx_frontends")) {
             rx_spec.push_back(subdev_spec_pair_t("A", fe));
         }
         for (const std::string& fe :
-            _tree->list(mb_path / "dboards" / "A" / "tx_frontends")) {
+                _tree->list(mb_path / "dboards" / "A" / "tx_frontends")) {
             tx_spec.push_back(subdev_spec_pair_t("A", fe));
         }
         _tree->access<subdev_spec_t>(mb_path / "rx_subdev_spec").set(rx_spec);
@@ -781,9 +791,9 @@ e200_impl::e200_impl(
         // Set the DSP chains to some safe value
         for (size_t i = 0; i < _radio_perifs.size(); i++) {
             _radio_perifs[i].ddc->set_host_rate(
-                default_tick_rate / ad936x_manager::DEFAULT_DECIM);
+                    default_tick_rate / ad936x_manager::DEFAULT_DECIM);
             _radio_perifs[i].duc->set_host_rate(
-                default_tick_rate / ad936x_manager::DEFAULT_INTERP);
+                    default_tick_rate / ad936x_manager::DEFAULT_INTERP);
         }
     }
 }
@@ -805,21 +815,21 @@ void e200_impl::setup_radio(const size_t dspno)
     // Set up transport
     ////////////////////////////////////////////////////////////////////
     const uint32_t sid = (dspno == 0) ? E200_CTRL0_MSG_SID :
-                                      E200_CTRL1_MSG_SID;
+                         E200_CTRL1_MSG_SID;
 
     ////////////////////////////////////////////////////////////////////
     // radio control
     ////////////////////////////////////////////////////////////////////
     perif.ctrl = radio_ctrl_core_3000::make(
-        false /*lilE*/, _ctrl_transport, zero_copy_if::sptr() /*null*/, sid);
+            false /*lilE*/, _ctrl_transport, zero_copy_if::sptr() /*null*/, sid);
     perif.ctrl->hold_task(_async_task);
     _async_task_data->radio_ctrl[dspno] = perif.ctrl; // weak
     _tree->access<time_spec_t>(mb_path / "time" / "cmd")
-        .add_coerced_subscriber(
-            boost::bind(&radio_ctrl_core_3000::set_time, perif.ctrl, _1));
+            .add_coerced_subscriber(
+                    boost::bind(&radio_ctrl_core_3000::set_time, perif.ctrl, _1));
     _tree->access<double>(mb_path / "tick_rate")
-        .add_coerced_subscriber(
-            boost::bind(&radio_ctrl_core_3000::set_tick_rate, perif.ctrl, _1));
+            .add_coerced_subscriber(
+                    boost::bind(&radio_ctrl_core_3000::set_tick_rate, perif.ctrl, _1));
     this->register_loopback_self_test(perif.ctrl);
 
     ////////////////////////////////////////////////////////////////////
@@ -840,7 +850,7 @@ void e200_impl::setup_radio(const size_t dspno)
     if (_enable_user_regs) {
         UHD_LOG_DEBUG("B200", "Enabling user settings registers");
         perif.user_settings = user_settings_core_3000::make(
-            perif.ctrl, TOREG(SR_USER_SR_BASE), TOREG(SR_USER_RB_ADDR));
+                perif.ctrl, TOREG(SR_USER_SR_BASE), TOREG(SR_USER_RB_ADDR));
         if (!perif.user_settings) {
             const std::string error_msg = "Failed to create user settings bus!";
             UHD_LOG_ERROR("B200", error_msg);
@@ -863,23 +873,23 @@ void e200_impl::setup_radio(const size_t dspno)
     perif.ddc->populate_subtree(_tree->subtree(rx_dsp_path));
     _tree->create<bool>(rx_dsp_path / "rate" / "set").set(false);
     _tree->access<double>(rx_dsp_path / "rate" / "value")
-        .set_coercer(
-            boost::bind(&e200_impl::coerce_rx_samp_rate, this, perif.ddc, dspno, _1))
-        .add_coerced_subscriber([this, rx_dsp_path](const double) {
-            if (this->_tree) {
-                this->_tree->access<bool>(rx_dsp_path / "rate" / "set").set(true);
-            }
-        })
-        .add_coerced_subscriber(
-            boost::bind(&e200_impl::update_rx_samp_rate, this, dspno, _1));
+            .set_coercer(
+                    boost::bind(&e200_impl::coerce_rx_samp_rate, this, perif.ddc, dspno, _1))
+            .add_coerced_subscriber([this, rx_dsp_path](const double) {
+                if (this->_tree) {
+                    this->_tree->access<bool>(rx_dsp_path / "rate" / "set").set(true);
+                }
+            })
+            .add_coerced_subscriber(
+                    boost::bind(&e200_impl::update_rx_samp_rate, this, dspno, _1));
     _tree->create<stream_cmd_t>(rx_dsp_path / "stream_cmd")
-        .add_coerced_subscriber(
-            boost::bind(&rx_vita_core_3000::issue_stream_command, perif.framer, _1));
+            .add_coerced_subscriber(
+                    boost::bind(&rx_vita_core_3000::issue_stream_command, perif.framer, _1));
     _tree->access<double>(mb_path / "tick_rate")
-        .add_coerced_subscriber(
-            boost::bind(&rx_vita_core_3000::set_tick_rate, perif.framer, _1))
-        .add_coerced_subscriber(boost::bind(
-            &e200_impl::update_rx_dsp_tick_rate, this, _1, perif.ddc, rx_dsp_path));
+            .add_coerced_subscriber(
+                    boost::bind(&rx_vita_core_3000::set_tick_rate, perif.framer, _1))
+            .add_coerced_subscriber(boost::bind(
+                    &e200_impl::update_rx_dsp_tick_rate, this, _1, perif.ddc, rx_dsp_path));
 
     ////////////////////////////////////////////////////////////////////
     // create tx dsp control objects
@@ -888,18 +898,18 @@ void e200_impl::setup_radio(const size_t dspno)
     perif.duc->populate_subtree(_tree->subtree(tx_dsp_path));
     _tree->create<bool>(tx_dsp_path / "rate" / "set").set(false);
     _tree->access<double>(tx_dsp_path / "rate" / "value")
-        .set_coercer(
-            boost::bind(&e200_impl::coerce_tx_samp_rate, this, perif.duc, dspno, _1))
-        .add_coerced_subscriber([this, tx_dsp_path](const double) {
-            if (this->_tree) {
-                this->_tree->access<bool>(tx_dsp_path / "rate" / "set").set(true);
-            }
-        })
-        .add_coerced_subscriber(
-            boost::bind(&e200_impl::update_tx_samp_rate, this, dspno, _1));
+            .set_coercer(
+                    boost::bind(&e200_impl::coerce_tx_samp_rate, this, perif.duc, dspno, _1))
+            .add_coerced_subscriber([this, tx_dsp_path](const double) {
+                if (this->_tree) {
+                    this->_tree->access<bool>(tx_dsp_path / "rate" / "set").set(true);
+                }
+            })
+            .add_coerced_subscriber(
+                    boost::bind(&e200_impl::update_tx_samp_rate, this, dspno, _1));
     _tree->access<double>(mb_path / "tick_rate")
-        .add_coerced_subscriber(boost::bind(
-            &e200_impl::update_tx_dsp_tick_rate, this, _1, perif.duc, tx_dsp_path));
+            .add_coerced_subscriber(boost::bind(
+                    &e200_impl::update_tx_dsp_tick_rate, this, _1, perif.duc, tx_dsp_path));
 
     ////////////////////////////////////////////////////////////////////
     // create RF frontend interfacing
@@ -909,37 +919,37 @@ void e200_impl::setup_radio(const size_t dspno)
         const std::string key = std::string(((dir == RX_DIRECTION) ? "RX" : "TX"))
                                 + std::string(((dspno == _fe1) ? "1" : "2"));
         const fs_path rf_fe_path =
-            mb_path / "dboards" / "A" / (x + "_frontends") / (dspno ? "B" : "A");
+                mb_path / "dboards" / "A" / (x + "_frontends") / (dspno ? "B" : "A");
 
         // This will connect all the AD936x-specific items
         _codec_mgr->populate_frontend_subtree(_tree->subtree(rf_fe_path), key, dir);
 
         // Now connect all the b200_impl-specific items
         _tree->create<sensor_value_t>(rf_fe_path / "sensors" / "lo_locked")
-            .set_publisher(
-                boost::bind(&e200_impl::get_fe_pll_locked, this, dir == TX_DIRECTION));
+                .set_publisher(
+                        boost::bind(&e200_impl::get_fe_pll_locked, this, dir == TX_DIRECTION));
         _tree->access<double>(rf_fe_path / "freq" / "value")
-            .add_coerced_subscriber(
-                boost::bind(&e200_impl::update_bandsel, this, key, _1));
+                .add_coerced_subscriber(
+                        boost::bind(&e200_impl::update_bandsel, this, key, _1));
         if (dir == RX_DIRECTION) {
             static const std::vector<std::string> ants{"TX/RX", "RX2"};
             _tree->create<std::vector<std::string>>(rf_fe_path / "antenna" / "options")
-                .set(ants);
+                    .set(ants);
             _tree->create<std::string>(rf_fe_path / "antenna" / "value")
-                .add_coerced_subscriber(
-                    boost::bind(&e200_impl::update_antenna_sel, this, dspno, _1))
-                .set("RX2");
+                    .add_coerced_subscriber(
+                            boost::bind(&e200_impl::update_antenna_sel, this, dspno, _1))
+                    .set("RX2");
 
         } else if (dir == TX_DIRECTION) {
             static const std::vector<std::string> ants(1, "TX/RX");
             _tree->create<std::vector<std::string>>(rf_fe_path / "antenna" / "options")
-                .set(ants);
+                    .set(ants);
             _tree->create<std::string>(rf_fe_path / "antenna" / "value").set("TX/RX");
         }
 
         if (_enable_user_regs) {
             _tree->create<uhd::wb_iface::sptr>(rf_fe_path / "user_settings/iface")
-                .set(perif.user_settings);
+                    .set(perif.user_settings);
         }
     }
 }
@@ -968,33 +978,33 @@ void e200_impl::register_loopback_self_test(wb_iface::sptr iface)
  * Sample and tick rate comprehension below
  **********************************************************************/
 void e200_impl::enforce_tick_rate_limits(
-    size_t chan_count, double tick_rate, const std::string& direction /*= ""*/)
+        size_t chan_count, double tick_rate, const std::string& direction /*= ""*/)
 {
     const size_t max_chans = 2;
     if (chan_count > max_chans) {
         throw uhd::value_error(boost::str(
-            boost::format("cannot not setup %d %s channels (maximum is %d)") % chan_count
-            % (direction.empty() ? "data" : direction) % max_chans));
+                boost::format("cannot not setup %d %s channels (maximum is %d)") % chan_count
+                % (direction.empty() ? "data" : direction) % max_chans));
     } else {
         const double max_tick_rate =
-            ad9361_device_t::AD9361_MAX_CLOCK_RATE / ((chan_count <= 1) ? 1 : 2);
+                ad9361_device_t::AD9361_MAX_CLOCK_RATE / ((chan_count <= 1) ? 1 : 2);
         if (tick_rate - max_tick_rate >= 1.0) {
             throw uhd::value_error(boost::str(
-                boost::format(
-                    "current master clock rate (%.6f MHz) exceeds maximum possible "
-                    "master clock rate (%.6f MHz) when using %d %s channels")
-                % (tick_rate / 1e6) % (max_tick_rate / 1e6) % chan_count
-                % (direction.empty() ? "data" : direction)));
+                    boost::format(
+                            "current master clock rate (%.6f MHz) exceeds maximum possible "
+                            "master clock rate (%.6f MHz) when using %d %s channels")
+                    % (tick_rate / 1e6) % (max_tick_rate / 1e6) % chan_count
+                    % (direction.empty() ? "data" : direction)));
         }
         const double min_tick_rate =
-            ad9361_device_t::AD9361_MIN_CLOCK_RATE / ((chan_count <= 1) ? 1 : 2);
+                ad9361_device_t::AD9361_MIN_CLOCK_RATE / ((chan_count <= 1) ? 1 : 2);
         if (min_tick_rate - tick_rate >= 1.0) {
             throw uhd::value_error(boost::str(
-                boost::format(
-                    "current master clock rate (%.6f MHz) is less than minimum possible "
-                    "master clock rate (%.6f MHz) when using %d %s channels")
-                % (tick_rate / 1e6) % (min_tick_rate / 1e6) % chan_count
-                % (direction.empty() ? "data" : direction)));
+                    boost::format(
+                            "current master clock rate (%.6f MHz) is less than minimum possible "
+                            "master clock rate (%.6f MHz) when using %d %s channels")
+                    % (tick_rate / 1e6) % (min_tick_rate / 1e6) % chan_count
+                    % (direction.empty() ? "data" : direction)));
         }
     }
 }
@@ -1002,7 +1012,7 @@ void e200_impl::enforce_tick_rate_limits(
 double e200_impl::set_tick_rate(const double new_tick_rate)
 {
     UHD_LOGGER_INFO("E200") << (boost::format("Asking for clock rate %.6f MHz... ")
-                                   % (new_tick_rate / 1e6))
+                                % (new_tick_rate / 1e6))
                             << std::flush;
     check_tick_rate_with_current_streamers(new_tick_rate); // Defined in b200_io_impl.cpp
 
@@ -1036,15 +1046,15 @@ void e200_impl::check_fw_compat(void)
 
     if (compat_major != E200_FW_COMPAT_NUM_MAJOR) {
         throw uhd::runtime_error(str(
-            boost::format(
-                "Expected firmware compatibility number %d.%d, but got %d.%d:\n"
-                "The firmware build is not compatible with the host code build.\n"
-                "%s")
-            % int(E200_FW_COMPAT_NUM_MAJOR) % int(E200_FW_COMPAT_NUM_MINOR) % compat_major
-            % compat_minor % print_utility_error("uhd_images_downloader.py")));
+                boost::format(
+                        "Expected firmware compatibility number %d.%d, but got %d.%d:\n"
+                        "The firmware build is not compatible with the host code build.\n"
+                        "%s")
+                % int(E200_FW_COMPAT_NUM_MAJOR) % int(E200_FW_COMPAT_NUM_MINOR) % compat_major
+                % compat_minor % print_utility_error("uhd_images_downloader.py")));
     }
     _tree->create<std::string>("/mboards/0/fw_version")
-        .set(str(boost::format("%u.%u") % compat_major % compat_minor));
+            .set(str(boost::format("%u.%u") % compat_major % compat_minor));
 }
 
 void e200_impl::check_fpga_compat(void)
@@ -1055,21 +1065,21 @@ void e200_impl::check_fpga_compat(void)
     const uint16_t compat_minor = uint16_t(compat & 0xffff);
     if (signature != 0xACE0BA5E)
         throw uhd::runtime_error(
-            "b200::check_fpga_compat signature register readback failed");
+                "b200::check_fpga_compat signature register readback failed");
 
     const uint16_t expected = ((_product == B200MINI or _product == B205MINI)
-                                   ? E205_FPGA_COMPAT_NUM
-                                   : E200_FPGA_COMPAT_NUM);
+                               ? E205_FPGA_COMPAT_NUM
+                               : E200_FPGA_COMPAT_NUM);
     if (compat_major != expected) {
         throw uhd::runtime_error(str(
-            boost::format("Expected FPGA compatibility number %d, but got %d:\n"
-                          "The FPGA build is not compatible with the host code build.\n"
-                          "%s")
-            % int(expected) % compat_major
-            % print_utility_error("uhd_images_downloader.py")));
+                boost::format("Expected FPGA compatibility number %d, but got %d:\n"
+                              "The FPGA build is not compatible with the host code build.\n"
+                              "%s")
+                % int(expected) % compat_major
+                % print_utility_error("uhd_images_downloader.py")));
     }
     _tree->create<std::string>("/mboards/0/fpga_version")
-        .set(str(boost::format("%u.%u") % compat_major % compat_minor));
+            .set(str(boost::format("%u.%u") % compat_major % compat_minor));
 }
 
 /***********************************************************************
@@ -1082,7 +1092,7 @@ void e200_impl::update_clock_source(const std::string& source)
     if (_product == B200MINI or _product == B205MINI) {
         if (source == "external" and _time_source == EXTERNAL) {
             throw uhd::value_error(
-                "external reference cannot be both a clock source and a time source");
+                    "external reference cannot be both a clock source and a time source");
         }
 
         if (source == "internal") {
@@ -1114,7 +1124,7 @@ void e200_impl::update_clock_source(const std::string& source)
     } else if (source == "gpsdo") {
         if (not _gps or not _gps->gps_detected()) {
             throw uhd::key_error(
-                "update_clock_source: gpsdo selected, but no gpsdo detected!");
+                    "update_clock_source: gpsdo selected, but no gpsdo detected!");
         }
         if (_gpio_state.ref_sel != 1) {
             _gpio_state.ref_sel = 1;
@@ -1131,7 +1141,7 @@ void e200_impl::update_time_source(const std::string& source)
     if ((_product == B200MINI or _product == B205MINI) and source == "external"
         and _gpio_state.ref_sel == 1) {
         throw uhd::value_error(
-            "external reference cannot be both a time source and a clock source");
+                "external reference cannot be both a time source and a clock source");
     }
 
     // We assume source is valid for this device (if it's gone through
@@ -1250,11 +1260,11 @@ void e200_impl::reset_codec()
 void e200_impl::update_gpio_state(void)
 {
     const uint32_t misc_word =
-        0 | (_gpio_state.swap_atr << 8) | (_gpio_state.tx_bandsel_a << 7)
-        | (_gpio_state.tx_bandsel_b << 6) | (_gpio_state.rx_bandsel_a << 5)
-        | (_gpio_state.rx_bandsel_b << 4) | (_gpio_state.rx_bandsel_c << 3)
-        | (_gpio_state.codec_arst << 2) | (_gpio_state.mimo << 1)
-        | (_gpio_state.ref_sel << 0);
+            0 | (_gpio_state.swap_atr << 8) | (_gpio_state.tx_bandsel_a << 7)
+            | (_gpio_state.tx_bandsel_b << 6) | (_gpio_state.rx_bandsel_a << 5)
+            | (_gpio_state.rx_bandsel_b << 4) | (_gpio_state.rx_bandsel_c << 3)
+            | (_gpio_state.codec_arst << 2) | (_gpio_state.mimo << 1)
+            | (_gpio_state.ref_sel << 0);
 
     _local_ctrl->poke32(TOREG(SR_CORE_MISC), misc_word);
 }
@@ -1330,7 +1340,7 @@ void e200_impl::update_enables(void)
 
     if ((num_rx + num_tx) == 3) {
         throw uhd::runtime_error(
-            "b200: 2 RX 1 TX and 1 RX 2 TX configurations not possible");
+                "b200: 2 RX 1 TX and 1 RX 2 TX configurations not possible");
     }
 
     // setup the active chains in the codec
