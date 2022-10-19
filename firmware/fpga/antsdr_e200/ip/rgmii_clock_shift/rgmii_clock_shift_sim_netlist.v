@@ -1,10 +1,10 @@
 // Copyright 1986-2019 Xilinx, Inc. All Rights Reserved.
 // --------------------------------------------------------------------------------
 // Tool Version: Vivado v.2019.1 (lin64) Build 2552052 Fri May 24 14:47:09 MDT 2019
-// Date        : Thu Sep 22 13:04:46 2022
+// Date        : Wed Oct 19 11:29:43 2022
 // Host        : mp-dev running 64-bit Kylin V10 SP1
 // Command     : write_verilog -force -mode funcsim
-//               /home/mp/wcc_demo/e200_net/ip/rgmii_clock_shift/rgmii_clock_shift_sim_netlist.v
+//               /home/mp/wcc_demo/git_antsdr_uhd/antsdr_uhd_project/firmware/fpga/antsdr_e200/ip/rgmii_clock_shift/rgmii_clock_shift_sim_netlist.v
 // Design      : rgmii_clock_shift
 // Purpose     : This verilog netlist is a functional simulation representation of the design and should not be modified
 //               or synthesized. This netlist cannot be used for SDF annotated simulation.

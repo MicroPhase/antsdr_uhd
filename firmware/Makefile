@@ -81,12 +81,12 @@ build/device_tree.dtb: linux/arch/arm/boot/dts/zynq-$(TARGET).dtb | build
 	cp $< $@
 
 ## hdf
-build/antsdr_$(TARGET).hdf: | build
-	bash -c "source $(VIVADO_SETTINGS) && make -C fpga/antsdr_$(TARGET) -j $(NCORES) && cp fpga/antsdr_$(TARGET)/antsdr_$(TARGET)/antsdr_$(TARGET).sdk/antsdr_$(TARGET).hdf $@"
+build/system_top.hdf: | build
+	bash -c "source $(VIVADO_SETTINGS) && make -C fpga/antsdr_$(TARGET) -j $(NCORES) && cp fpga/antsdr_$(TARGET)/antsdr_$(TARGET)/antsdr_$(TARGET).sdk/system_top.hdf $@"
 
 ## bit
-build/system_top.bit : build/antsdr_$(TARGET).hdf
-	unzip -o build/antsdr_$(TARGET).hdf -d build/antsdr_$(TARGET)
+build/system_top.bit : build/system_top.hdf
+	unzip -o build/system_top.hdf -d build/antsdr_$(TARGET)
 	cp build/antsdr_$(TARGET)/antsdr_$(TARGET).bit build/
 
 
@@ -115,6 +115,7 @@ sdimg: build/
 
 clean-build:
 	rm -rf build
+	rm -rf build_sdimg
 
 clean: clean-build
 	make -C linux ARCH=arm CROSS_COMPILE=$(CROSS_COMPILE) distclean

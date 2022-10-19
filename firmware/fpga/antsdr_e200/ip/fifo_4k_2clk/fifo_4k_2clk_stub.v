@@ -1,9 +1,10 @@
 // Copyright 1986-2019 Xilinx, Inc. All Rights Reserved.
 // --------------------------------------------------------------------------------
 // Tool Version: Vivado v.2019.1 (lin64) Build 2552052 Fri May 24 14:47:09 MDT 2019
-// Date        : Thu Sep 22 10:05:45 2022
+// Date        : Wed Oct 19 11:30:20 2022
 // Host        : mp-dev running 64-bit Kylin V10 SP1
-// Command     : write_verilog -force -mode synth_stub /home/mp/wcc_demo/e200_net/ip/fifo_4k_2clk/fifo_4k_2clk_stub.v
+// Command     : write_verilog -force -mode synth_stub
+//               /home/mp/wcc_demo/git_antsdr_uhd/antsdr_uhd_project/firmware/fpga/antsdr_e200/ip/fifo_4k_2clk/fifo_4k_2clk_stub.v
 // Design      : fifo_4k_2clk
 // Purpose     : Stub declaration of top-level module interface
 // Device      : xc7z020clg400-2
