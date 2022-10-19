@@ -1,6 +1,5 @@
 ipcache
 *.ip_user_files
-*.dcp
 *.cache
 *.data
 *.xpr
@@ -15,7 +14,6 @@ ipcache
 *.lso
 *.mfd
 *.nga
-*.ngc
 *.ngd
 *.ngr
 *.pad
