@@ -81,7 +81,7 @@ public:
 };
 
 
-// B205
+// E200
 class e200_ad9361_client_t : public ad9361_params
 {
 public:
@@ -291,76 +291,6 @@ static device_addrs_t e200_find(const device_addr_t& hint)
         if (hint_i.has_key("addr") || hint_i.has_key("resource"))
             return b200_addrs;
     }
-    // Important note:
-    // The get device list calls are nested inside the for loop.
-    // This allows the usb guts to decontruct when not in use,
-    // so that re-enumeration after fw load can occur successfully.
-    // This requirement is a courtesy of libusb1.0 on windows.
-//    size_t found = 0;
-//    for (usb_device_handle::sptr handle : get_e200_device_handles(hint)) {
-//        // extract the firmware path for the b200
-//        std::string b200_fw_image;
-//        try {
-//            b200_fw_image = hint.get("fw", B200_FW_FILE_NAME);
-//            b200_fw_image =
-//                uhd::find_image_path(b200_fw_image, STR(UHD_IMAGES_DIR)); // FIXME
-//        } catch (uhd::exception& e) {
-//            UHD_LOGGER_WARNING("B200") << e.what();
-//            return b200_addrs;
-//        }
-//        UHD_LOGGER_DEBUG("B200") << "the firmware image: " << b200_fw_image;
-//
-//        usb_control::sptr control;
-//        try {
-//            control = usb_control::make(handle, 0);
-//        } catch (const uhd::exception&) {
-//            continue;
-//        } // ignore claimed
-//
-//        // check if fw was already loaded
-//        if (!(handle->firmware_loaded())) {
-//            e200_iface::make(control)->load_firmware(b200_fw_image);
-//        }
-//
-//        found++;
-//    }
-//
-//    const auto timeout_time = std::chrono::steady_clock::now()
-//                              + std::chrono::milliseconds(REENUMERATION_TIMEOUT_MS);
-//    // search for the device until found or timeout
-//    while (std::chrono::steady_clock::now() < timeout_time and b200_addrs.empty()
-//           and found != 0) {
-//        for (usb_device_handle::sptr handle : get_e200_device_handles(hint)) {
-//            usb_control::sptr control;
-//            try {
-//                control = usb_control::make(handle, 0);
-//            } catch (const uhd::exception&) {
-//                continue;
-//            } // ignore claimed
-//
-//            e200_iface::sptr iface          = e200_iface::make(control);
-//            const mboard_eeprom_t mb_eeprom = e200_impl::get_mb_eeprom(iface);
-//
-//            device_addr_t new_addr;
-//            new_addr["type"]   = "b200";
-//            new_addr["name"]   = mb_eeprom["name"];
-//            new_addr["serial"] = handle->get_serial();
-//            try {
-//                // Turn the 16-Bit product ID into a string representation
-//                new_addr["product"] = E2XX_STR_NAMES[get_e200_product(handle, mb_eeprom)];
-//            } catch (const uhd::runtime_error&) {
-//                // No problem if this fails -- this is just device discovery, after all.
-//                new_addr["product"] = "B2??";
-//            }
-//
-//            // this is a found b200 when the hint serial and name match or blank
-//            if ((not hint.has_key("name") or hint["name"] == new_addr["name"])
-//                and (not hint.has_key("serial")
-//                        or hint["serial"] == new_addr["serial"])) {
-//                b200_addrs.push_back(new_addr);
-//            }
-//        }
-//    }
 
     return b200_addrs;
 }
@@ -430,7 +360,7 @@ e200_impl::e200_impl(
        _product = B205MINI;
         _product_mp = E310;
        const std::string addr = device_addr["addr"];
-        UHD_LOGGER_INFO("E200") << "Detected Device: " << "Detected Device: ANTSDR";
+        UHD_LOGGER_INFO("E200") << "Detected Device: ANTSDR";
 
         _gpsdo_capable = 0;
 
@@ -629,7 +559,6 @@ e200_impl::e200_impl(
 
         } else {
             client_settings = boost::make_shared<antsdr_ad9361_client_t>();
-//            client_settings = boost::make_shared<e200_ad9361_client_t>();
         }
         _codec_ctrl = ad9361_ctrl::make_spi(client_settings, _spi_iface, AD9361_SLAVENO);
 
