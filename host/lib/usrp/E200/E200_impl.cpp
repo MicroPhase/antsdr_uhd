@@ -274,7 +274,10 @@ static device_addrs_t e200_find(const device_addr_t& hint)
                 and ntohl(ctrl_data_in->check) == MICROPHASE_CHECK
                 and ntohl(ctrl_data_in->serial) == MICROPHASE_SERIAL_DUDE
                 and ntohl(ctrl_data_in->auth) == MICROPHASE_AUTHOR_DUDE) {
-                mp_addr["serial"] = "19991030";
+                uint8_t serial[32];
+                memcpy(serial,ctrl_data_in->serial_all,sizeof(serial));
+                std::string serial_str((char *)serial);
+                mp_addr["serial"] = serial_str;
                 mp_addr["name"] = "ANTSDR-E200";
                 mp_addr["product"] = "E200";
                 // found the device,open up for communication!
