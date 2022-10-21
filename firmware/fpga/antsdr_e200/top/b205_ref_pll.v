@@ -267,12 +267,13 @@ module b205_ref_pll(
     always @(posedge clk)
         locked <= (ld == 3'b111);
 
-    ad5662_auto_spi dac
-    (
-        .clk(clk),
-        .dat(daco),
-        .sclk(sclk),
-        .mosi(mosi),
-        .sync_n(sync_n)
+    ltc2630_spi u_ltc2630_spi(
+        .clk  ( clk  ),
+        .rst  ( reset  ),
+        .data ( daco ),
+        .sclk ( sclk ),
+        .mosi ( mosi ),
+        .sync_n  ( sync_n  )
     );
+
 endmodule

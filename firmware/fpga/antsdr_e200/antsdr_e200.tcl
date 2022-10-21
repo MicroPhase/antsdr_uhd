@@ -29,7 +29,7 @@ add_files {
     ../lib/ngc/hbdec2.ngc 
     ../lib/ngc/hbdec1.ngc 
     ../lib/dsp/acc.v 
-    ../lib/control/ad5662_auto_spi.v 
+    ../lib/control/ltc2630_spi.v
     ../lib/dsp/add2.v 
     ../lib/dsp/add2_and_clip.v 
     ../lib/dsp/add2_and_clip_reg.v 
