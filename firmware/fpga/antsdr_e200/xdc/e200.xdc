@@ -1,9 +1,9 @@
-set_property  -dict {PACKAGE_PIN  M20   IOSTANDARD  LVCMOS18} [get_ports  CLK_40M_DAC_nSYNC] ;
-set_property  -dict {PACKAGE_PIN  M19   IOSTANDARD  LVCMOS18} [get_ports  CLK_40M_DAC_SCLK] ;
-set_property  -dict {PACKAGE_PIN  M17   IOSTANDARD  LVCMOS18} [get_ports  CLK_40M_DAC_DIN]  ;
+set_property  -dict {PACKAGE_PIN  V6    IOSTANDARD  LVCMOS18} [get_ports  CLK_40M_DAC_nSYNC] ;
+set_property  -dict {PACKAGE_PIN  W6    IOSTANDARD  LVCMOS18} [get_ports  CLK_40M_DAC_SCLK] ;
+set_property  -dict {PACKAGE_PIN  V10   IOSTANDARD  LVCMOS18} [get_ports  CLK_40M_DAC_DIN]  ;
 
 
-set_property  -dict {PACKAGE_PIN  J18   IOSTANDARD  LVCMOS18} [get_ports  PPS_IN]  ;
+set_property  -dict {PACKAGE_PIN  V11   IOSTANDARD  LVCMOS18} [get_ports  PPS_IN]  ;
 set_property  -dict {PACKAGE_PIN  K17   IOSTANDARD  LVCMOS18} [get_ports  CLK_40MHz_FPGA]  ;
 
 

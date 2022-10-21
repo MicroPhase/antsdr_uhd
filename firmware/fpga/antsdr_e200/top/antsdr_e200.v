@@ -360,8 +360,8 @@ module antsdr_e200 (
         // The source clock to drive this pll is currently from zynq ps
         // but we want to have a more accurate clock, we need to use the 
         // clock from the on board crystal oscillator in the future.
-        // .clk_in1(CLK_40MHz_FPGA)
-        .clk_in1(FCLK_CLK2)
+        .clk_in1(CLK_40MHz_FPGA)
+        // .clk_in1(FCLK_CLK2)
     );
 
     reg [15:0] clocks_ready_count;
