@@ -28,8 +28,8 @@ set_property  -dict {PACKAGE_PIN  B20   IOSTANDARD  LVCMOS18} [get_ports  mdc]  
 
 
 set_property  -dict {PACKAGE_PIN  G15   IOSTANDARD  LVCMOS18} [get_ports  cTXDRV_PWEN]  ;
-set_property  -dict {PACKAGE_PIN  J20   IOSTANDARD  LVCMOS18} [get_ports  CLKIN_10MHz]  ;
-set_property  -dict {PACKAGE_PIN  H20   IOSTANDARD  LVCMOS18} [get_ports  CLKIN_10MHz_REQ]  ;
+set_property  -dict {PACKAGE_PIN  J18   IOSTANDARD  LVCMOS18} [get_ports  CLKIN_10MHz]  ;
+set_property  -dict {PACKAGE_PIN  M20   IOSTANDARD  LVCMOS18} [get_ports  CLKIN_10MHz_REQ]  ;
 
 
 # create_clock -name rx_clk       -period  8 [get_ports rgmii_rxc]
