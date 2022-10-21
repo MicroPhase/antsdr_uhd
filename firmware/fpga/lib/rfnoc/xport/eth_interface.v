@@ -85,7 +85,7 @@ module eth_interface #(
   // Allocate one full page for MAC
   localparam [REG_AWIDTH-1:0] REG_MAC_LSB        = BASE + 'h0000;
   localparam [REG_AWIDTH-1:0] REG_MAC_MSB        = BASE + 'h0004;
-
+  localparam [REG_AWIDTH-1:0] REG_MAC_MASK       = BASE + 'h0008;
   // Source IP address
   localparam [REG_AWIDTH-1:0] REG_IP             = BASE + 'h1000;
   // Source UDP Port
@@ -113,9 +113,16 @@ module eth_interface #(
   reg [15:0]      bridge_udp_port;
   reg             bridge_en;
 
+  reg [31:0]      mac_mask ;
+  wire[47:0]      work_mac          ;
+  wire[31:0]      work_ip           ;
+
   assign my_mac       = bridge_en ? bridge_mac_reg : mac_reg;
   assign my_ip        = bridge_en ? bridge_ip_reg : ip_reg;
   assign my_udp_port  = bridge_en ? bridge_udp_port : udp_port;
+
+  assign work_mac = mac_mask[0] ? my_mac : 'd0;
+  assign work_ip = mac_mask[0] ? my_ip : 'd0;
 
   always @(posedge clk) begin
     if (reset) begin
@@ -136,6 +143,9 @@ module eth_interface #(
 
         REG_MAC_MSB:
           mac_reg[47:32]        <= reg_wr_data[15:0];
+
+        REG_MAC_MASK:
+          mac_mask              <= reg_wr_data;
 
         REG_IP:
           ip_reg                <= reg_wr_data;
@@ -172,6 +182,9 @@ module eth_interface #(
 
         REG_MAC_MSB:
           reg_rd_data <= {16'b0,mac_reg[47:32]};
+
+        REG_MAC_MASK:
+          reg_rd_data <= mac_mask;
 
         REG_IP:
           reg_rd_data <= ip_reg;
@@ -254,8 +267,8 @@ module eth_interface #(
     .m_cpu_tlast     (e2c_tlast    ),
     .m_cpu_tvalid    (e2c_tvalid   ),
     .m_cpu_tready    (e2c_tready   ),
-    .my_eth_addr     (my_mac       ),
-    .my_ipv4_addr    (my_ip        ),
+    .my_eth_addr     (work_mac       ),
+    .my_ipv4_addr    (work_ip        ),
     .my_udp_chdr_port(my_udp_port  )
   );
 
