@@ -1,10 +1,10 @@
 // Copyright 1986-2019 Xilinx, Inc. All Rights Reserved.
 // --------------------------------------------------------------------------------
 // Tool Version: Vivado v.2019.1 (lin64) Build 2552052 Fri May 24 14:47:09 MDT 2019
-// Date        : Wed Oct 19 11:29:23 2022
-// Host        : mp-dev running 64-bit Kylin V10 SP1
+// Date        : Fri Oct 21 10:41:00 2022
+// Host        : jcc running 64-bit Ubuntu 18.04.6 LTS
 // Command     : write_verilog -force -mode synth_stub
-//               /home/mp/wcc_demo/git_antsdr_uhd/antsdr_uhd_project/firmware/fpga/antsdr_e200/ip/gen_clks/gen_clks_stub.v
+//               /home/jcc/work/Git-project/antsdr_uhd/firmware/fpga/antsdr_e200/ip/gen_clks/gen_clks_stub.v
 // Design      : gen_clks
 // Purpose     : Stub declaration of top-level module interface
 // Device      : xc7z020clg400-2

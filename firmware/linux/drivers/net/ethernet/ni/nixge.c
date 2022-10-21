@@ -18,6 +18,10 @@
 #include <linux/nvmem-consumer.h>
 #include <linux/ethtool.h>
 #include <linux/iopoll.h>
+#include <linux/init.h>
+#include <linux/cdev.h>
+#include <linux/fs.h>
+#include <linux/device.h>
 
 #define TX_BD_NUM		64
 #define RX_BD_NUM		128
@@ -95,6 +99,8 @@
 #define NIXGE_REG_MAC_LSB	0x1000
 #define NIXGE_REG_MAC_MSB	0x1004
 
+/* jcc */
+#define NIXGE_REG_MAC_MASK 0x1008
 /* Packet size info */
 #define NIXGE_HDR_SIZE		14 /* Size of Ethernet header */
 #define NIXGE_TRL_SIZE		4 /* Size of Ethernet trailer (FCS) */
@@ -206,6 +212,11 @@ struct nixge_priv {
 
 	int is_fixed_link;
 };
+
+static unsigned int major; /* major number for device */
+static struct class *dummy_class;
+static struct cdev dummy_cdev;
+struct net_device *ndev_chr;
 
 static void nixge_dma_write_reg(struct nixge_priv *priv, off_t offset, u32 val)
 {
@@ -979,6 +990,8 @@ static s32 __nixge_hw_set_mac_address(struct net_device *ndev)
 	nixge_ctrl_write_reg(priv, NIXGE_REG_MAC_MSB,
 			     (ndev->dev_addr[1] | (ndev->dev_addr[0] << 8)));
 
+	
+
 	return 0;
 }
 
@@ -1268,6 +1281,7 @@ static int nixge_of_get_resources(struct platform_device *pdev)
 
 	ndev = platform_get_drvdata(pdev);
 	priv = netdev_priv(ndev);
+
 	of_id = of_match_node(nixge_dt_ids, pdev->dev.of_node);
 	if (!of_id)
 		return -ENODEV;
@@ -1300,11 +1314,102 @@ static int nixge_of_get_resources(struct platform_device *pdev)
 	return 0;
 }
 
+static int dummy_open(struct inode * inode, struct file * filp)
+{
+    return 0;
+}
+
+static int dummy_release(struct inode * inode, struct file * filp)
+{
+    return 0;
+}
+
+static ssize_t dummy_read (struct file *filp, char __user * buf, size_t count,
+                                loff_t * offset)
+{
+    return 0;
+}
+
+
+static ssize_t dummy_write(struct file * filp, const char __user * buf, size_t count,
+                                loff_t * offset)
+{
+	struct nixge_priv *priv = netdev_priv(ndev_chr);
+	int value;
+	char write_buf[10];
+	value = copy_from_user(write_buf,buf,count);
+    if(value == 0){
+		nixge_ctrl_write_reg(priv, NIXGE_REG_MAC_MASK, (int) (write_buf[0] - '0'));
+	}
+    return count;
+}
+
+
+static struct file_operations dummy_fops = {
+    .owner = THIS_MODULE,
+	.open =  dummy_open,
+    .release = dummy_release,
+    .read =  dummy_read,
+    .write =     dummy_write,
+};
+
+static void dummy_char_init(struct device *dummy_device)
+{
+    int error;
+    dev_t devt = 0;
+
+    pr_emerg("init char module\n");
+    error = alloc_chrdev_region(&devt, 0, 1, "dummy_char");
+    if (error < 0) {
+        pr_err("Can't get major number\n");
+        return ;
+    }
+    major = MAJOR(devt);
+    pr_emerg("dummy_char major number = %d\n",major);
+
+    dummy_class = class_create(THIS_MODULE, "dummy_char_class");
+    if (IS_ERR(dummy_class)) {
+        pr_err("Error creating dummy char class.\n");
+        unregister_chrdev_region(MKDEV(major, 0), 1);
+        return;
+    }
+    /* Initialize the char device and tie a file_operations to it */
+    cdev_init(&dummy_cdev, &dummy_fops);
+    dummy_cdev.owner = THIS_MODULE;
+    /* Now make the device live for the users to access */
+    cdev_add(&dummy_cdev, devt, 1);
+
+    dummy_device = device_create(dummy_class,
+                                NULL,   /* no parent device */
+                                devt,    /* associated dev_t */
+                                NULL,   /* no additional data */
+                                "dummy_char");  /* device name */
+
+    if (IS_ERR(dummy_device)) {
+        pr_emerg("Error creating dummy char device.\n");
+        class_destroy(dummy_class);
+        unregister_chrdev_region(devt, 1);
+        return ;
+    }
+
+    pr_emerg("dummy char module loaded\n");
+    return;
+}
+
+static void dummy_char_cleanup_module(void)
+{
+	unregister_chrdev_region(MKDEV(major, 0), 1);
+    device_destroy(dummy_class, MKDEV(major, 0));
+    cdev_del(&dummy_cdev);
+    class_destroy(dummy_class);
+}
+
 static int nixge_probe(struct platform_device *pdev)
 {
 	struct device_node *mn, *phy_node;
 	struct nixge_priv *priv;
 	struct net_device *ndev;
+	struct device *cdev;
 	const u8 *mac_addr;
 	int err;
 
@@ -1312,8 +1417,10 @@ static int nixge_probe(struct platform_device *pdev)
 	if (!ndev)
 		return -ENOMEM;
 
+	dummy_char_init(cdev);
 	platform_set_drvdata(pdev, ndev);
 	SET_NETDEV_DEV(ndev, &pdev->dev);
+	
 
 	ndev->features = NETIF_F_SG;
 	ndev->netdev_ops = &nixge_netdev_ops;
@@ -1334,12 +1441,15 @@ static int nixge_probe(struct platform_device *pdev)
 	priv = netdev_priv(ndev);
 	priv->ndev = ndev;
 	priv->dev = &pdev->dev;
+	ndev_chr = ndev;
 
 	netif_napi_add(ndev, &priv->napi, nixge_poll, NAPI_POLL_WEIGHT);
 	// get the dma and eth_interface io register resources
 	err = nixge_of_get_resources(pdev);
 	if (err)
 		return err;
+
+	nixge_ctrl_write_reg(priv, NIXGE_REG_MAC_MASK, 0);
 	// set the mac address to PL eth_interface
 	__nixge_hw_set_mac_address(ndev);
 
@@ -1420,7 +1530,7 @@ static int nixge_remove(struct platform_device *pdev)
 	struct nixge_priv *priv = netdev_priv(ndev);
 
 	unregister_netdev(ndev);
-
+	dummy_char_cleanup_module();
 	if (priv->is_fixed_link)
 		of_phy_deregister_fixed_link(pdev->dev.of_node);
 	of_node_put(priv->phy_node);
