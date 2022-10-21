@@ -64,7 +64,7 @@
 	clock-frequency = <400000>;
 
 	eeprom@50 {
-		compatible = "atmel,24c32";
+		compatible = "atmel,24c256";
 		reg = <0x50>;
 	};
 
