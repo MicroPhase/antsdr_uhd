@@ -14,11 +14,10 @@
 #include "zynq-7000.dtsi"
 
 / {
-	model = "NI Ettus Research Project Neon SDR";
+	model = "MICROPHASE E200 SDR";
 	compatible = "ettus,zynq-neon-rev1", "xlnx,zynq-7000";
 
 	aliases {
-		// ethernet0 = &gem0;
 		serial0 = &uart0;
 		spi0 = &spi0;
 		i2c0 = &i2c0;
@@ -134,11 +133,4 @@
 			link-gpios = <&gpio0 114 0>;
 		};
 	};
-
-	// uio@40006000 {
-	// 	compatible = "usrp-uio";
-	// 	reg = <0x40006000 0x2000>; //FIXME
-	// 	reg-names = "misc-enet-regs";
-	// 	status = "okay";
-	// };
 };
