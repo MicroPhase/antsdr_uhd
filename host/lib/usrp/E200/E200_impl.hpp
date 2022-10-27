@@ -156,7 +156,7 @@ class e200_impl : public uhd::device
 {
 public:
     // structors
-    e200_impl(const uhd::device_addr_t&, uhd::transport::usb_device_handle::sptr& handle);
+    e200_impl(const uhd::device_addr_t&);
     ~e200_impl(void);
 
     // the io interface
@@ -198,6 +198,7 @@ private:
     uhd::transport::zero_copy_if::sptr _data_tx_transport;
     uhd::transport::zero_copy_if::sptr _data_rx_transport;
     uhd::usrp::recv_packet_demuxer_3000::sptr _demux_tx;
+
 
     // transports
     uhd::transport::zero_copy_if::sptr _data_transport;

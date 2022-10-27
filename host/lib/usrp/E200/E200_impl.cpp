@@ -222,7 +222,11 @@ static device_addrs_t e200_find(const device_addr_t& hint)
     /* connect the device from ethernet "addr=" */
     udp_simple::sptr udp_transport;
     device_addr_t find_e310;
-    find_e310["addr"] = "192.168.1.10";
+    if(not hint.has_key("addr")){
+        find_e310["addr"] = "192.168.1.10";
+    }
+    else
+        find_e310["addr"] = hint["addr"];
     try {
         udp_transport = udp_simple::make_broadcast(
                 find_e310["addr"], BOOST_STRINGIZE(MICROPHASE_E310_UDP_FIND_PORT));
@@ -312,25 +316,16 @@ static device_addrs_t e200_find(const device_addr_t& hint)
  **********************************************************************/
 static device::sptr e200_make(const device_addr_t& device_addr)
 {
-    uhd::transport::usb_device_handle::sptr handle;
-
     // We try twice, because the first time, the link might be in a bad state
     // and we might need to reset the link, but if that didn't help, trying
     // a third time is pointless.
     try {
-        return device::sptr(new e200_impl(device_addr, handle));
-    } catch (const uhd::usb_error&) {
+        return device::sptr(new e200_impl(device_addr));
+    } catch (const uhd::runtime_error&) {
         UHD_LOGGER_INFO("E200") << "Detected bad net state; resetting.";
-        libusb::device_handle::sptr dev_handle(libusb::device_handle::get_cached_handle(
-                boost::static_pointer_cast<libusb::special_handle>(handle)->get_device()));
-        dev_handle->clear_endpoints(
-                E200_USB_CTRL_RECV_ENDPOINT, E200_USB_CTRL_SEND_ENDPOINT);
-        dev_handle->clear_endpoints(
-                E200_USB_DATA_RECV_ENDPOINT, E200_USB_DATA_SEND_ENDPOINT);
-        dev_handle->reset_device();
     }
 
-    return device::sptr(new e200_impl(device_addr, handle));
+    return device::sptr(new e200_impl(device_addr));
 }
 
 UHD_STATIC_BLOCK(register_e200_device)
@@ -342,7 +337,7 @@ UHD_STATIC_BLOCK(register_e200_device)
  * Structors
  **********************************************************************/
 e200_impl::e200_impl(
-        const uhd::device_addr_t& device_addr, usb_device_handle::sptr& handle)
+        const uhd::device_addr_t& device_addr)
         : _product(B200_)
         , // Some safe value
           _revision(0)
@@ -373,6 +368,19 @@ e200_impl::e200_impl(
         _product_mp = E310;
         const std::string addr = device_addr["addr"];
         UHD_LOGGER_INFO("E200") << "Detected Device: ANTSDR";
+
+        mboard_eeprom_t mb_eeprom;
+        mb_eeprom["magic"] = "45568";
+        mb_eeprom["eeprom_revision"] = "v0.1";
+        mb_eeprom["eeprom_compat"] = "1";
+        mb_eeprom["product"] = "MICROPHASE";
+        mb_eeprom["name"] = "E200";
+        mb_eeprom["serial"] = device_addr["serial"];
+        _tree->create<mboard_eeprom_t>(mb_path / "eeprom")
+                .set(mb_eeprom)
+                .add_coerced_subscriber(
+                        std::bind(&e200_impl::set_mb_eeprom,this,std::placeholders::_1)
+                        );
 
         _gpsdo_capable = 0;
 
