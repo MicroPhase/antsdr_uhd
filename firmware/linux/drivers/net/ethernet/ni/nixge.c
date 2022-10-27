@@ -22,6 +22,7 @@
 #include <linux/cdev.h>
 #include <linux/fs.h>
 #include <linux/device.h>
+#include <linux/string.h>
 
 #define TX_BD_NUM		64
 #define RX_BD_NUM		128
@@ -101,6 +102,7 @@
 
 /* jcc */
 #define NIXGE_REG_MAC_MASK 0x1008
+#define NIXGE_IP_CTL	0x2000
 /* Packet size info */
 #define NIXGE_HDR_SIZE		14 /* Size of Ethernet header */
 #define NIXGE_TRL_SIZE		4 /* Size of Ethernet trailer (FCS) */
@@ -1327,21 +1329,87 @@ static int dummy_release(struct inode * inode, struct file * filp)
 static ssize_t dummy_read (struct file *filp, char __user * buf, size_t count,
                                 loff_t * offset)
 {
+	struct nixge_priv *priv = netdev_priv(ndev_chr);
+	u32 ip[1];
+	int value;
+	ip[0] = nixge_ctrl_read_reg(priv,NIXGE_IP_CTL);
+	value = copy_to_user(buf,ip,sizeof(ip));
+	if(value == 0)
+		return count;
     return 0;
 }
 
+static void split_ip(char *input,char *first,char *second,char *third,char *fourth)
+{
+	int i,j = 0;
+	int flag = 0;
+	for(i=0;i<strlen(input);i++)
+	{
+		switch (flag)
+		{
+		case 0:
+			first[j] = input[i];
+			break;
+		case 1:
+			second[j] = input[i];
+		case 2:
+			third[j] = input[i];
+		case 3:
+			fourth[j] = input[i];
+		default:
+			break;
+		}
+		j++;
+		if(input[i] == '.')
+		{
+			switch (flag)
+			{
+			case 0:
+				first[j] = '\0';
+				break;
+			case 1:
+				second[j] = '\0';
+			case 2:
+				third[j] ='\0';
+			case 3:
+				fourth[j] = '\0';
+			default:
+				break;
+			}
+			j = 0;
+			flag++;
+		}
+	}
+}
 
 static ssize_t dummy_write(struct file * filp, const char __user * buf, size_t count,
                                 loff_t * offset)
 {
 	struct nixge_priv *priv = netdev_priv(ndev_chr);
 	int value;
-	char write_buf[10];
+	char write_buf[20];
 	value = copy_from_user(write_buf,buf,count);
     if(value == 0){
-		nixge_ctrl_write_reg(priv, NIXGE_REG_MAC_MASK, (int) (write_buf[0] - '0'));
+		if(2 == count){
+			nixge_ctrl_write_reg(priv, NIXGE_REG_MAC_MASK, (int) (write_buf[0] - '0'));
+		}
+		else if(count >= 9){
+			u32 top_n,mid_n,s_mid_n,last_n;
+			u32 write_reg_ip;
+			char ip[20];
+			char top[5],mid[5],s_mid[5],last[5];
+			memcpy(ip,write_buf,strlen(write_buf));
+			split_ip(ip,top,mid,s_mid,last);
+			top_n = simple_strtol(top,NULL,10);
+			mid_n = simple_strtol(mid,NULL,10);
+			s_mid_n = simple_strtol(s_mid,NULL,10);
+			last_n = simple_strtol(last,NULL,10);
+			write_reg_ip = top_n << 24 | mid_n << 16 | s_mid_n <<8 | last_n;
+			nixge_ctrl_write_reg(priv,NIXGE_IP_CTL,write_reg_ip);
+		}
+		return count;
 	}
-    return count;
+	return 0;
 }
 
 

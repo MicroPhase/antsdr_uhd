@@ -14,11 +14,10 @@
 #include "zynq-7000.dtsi"
 
 / {
-	model = "NI Ettus Research Project Neon SDR";
+	model = "MICROPHASE E200 SDR";
 	compatible = "ettus,zynq-neon-rev1", "xlnx,zynq-7000";
 
 	aliases {
-		// ethernet0 = &gem0;
 		serial0 = &uart0;
 		spi0 = &spi0;
 		i2c0 = &i2c0;
@@ -115,7 +114,7 @@
 
 	nixge0: ethernet@40000000 {
 		compatible = "ni,xge-enet-2.00";
-		reg = <0x40000000 0x6000>; //FIXME
+		reg = <0x40000000 0x8000>; //FIXME
 
 		clocks = <&clkc 15>;
 		clock-names = "bus_clk";
@@ -133,12 +132,5 @@
 			/* 114 = 54 (MIOs) + 60 (EMIO 60) */
 			link-gpios = <&gpio0 114 0>;
 		};
-	};
-
-	uio@40006000 {
-		compatible = "usrp-uio";
-		reg = <0x40006000 0x2000>; //FIXME
-		reg-names = "misc-enet-regs";
-		status = "okay";
 	};
 };
