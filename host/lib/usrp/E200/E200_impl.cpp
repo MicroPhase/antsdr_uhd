@@ -281,6 +281,7 @@ static device_addrs_t e200_find(const device_addr_t& hint)
                 uint8_t serial[32];
                 memcpy(serial,ctrl_data_in->serial_all,sizeof(serial));
                 std::string serial_str((char *)serial);
+                std::transform(serial_str.begin(),serial_str.end(),serial_str.begin(),::toupper);
                 mp_addr["serial"] = serial_str;
                 mp_addr["name"] = "ANTSDR-E200";
                 mp_addr["product"] = "E200";
@@ -484,7 +485,7 @@ e200_impl::e200_impl(
         ////////////////////////////////////////////////////////////////////
         // Initialize the properties tree
         ////////////////////////////////////////////////////////////////////
-        std::string product_name = "ANTSDR-E200";
+        std::string product_name = "B210";
         _tree->create<std::string>("/name").set("ANT-E-Series Device");
         _tree->create<std::string>(mb_path / "name").set(product_name);
         _tree->create<std::string>(mb_path / "codename")
