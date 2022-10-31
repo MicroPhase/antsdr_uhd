@@ -49,14 +49,14 @@ module antsdr_u205_io (
   generate
     for (n = 0; n < 12; n = n + 1) begin
       IDDR #(.DDR_CLK_EDGE("SAME_EDGE")) iddr (
-        .C(rx_clk_bufr), .CE(1'b1), .R(1'b0), .S(1'b0),
+        .C(radio_clk), .CE(1'b1), .R(1'b0), .S(1'b0),
         .D(rx_data[n]), .Q1(rx_q[n]), .Q2(rx_i[n]));
     end
   endgenerate
 
   wire rx_frame_rising, rx_frame_falling;
   IDDR #(.DDR_CLK_EDGE("SAME_EDGE")) iddr_frame (
-    .C(rx_clk_bufr), .CE(1'b1), .R(1'b0), .S(1'b0),
+    .C(radio_clk), .CE(1'b1), .R(1'b0), .S(1'b0),
     .D(rx_frame), .Q1(rx_frame_rising), .Q2(rx_frame_falling));
 
   always @(posedge radio_clk or posedge radio_rst) begin
