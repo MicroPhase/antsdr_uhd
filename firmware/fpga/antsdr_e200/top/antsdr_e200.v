@@ -74,9 +74,6 @@ module antsdr_e200 (
         // AD936x - Always on 40MHz clock:
         input  wire	 			CLK_40MHz_FPGA  ,
 
-        // GPIO
-        // output wire       clk_sel,
-
         // PPS or 10 MHz (need to choose from SW)
         input  wire             PPS_IN          ,
         input  wire             CLKIN_10MHz     ,
@@ -130,19 +127,13 @@ module antsdr_e200 (
     parameter PROTOCOL = "1GbE";
     parameter RGMII = 1;
     parameter MDIO_EN = 1'b1;
-    parameter MDIO_PHYADDR = 5'd0;
+    parameter MDIO_PHYADDR = 5'd1;
 
 
     // Constants
     localparam REG_AWIDTH = 14; // log2(0x4000)
     localparam REG_DWIDTH = 32;
-    //If bus_clk freq ever changes, update this parameter accordingly.
-    localparam BUS_CLK_RATE = 32'd200000000; //200 MHz bus_clk rate.
     localparam SFP_PORTNUM = 8'b0; // Only one SFP port
-    localparam NUM_RADIOS = 1;
-    localparam NUM_CHANNELS_PER_RADIO = 2;
-    localparam NUM_DBOARDS = 1;
-    localparam NUM_CHANNELS = NUM_RADIOS * NUM_CHANNELS_PER_RADIO;
 
     // Clocks
     wire bus_clk;
@@ -280,7 +271,6 @@ module antsdr_e200 (
     wire [31:0] port_info;
     wire        link_up;
     wire [15:0] device_id;
-    wire        clocks_locked;
 
     ///////////////////////////////////////////////////////////////////////
     // generate clocks from always on codec main clk
@@ -288,7 +278,6 @@ module antsdr_e200 (
     wire locked;
     wire int_40mhz;
     wire ref_pll_clk;
-    wire clk_200M   ;
 
 
     wire    [63:0]  h2c_fifo_post_tdata     ;
@@ -320,9 +309,6 @@ module antsdr_e200 (
 
     assign global_rst = bus_rst;
 
-    // PS-based Resets //
-    //
-    // Synchronous reset for the clk40 domain. This is derived from the PS reset 0.
     reset_sync clk40_reset_gen (
         .clk(clk40),
         .reset_in(~FCLK_RESET0_N),
@@ -344,7 +330,6 @@ module antsdr_e200 (
     wire refclk_locked_busclk;
 
     assign clk40   = FCLK_CLK0;   // 40 MHz
-    // assign bus_clk = FCLK_CLK1;   // 200 MHz
     assign reg_clk = clk40;
 
     // assign clk_sel = 1'b1;
@@ -354,14 +339,9 @@ module antsdr_e200 (
         .clk_out1(int_40mhz),       // output clk_out1
         .clk_out2(bus_clk),         // output clk_out2
         .clk_out3(ref_pll_clk),     // output clk_out3
-        .clk_out4(clk_200M),        // output clk_out3
         .locked(locked),            // output locked
 
-        // The source clock to drive this pll is currently from zynq ps
-        // but we want to have a more accurate clock, we need to use the 
-        // clock from the on board crystal oscillator in the future.
         .clk_in1(CLK_40MHz_FPGA)
-        // .clk_in1(FCLK_CLK2)
     );
 
     reg [15:0] clocks_ready_count;
@@ -384,14 +364,6 @@ module antsdr_e200 (
     reset_sync ref_pll_sync(.clk(ref_pll_clk), .reset_in(!clocks_ready), .reset_out(ref_pll_rst));
     reset_sync radio_sync(.clk(radio_clk), .reset_in(!clocks_ready), .reset_out(radio_rst));
 
-
-    ///////////////////////////////////////////////////////////////////////
-    // reference clock PLL
-    // this module do not have any effect on the system right now, because 
-    // we are using the zynq ps to pl clock as the main pll drive clock
-    // If we use the on board crystal oscillator, then we can get a more 
-    // accurate clock for the system.
-    ///////////////////////////////////////////////////////////////////////
     wire ref_sel;
     wire ext_ref;
     wire ext_ref_is_pps;
@@ -574,12 +546,6 @@ module antsdr_e200 (
         .v2e_tready              ( v2e_tready              )
     );
 
-
-    /////////////////////////////////////////////////////////////////////
-    //SFP_PORTNUM
-    // SFP Wrapper: All protocols (1G/XG/AA) + eth_switch
-    //
-    /////////////////////////////////////////////////////////////////////
     wire  mdio_out;
     wire  mdio_tri;
     wire  mdio_in;
@@ -914,5 +880,5 @@ module antsdr_e200 (
     );
 
 
-endmodule // e320
+endmodule
 `default_nettype wire
