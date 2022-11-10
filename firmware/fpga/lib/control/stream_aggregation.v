@@ -135,7 +135,10 @@ module stream_aggregation #(
         case (mx_state)
             MX_IDLE :
                 // the resp is tx flow control
-                if(i0_tvalid_int && i0_tdata_int[31:16] == 'h50 && i0_tdata_int[63]==1'b1)
+                if(i0_tvalid_int && i0_tdata_int[31:16] == R0_DATA_SID && i0_tdata_int[63]==1'b1)
+                    mx_state <= MX_0;
+                                // the resp is tx flow control
+                else if(i0_tvalid_int && i0_tdata_int[31:16] == R1_DATA_SID && i0_tdata_int[63]==1'b1)
                     mx_state <= MX_0;
                 // the resp is ctrl resp
                 else if (i0_tvalid_int & i0_tdata_int[63]==1'b1) begin
