@@ -45,7 +45,7 @@ module b200_core
     output [31:0] tx0, output [31:0] tx1,
     output [7:0] fe0_gpio_out, output [7:0] fe1_gpio_out,
     input [9:0] fp_gpio_in, output [9:0] fp_gpio_out, output [9:0] fp_gpio_ddr,
-    input 	  pps_int, input pps_ext,
+    input 	  pps_ref,
     output    pps_fpga_int,
     output [1:0] pps_select,
 
@@ -107,15 +107,9 @@ module b200_core
     assign pps_fpga_int = int_pps;
     // Flop PPS signals into radio clock domain
     reg [1:0] 	 gpsdo_pps_del, ext_pps_del, int_pps_del;
-    always @(posedge radio_clk) ext_pps_del[1:0] <= {ext_pps_del[0], pps_ext};
-    always @(posedge radio_clk) gpsdo_pps_del[1:0] <= {gpsdo_pps_del[0], pps_int};
-    always @(posedge radio_clk) int_pps_del[1:0] <= {int_pps_del[0], int_pps};
 
     // PPS mux
-    wire pps =  (pps_select == 2'b00)? gpsdo_pps_del[1] :
-                (pps_select == 2'b01)? ext_pps_del[1] :
-                (pps_select == 2'b10)? int_pps_del[1] :
-                1'b0;
+    wire pps =   (pps_select == 2'b11)? 1'b0 : pps_ref;
 
     /*******************************************************************
      * Response mux Routing logic

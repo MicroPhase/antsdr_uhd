@@ -41,25 +41,46 @@ module antsdr_u205_io (
   ** RX Capture Interface
   ****************************************************************************/
   wire rx_clk_bufr; // Capture clock
+  wire rx_clk_mimo_bufr;
   BUFR bufr_rx_clk (.I(rx_clk), .O(rx_clk_bufr));
-  BUFG bufg_radio_clk (.I(rx_clk_bufr), .O(radio_clk));
+  
+  BUFR #(
+   .BUFR_DIVIDE("2"),   // Values: "BYPASS, 1, 2, 3, 4, 5, 6, 7, 8"
+   .SIM_DEVICE("7SERIES")  // Must be set to "7SERIES"
+  )
+  BUFR_inst (
+    .O(rx_clk_mimo_bufr),     // 1-bit output: Clock output port
+    .CE(1'b1),   // 1-bit input: Active high, clock enable (Divided modes only)
+    .CLR(areset), // 1-bit input: Active high, asynchronous clear (Divided modes only)
+    .I(rx_clk)      // 1-bit input: Clock buffer input driven by an IBUF, MMCM or local interconnect
+  );
 
+  BUFGMUX #(
+    )
+    BUFGMUX_inst (
+       .O(radio_clk),   // 1-bit output: Clock output
+       .I0(rx_clk_bufr), // 1-bit input: Clock input (S=0)
+       .I1(rx_clk_mimo_bufr), // 1-bit input: Clock input (S=1)
+       .S(mimo_sync)    // 1-bit input: Clock select
+    );
+
+    
   wire [11:0] rx_i, rx_q;
   genvar n;
   generate
     for (n = 0; n < 12; n = n + 1) begin
       IDDR #(.DDR_CLK_EDGE("SAME_EDGE")) iddr (
-        .C(radio_clk), .CE(1'b1), .R(1'b0), .S(1'b0),
+        .C(rx_clk_bufr), .CE(1'b1), .R(1'b0), .S(1'b0),
         .D(rx_data[n]), .Q1(rx_q[n]), .Q2(rx_i[n]));
     end
   endgenerate
 
   wire rx_frame_rising, rx_frame_falling;
   IDDR #(.DDR_CLK_EDGE("SAME_EDGE")) iddr_frame (
-    .C(radio_clk), .CE(1'b1), .R(1'b0), .S(1'b0),
+    .C(rx_clk_bufr), .CE(1'b1), .R(1'b0), .S(1'b0),
     .D(rx_frame), .Q1(rx_frame_rising), .Q2(rx_frame_falling));
 
-  always @(posedge radio_clk or posedge radio_rst) begin
+  always @(posedge rx_clk_bufr or posedge radio_rst) begin
     if (radio_rst) begin
       rx_stb <= 1'b0;
     end else begin
@@ -90,22 +111,22 @@ module antsdr_u205_io (
   generate
     for (n = 0; n < 12; n = n + 1) begin
       ODDR #(.DDR_CLK_EDGE("SAME_EDGE")) oddr (
-        .C(radio_clk), .CE(1'b1), .R(1'b0), .S(1'b0),
+        .C(rx_clk_bufr), .CE(1'b1), .R(1'b0), .S(1'b0),
         .D1(tx_i[n]), .D2(tx_q[n]), .Q(tx_data[n]));
     end
   endgenerate
 
   ODDR #(.DDR_CLK_EDGE("SAME_EDGE")) oddr_frame (
-    .C(radio_clk), .CE(1'b1), .R(1'b0), .S(1'b0),
+    .C(rx_clk_bufr), .CE(1'b1), .R(1'b0), .S(1'b0),
     // In SISO mode, TX frame is asserted only on the falling edge
     .D1(tx_frame_int), .D2(tx_frame_int & mimo_sync), .Q(tx_frame));
 
   ODDR #(.DDR_CLK_EDGE("SAME_EDGE")) oddr_clk (
-    .C(radio_clk), .CE(1'b1), .R(1'b0), .S(1'b0),
+    .C(rx_clk_bufr), .CE(1'b1), .R(1'b0), .S(1'b0),
     .D1(1'b1), .D2(1'b0), .Q(tx_clk));
 
   reg [11:0] tx_i1_hold, tx_q1_hold;
-  always @(posedge radio_clk or posedge radio_rst) begin
+  always @(posedge rx_clk_bufr or posedge radio_rst) begin
     if (radio_rst) begin
       tx_stb       <= 1'b0;
       tx_frame_int <= 1'b1;
@@ -136,4 +157,25 @@ module antsdr_u205_io (
     end
   end
 
+
+  // wire [255:0] probe0;
+  // assign probe0 = {
+  //   rx_i0,
+  //   rx_q0,
+  //   rx_i1,
+  //   rx_q1,
+  //   rx_stb,
+  //   tx_i0,
+  //   tx_q0,
+  //   tx_i1,
+  //   tx_q1,
+  //   tx_stb
+
+  // };
+  // ila_0 u_ila (
+  //     .clk(radio_clk), // input wire clk
+  
+  
+  //     .probe0(probe0) // input wire [255:0] probe0
+  // );
 endmodule

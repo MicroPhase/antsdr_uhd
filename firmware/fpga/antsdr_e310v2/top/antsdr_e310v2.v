@@ -39,7 +39,7 @@
 // Revision History:
 // Date          By            Revision    Change Description
 //---------------------------------------------------------------------
-// 2022-10-09     Chaochen Wei  1.0         Original
+// 2022-11-21     Chaochen Wei  1.0         Original
 // 
 // 
 // --------------------------------------------------------------------------------
@@ -286,8 +286,6 @@ module antsdr_e310v2 (
     // generate clocks from always on codec main clk
     ///////////////////////////////////////////////////////////////////////
     wire locked;
-    wire int_40mhz;
-    wire ref_pll_clk;
 
 
     wire    [63:0]  h2c_fifo_post_tdata     ;
@@ -333,7 +331,7 @@ module antsdr_e310v2 (
     // Clocks and PPS
     //
     /////////////////////////////////////////////////////////////////////
-
+    wire clk_int40;
     wire pps_refclk;
     wire [1:0] pps_select;
     wire pps_fpga_int;
@@ -343,21 +341,9 @@ module antsdr_e310v2 (
     assign clk40   = FCLK_CLK0;   // 40 MHz
     assign reg_clk = clk40;
 
-    // assign clk_sel = 1'b1;
-
-
-    gen_clks gen_clks(
-        .clk_out1(int_40mhz),       // output clk_out1
-        .clk_out2(bus_clk),         // output clk_out2
-        .clk_out3(ref_pll_clk),     // output clk_out3
-        .locked(locked),            // output locked
-
-        .clk_in1(CLK_40MHz_FPGA)
-    );
-
     reg [15:0] clocks_ready_count;
     reg clocks_ready;
-    always @(posedge int_40mhz or posedge global_rst or negedge locked) begin
+    always @(posedge bus_clk or posedge global_rst or negedge locked) begin
         if (global_rst | !locked) begin
             clocks_ready_count <= 16'b0;
             clocks_ready <= 1'b0;
@@ -371,29 +357,57 @@ module antsdr_e310v2 (
     ///////////////////////////////////////////////////////////////////////
     // Create sync reset signals
     ///////////////////////////////////////////////////////////////////////
-    wire  ref_pll_rst, radio_rst;
-    reset_sync ref_pll_sync(.clk(ref_pll_clk), .reset_in(!clocks_ready), .reset_out(ref_pll_rst));
+    
+    wire   radio_rst;
     reset_sync radio_sync(.clk(radio_clk), .reset_in(!clocks_ready), .reset_out(radio_rst));
 
-    wire ref_sel;
+    wire [1:0] refsel;
     wire ext_ref;
     wire ext_ref_is_pps;
     wire ext_ref_locked;
+    wire lpps;
+    
+    // pps_select == 2'b00 ----> onboard gps module pps
+    // pps_select == 2'b01 ----> external pps/10M
+    // pps_select == 2'b10 ----> internal pps genreated by fpga
+
     assign ext_ref =    (pps_select == 2'b00)? PPS_IN_INT :
                         (pps_select == 2'b01)? PPS_IN_EXT :
-                        (pps_select == 2'b10)? pps_fpga_int :
-                        ref_sel ? CLKIN_10MHz : 1'b0;
+                        (pps_select == 2'b10)? pps_fpga_int : 1'b0;
+    wire is10meg;
+    wire ispps;
 
-    b205_ref_pll ref_pll(
-        .reset(ref_pll_rst),
-        .clk(ref_pll_clk),
-        .refclk(int_40mhz),
-        .ref_x(ext_ref),
-        .locked(ext_ref_locked),
-        .sclk(CLK_40M_DAC_SCLK),
-        .mosi(CLK_40M_DAC_DIN),
-        .sync_n(CLK_40M_DAC_nSYNC)
+    assign refsel = (pps_select == 2'b01 || pps_select == 2'b10) ? 2'b11 : 
+                    (pps_select == 2'b00)? 2'b00: 2'b01;
+
+    gen_clks u_gen_clocks_main(
+        .clk_out1(),
+        .clk_out2(bus_clk),
+        .clk_out3(),    
+
+        .locked(),      
+        .clk_in1(clk_int40)
+    ); 
+
+
+    ppsloop u_ppsloop(
+        .reset   ( 1'b0   ),
+        .xoclk   ( CLK_40MHz_FPGA   ),
+        .ppsgps  ( PPS_IN_INT  ),
+        .ppsext  ( ext_ref  ),
+        .refsel  ( refsel  ),
+        .lpps    ( lpps    ),
+        .is10meg ( is10meg ),
+        .ispps   ( ispps   ),
+        .reflck  ( ext_ref_locked  ),
+        .plllck  ( locked  ),
+        .clk_int40 ( clk_int40 ),
+        .sclk    ( CLK_40M_DAC_SCLK    ),
+        .mosi    ( CLK_40M_DAC_DIN    ),
+        .sync_n  ( CLK_40M_DAC_nSYNC  ),
+        .dac_dflt  ( 16'h7fff  )
     );
+
 
     ///////////////////////////////////////////////////////////////////////
     // AD936x I/O
@@ -481,12 +495,11 @@ module antsdr_e310v2 (
        fe1_gpio <= swap_atr_n ? radio0_gpio : radio1_gpio;
     end
  
-    assign {tx_amp_en1, SFDX1_RX, SFDX1_TX, SRX1_RX, SRX1_TX, LED_RX1, LED_TXRX1_RX, LED_TXRX1_TX} = fe0_gpio;
-    assign {tx_amp_en2, SFDX2_RX, SFDX2_TX, SRX2_RX, SRX2_TX, LED_RX2, LED_TXRX2_RX, LED_TXRX2_TX} = fe1_gpio;
- 
- 
-    // assign {tx_enable1, FE_RX1_SEL2, FE_TXRX1_SEL2, FE_TXRX1_SEL1, FE_RX1_SEL1, LED_RX1, LED_TXRX1_RX, LED_TXRX1_TX} = fe0_gpio;
-    // assign {tx_enable2, FE_RX2_SEL1, FE_TXRX2_SEL1, FE_RX2_SEL2, FE_TXRX2_SEL2, LED_RX2, LED_TXRX2_RX, LED_TXRX2_TX} = fe1_gpio;
+    // assign {tx_amp_en1, SFDX1_RX, SFDX1_TX, SRX1_RX, SRX1_TX, LED_RX1, LED_TXRX1_RX, LED_TXRX1_TX} = fe0_gpio;
+    // assign {tx_amp_en2, SFDX2_RX, SFDX2_TX, SRX2_RX, SRX2_TX, LED_RX2, LED_TXRX2_RX, LED_TXRX2_TX} = fe1_gpio;
+
+    assign {tx_amp_en1, FE_RX1_SEL2, FE_TXRX1_SEL2, FE_TXRX1_SEL1, FE_RX1_SEL1, LED_RX1, LED_TXRX1_RX, LED_TXRX1_TX} = fe0_gpio;
+    assign {tx_amp_en2, FE_RX2_SEL1, FE_TXRX2_SEL1, FE_RX2_SEL2, FE_TXRX2_SEL2, LED_RX2, LED_TXRX2_RX, LED_TXRX2_TX} = fe1_gpio;
  
     wire [31:0] misc_outs; reg [31:0] misc_outs_r;
  
@@ -494,7 +507,7 @@ module antsdr_e310v2 (
  
     wire codec_arst;
     wire tx_bandsel_a, tx_bandsel_b, rx_bandsel_a, rx_bandsel_b, rx_bandsel_c;
- 
+    wire ref_sel;
     assign { swap_atr_n, tx_bandsel_a, tx_bandsel_b, rx_bandsel_a, rx_bandsel_b, rx_bandsel_c, codec_arst, mimo, ref_sel } = misc_outs_r[8:0];
  
     assign CAT_CTL_IN = 4'b1;
@@ -523,7 +536,7 @@ module antsdr_e310v2 (
         .fe0_gpio_out(radio0_gpio), .fe1_gpio_out(radio1_gpio),
         .fp_gpio_in(fp_gpio_in), .fp_gpio_out(fp_gpio_out), .fp_gpio_ddr(fp_gpio_ddr),
 
-        .pps_int(PPS_IN_INT), .pps_ext(PPS_IN_EXT),
+        .pps_ref(lpps),
         .pps_fpga_int(pps_fpga_int),
         .pps_select(pps_select),
 
@@ -577,6 +590,7 @@ module antsdr_e310v2 (
         .v2e_tready              ( v2e_tready              )
     );
 
+
     wire  mdio_out;
     wire  mdio_tri;
     wire  mdio_in;
@@ -584,8 +598,6 @@ module antsdr_e310v2 (
     // assign mdio = mdio_tri ? mdio_out : 1'bz;
     // assign mdio_in = mdio;
     assign eth_phy_rst_n = 1'b1;
-
-
 
     IOBUF MDIO_PHY_mdio_iobuf(
         .I(mdio_out),
