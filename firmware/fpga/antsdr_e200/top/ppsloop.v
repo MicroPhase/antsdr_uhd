@@ -6,7 +6,7 @@
 
 
 module ppsloop#(
-  parameter DEVICE = "E310V2"
+  parameter DEVICE = "E200"
 )(
     input reset,
     input xoclk, // 40 MHz from VCTCXO

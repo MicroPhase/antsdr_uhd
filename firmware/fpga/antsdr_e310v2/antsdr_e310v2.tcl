@@ -20,7 +20,6 @@ add_files {
     ./ip/fifo_4k_2clk/fifo_4k_2clk.xci
     ./ip/fifo_short_2clk/fifo_short_2clk.xci
     ./ip/axi64_8k_2clk_fifo/axi64_8k_2clk_fifo.xci
-    ./ip/rgmii_clock_shift/rgmii_clock_shift.xci
     ./ip/gen_clks/gen_clks.xci
 
     ./top/b200_core.v
@@ -119,6 +118,7 @@ add_files {
     ../lib/radio_200/radio_legacy.v
     ../lib/control/ram_2port_impl.vh
     ../lib/control/ram_2port.v
+    ../lib/control/rgmii_if_idelay.v
     ../lib/control/regport_resp_mux.v
     ../lib/control/reset_sync.v
     ../lib/rgmii/rgmii_phy.v
@@ -139,6 +139,7 @@ add_files {
     ../lib/packet_proc_200/source_flow_control_legacy.v
     ../lib/dsp/srl.v
     ../lib/control/stream_aggregation.v
+    ../lib/control/ltc2630_spi.v
     ../lib/control/stream_split.v
     ../lib/control/synchronizer.v
     ../lib/control/synchronizer_impl.v
