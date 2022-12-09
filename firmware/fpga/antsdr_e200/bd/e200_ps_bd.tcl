@@ -485,8 +485,8 @@ proc create_root_design { parentCell } {
    CONFIG.PCW_ENET0_PERIPHERAL_DIVISOR1 {1} \
    CONFIG.PCW_ENET0_PERIPHERAL_ENABLE {0} \
    CONFIG.PCW_ENET0_PERIPHERAL_FREQMHZ {1000 Mbps} \
-   CONFIG.PCW_ENET0_RESET_ENABLE {1} \
-   CONFIG.PCW_ENET0_RESET_IO {MIO 7} \
+   CONFIG.PCW_ENET0_RESET_ENABLE {0} \
+   CONFIG.PCW_ENET0_RESET_IO {<Select>} \
    CONFIG.PCW_ENET1_BASEADDR {0xE000C000} \
    CONFIG.PCW_ENET1_GRP_MDIO_ENABLE {0} \
    CONFIG.PCW_ENET1_HIGHADDR {0xE000CFFF} \
@@ -496,7 +496,7 @@ proc create_root_design { parentCell } {
    CONFIG.PCW_ENET1_PERIPHERAL_ENABLE {0} \
    CONFIG.PCW_ENET1_PERIPHERAL_FREQMHZ {1000 Mbps} \
    CONFIG.PCW_ENET1_RESET_ENABLE {0} \
-   CONFIG.PCW_ENET_RESET_ENABLE {1} \
+   CONFIG.PCW_ENET_RESET_ENABLE {0} \
    CONFIG.PCW_ENET_RESET_POLARITY {Active Low} \
    CONFIG.PCW_ENET_RESET_SELECT {<Select>} \
    CONFIG.PCW_EN_4K_TIMER {0} \
@@ -560,7 +560,7 @@ proc create_root_design { parentCell } {
    CONFIG.PCW_EN_TTC0 {0} \
    CONFIG.PCW_EN_TTC1 {0} \
    CONFIG.PCW_EN_UART0 {1} \
-   CONFIG.PCW_EN_UART1 {0} \
+   CONFIG.PCW_EN_UART1 {1} \
    CONFIG.PCW_EN_USB0 {0} \
    CONFIG.PCW_EN_USB1 {0} \
    CONFIG.PCW_EN_WDT {0} \
@@ -638,11 +638,11 @@ proc create_root_design { parentCell } {
    CONFIG.PCW_MIO_11_IOTYPE {LVCMOS 3.3V} \
    CONFIG.PCW_MIO_11_PULLUP {enabled} \
    CONFIG.PCW_MIO_11_SLEW {slow} \
-   CONFIG.PCW_MIO_12_DIRECTION {inout} \
+   CONFIG.PCW_MIO_12_DIRECTION {out} \
    CONFIG.PCW_MIO_12_IOTYPE {LVCMOS 3.3V} \
    CONFIG.PCW_MIO_12_PULLUP {enabled} \
    CONFIG.PCW_MIO_12_SLEW {slow} \
-   CONFIG.PCW_MIO_13_DIRECTION {inout} \
+   CONFIG.PCW_MIO_13_DIRECTION {in} \
    CONFIG.PCW_MIO_13_IOTYPE {LVCMOS 3.3V} \
    CONFIG.PCW_MIO_13_PULLUP {enabled} \
    CONFIG.PCW_MIO_13_SLEW {slow} \
@@ -654,19 +654,19 @@ proc create_root_design { parentCell } {
    CONFIG.PCW_MIO_15_IOTYPE {LVCMOS 3.3V} \
    CONFIG.PCW_MIO_15_PULLUP {enabled} \
    CONFIG.PCW_MIO_15_SLEW {slow} \
-   CONFIG.PCW_MIO_16_DIRECTION {out} \
+   CONFIG.PCW_MIO_16_DIRECTION {inout} \
    CONFIG.PCW_MIO_16_IOTYPE {LVCMOS 3.3V} \
    CONFIG.PCW_MIO_16_PULLUP {disabled} \
    CONFIG.PCW_MIO_16_SLEW {fast} \
-   CONFIG.PCW_MIO_17_DIRECTION {out} \
+   CONFIG.PCW_MIO_17_DIRECTION {inout} \
    CONFIG.PCW_MIO_17_IOTYPE {LVCMOS 3.3V} \
    CONFIG.PCW_MIO_17_PULLUP {disabled} \
    CONFIG.PCW_MIO_17_SLEW {fast} \
-   CONFIG.PCW_MIO_18_DIRECTION {out} \
+   CONFIG.PCW_MIO_18_DIRECTION {inout} \
    CONFIG.PCW_MIO_18_IOTYPE {LVCMOS 3.3V} \
    CONFIG.PCW_MIO_18_PULLUP {disabled} \
    CONFIG.PCW_MIO_18_SLEW {fast} \
-   CONFIG.PCW_MIO_19_DIRECTION {out} \
+   CONFIG.PCW_MIO_19_DIRECTION {inout} \
    CONFIG.PCW_MIO_19_IOTYPE {LVCMOS 3.3V} \
    CONFIG.PCW_MIO_19_PULLUP {disabled} \
    CONFIG.PCW_MIO_19_SLEW {fast} \
@@ -674,35 +674,35 @@ proc create_root_design { parentCell } {
    CONFIG.PCW_MIO_1_IOTYPE {LVCMOS 3.3V} \
    CONFIG.PCW_MIO_1_PULLUP {enabled} \
    CONFIG.PCW_MIO_1_SLEW {slow} \
-   CONFIG.PCW_MIO_20_DIRECTION {out} \
+   CONFIG.PCW_MIO_20_DIRECTION {inout} \
    CONFIG.PCW_MIO_20_IOTYPE {LVCMOS 3.3V} \
    CONFIG.PCW_MIO_20_PULLUP {disabled} \
    CONFIG.PCW_MIO_20_SLEW {fast} \
-   CONFIG.PCW_MIO_21_DIRECTION {out} \
+   CONFIG.PCW_MIO_21_DIRECTION {inout} \
    CONFIG.PCW_MIO_21_IOTYPE {LVCMOS 3.3V} \
    CONFIG.PCW_MIO_21_PULLUP {disabled} \
    CONFIG.PCW_MIO_21_SLEW {fast} \
-   CONFIG.PCW_MIO_22_DIRECTION {in} \
+   CONFIG.PCW_MIO_22_DIRECTION {inout} \
    CONFIG.PCW_MIO_22_IOTYPE {LVCMOS 3.3V} \
    CONFIG.PCW_MIO_22_PULLUP {disabled} \
    CONFIG.PCW_MIO_22_SLEW {fast} \
-   CONFIG.PCW_MIO_23_DIRECTION {in} \
+   CONFIG.PCW_MIO_23_DIRECTION {inout} \
    CONFIG.PCW_MIO_23_IOTYPE {LVCMOS 3.3V} \
    CONFIG.PCW_MIO_23_PULLUP {disabled} \
    CONFIG.PCW_MIO_23_SLEW {fast} \
-   CONFIG.PCW_MIO_24_DIRECTION {in} \
+   CONFIG.PCW_MIO_24_DIRECTION {inout} \
    CONFIG.PCW_MIO_24_IOTYPE {LVCMOS 3.3V} \
    CONFIG.PCW_MIO_24_PULLUP {disabled} \
    CONFIG.PCW_MIO_24_SLEW {fast} \
-   CONFIG.PCW_MIO_25_DIRECTION {in} \
+   CONFIG.PCW_MIO_25_DIRECTION {inout} \
    CONFIG.PCW_MIO_25_IOTYPE {LVCMOS 3.3V} \
    CONFIG.PCW_MIO_25_PULLUP {disabled} \
    CONFIG.PCW_MIO_25_SLEW {fast} \
-   CONFIG.PCW_MIO_26_DIRECTION {in} \
+   CONFIG.PCW_MIO_26_DIRECTION {inout} \
    CONFIG.PCW_MIO_26_IOTYPE {LVCMOS 3.3V} \
    CONFIG.PCW_MIO_26_PULLUP {disabled} \
    CONFIG.PCW_MIO_26_SLEW {fast} \
-   CONFIG.PCW_MIO_27_DIRECTION {in} \
+   CONFIG.PCW_MIO_27_DIRECTION {inout} \
    CONFIG.PCW_MIO_27_IOTYPE {LVCMOS 3.3V} \
    CONFIG.PCW_MIO_27_PULLUP {disabled} \
    CONFIG.PCW_MIO_27_SLEW {fast} \
@@ -710,7 +710,7 @@ proc create_root_design { parentCell } {
    CONFIG.PCW_MIO_28_IOTYPE {LVCMOS 3.3V} \
    CONFIG.PCW_MIO_28_PULLUP {enabled} \
    CONFIG.PCW_MIO_28_SLEW {slow} \
-   CONFIG.PCW_MIO_29_DIRECTION {in} \
+   CONFIG.PCW_MIO_29_DIRECTION {inout} \
    CONFIG.PCW_MIO_29_IOTYPE {LVCMOS 3.3V} \
    CONFIG.PCW_MIO_29_PULLUP {enabled} \
    CONFIG.PCW_MIO_29_SLEW {slow} \
@@ -718,11 +718,11 @@ proc create_root_design { parentCell } {
    CONFIG.PCW_MIO_2_IOTYPE {LVCMOS 3.3V} \
    CONFIG.PCW_MIO_2_PULLUP {disabled} \
    CONFIG.PCW_MIO_2_SLEW {slow} \
-   CONFIG.PCW_MIO_30_DIRECTION {out} \
+   CONFIG.PCW_MIO_30_DIRECTION {inout} \
    CONFIG.PCW_MIO_30_IOTYPE {LVCMOS 3.3V} \
    CONFIG.PCW_MIO_30_PULLUP {enabled} \
    CONFIG.PCW_MIO_30_SLEW {slow} \
-   CONFIG.PCW_MIO_31_DIRECTION {in} \
+   CONFIG.PCW_MIO_31_DIRECTION {inout} \
    CONFIG.PCW_MIO_31_IOTYPE {LVCMOS 3.3V} \
    CONFIG.PCW_MIO_31_PULLUP {enabled} \
    CONFIG.PCW_MIO_31_SLEW {slow} \
@@ -742,7 +742,7 @@ proc create_root_design { parentCell } {
    CONFIG.PCW_MIO_35_IOTYPE {LVCMOS 3.3V} \
    CONFIG.PCW_MIO_35_PULLUP {enabled} \
    CONFIG.PCW_MIO_35_SLEW {slow} \
-   CONFIG.PCW_MIO_36_DIRECTION {in} \
+   CONFIG.PCW_MIO_36_DIRECTION {inout} \
    CONFIG.PCW_MIO_36_IOTYPE {LVCMOS 3.3V} \
    CONFIG.PCW_MIO_36_PULLUP {enabled} \
    CONFIG.PCW_MIO_36_SLEW {slow} \
@@ -814,7 +814,7 @@ proc create_root_design { parentCell } {
    CONFIG.PCW_MIO_51_IOTYPE {LVCMOS 3.3V} \
    CONFIG.PCW_MIO_51_PULLUP {enabled} \
    CONFIG.PCW_MIO_51_SLEW {slow} \
-   CONFIG.PCW_MIO_52_DIRECTION {out} \
+   CONFIG.PCW_MIO_52_DIRECTION {inout} \
    CONFIG.PCW_MIO_52_IOTYPE {LVCMOS 3.3V} \
    CONFIG.PCW_MIO_52_PULLUP {enabled} \
    CONFIG.PCW_MIO_52_SLEW {slow} \
@@ -843,8 +843,8 @@ proc create_root_design { parentCell } {
    CONFIG.PCW_MIO_9_PULLUP {enabled} \
    CONFIG.PCW_MIO_9_SLEW {slow} \
    CONFIG.PCW_MIO_PRIMITIVE {54} \
-   CONFIG.PCW_MIO_TREE_PERIPHERALS {GPIO#Quad SPI Flash#Quad SPI Flash#Quad SPI Flash#Quad SPI Flash#Quad SPI Flash#Quad SPI Flash#GPIO#GPIO#GPIO#I2C 0#I2C 0#GPIO#GPIO#UART 0#UART 0#GPIO#GPIO#GPIO#GPIO#GPIO#GPIO#GPIO#GPIO#GPIO#GPIO#GPIO#GPIO#GPIO#GPIO#GPIO#GPIO#GPIO#GPIO#GPIO#GPIO#GPIO#GPIO#GPIO#GPIO#SD 0#SD 0#SD 0#SD 0#SD 0#SD 0#GPIO#GPIO#GPIO#GPIO#GPIO#GPIO#GPIO#GPIO} \
-   CONFIG.PCW_MIO_TREE_SIGNALS {gpio[0]#qspi0_ss_b#qspi0_io[0]#qspi0_io[1]#qspi0_io[2]#qspi0_io[3]/HOLD_B#qspi0_sclk#gpio[7]#gpio[8]#gpio[9]#scl#sda#gpio[12]#gpio[13]#rx#tx#gpio[16]#gpio[17]#gpio[18]#gpio[19]#gpio[20]#gpio[21]#gpio[22]#gpio[23]#gpio[24]#gpio[25]#gpio[26]#gpio[27]#gpio[28]#gpio[29]#gpio[30]#gpio[31]#gpio[32]#gpio[33]#gpio[34]#gpio[35]#gpio[36]#gpio[37]#gpio[38]#gpio[39]#clk#cmd#data[0]#data[1]#data[2]#data[3]#gpio[46]#gpio[47]#gpio[48]#gpio[49]#gpio[50]#gpio[51]#gpio[52]#gpio[53]} \
+   CONFIG.PCW_MIO_TREE_PERIPHERALS {GPIO#Quad SPI Flash#Quad SPI Flash#Quad SPI Flash#Quad SPI Flash#Quad SPI Flash#Quad SPI Flash#GPIO#GPIO#GPIO#I2C 0#I2C 0#UART 1#UART 1#UART 0#UART 0#GPIO#GPIO#GPIO#GPIO#GPIO#GPIO#GPIO#GPIO#GPIO#GPIO#GPIO#GPIO#GPIO#GPIO#GPIO#GPIO#GPIO#GPIO#GPIO#GPIO#GPIO#GPIO#GPIO#GPIO#SD 0#SD 0#SD 0#SD 0#SD 0#SD 0#GPIO#GPIO#GPIO#GPIO#GPIO#GPIO#GPIO#GPIO} \
+   CONFIG.PCW_MIO_TREE_SIGNALS {gpio[0]#qspi0_ss_b#qspi0_io[0]#qspi0_io[1]#qspi0_io[2]#qspi0_io[3]/HOLD_B#qspi0_sclk#gpio[7]#gpio[8]#gpio[9]#scl#sda#tx#rx#rx#tx#gpio[16]#gpio[17]#gpio[18]#gpio[19]#gpio[20]#gpio[21]#gpio[22]#gpio[23]#gpio[24]#gpio[25]#gpio[26]#gpio[27]#gpio[28]#gpio[29]#gpio[30]#gpio[31]#gpio[32]#gpio[33]#gpio[34]#gpio[35]#gpio[36]#gpio[37]#gpio[38]#gpio[39]#clk#cmd#data[0]#data[1]#data[2]#data[3]#gpio[46]#gpio[47]#gpio[48]#gpio[49]#gpio[50]#gpio[51]#gpio[52]#gpio[53]} \
    CONFIG.PCW_M_AXI_GP0_ENABLE_STATIC_REMAP {0} \
    CONFIG.PCW_M_AXI_GP0_ID_WIDTH {12} \
    CONFIG.PCW_M_AXI_GP0_SUPPORT_NARROW_BURST {0} \
@@ -1069,8 +1069,8 @@ proc create_root_design { parentCell } {
    CONFIG.PCW_UART1_BAUD_RATE {115200} \
    CONFIG.PCW_UART1_GRP_FULL_ENABLE {0} \
    CONFIG.PCW_UART1_HIGHADDR {0xE0001FFF} \
-   CONFIG.PCW_UART1_PERIPHERAL_ENABLE {0} \
-   CONFIG.PCW_UART1_UART1_IO {<Select>} \
+   CONFIG.PCW_UART1_PERIPHERAL_ENABLE {1} \
+   CONFIG.PCW_UART1_UART1_IO {MIO 12 .. 13} \
    CONFIG.PCW_UART_PERIPHERAL_CLKSRC {IO PLL} \
    CONFIG.PCW_UART_PERIPHERAL_DIVISOR0 {18} \
    CONFIG.PCW_UART_PERIPHERAL_FREQMHZ {100} \
@@ -1153,15 +1153,15 @@ proc create_root_design { parentCell } {
    CONFIG.PCW_USB0_HIGHADDR {0xE0102fff} \
    CONFIG.PCW_USB0_PERIPHERAL_ENABLE {0} \
    CONFIG.PCW_USB0_PERIPHERAL_FREQMHZ {60} \
-   CONFIG.PCW_USB0_RESET_ENABLE {1} \
-   CONFIG.PCW_USB0_RESET_IO {MIO 8} \
+   CONFIG.PCW_USB0_RESET_ENABLE {0} \
+   CONFIG.PCW_USB0_RESET_IO {<Select>} \
    CONFIG.PCW_USB0_USB0_IO {<Select>} \
    CONFIG.PCW_USB1_BASEADDR {0xE0103000} \
    CONFIG.PCW_USB1_HIGHADDR {0xE0103fff} \
    CONFIG.PCW_USB1_PERIPHERAL_ENABLE {0} \
    CONFIG.PCW_USB1_PERIPHERAL_FREQMHZ {60} \
    CONFIG.PCW_USB1_RESET_ENABLE {0} \
-   CONFIG.PCW_USB_RESET_ENABLE {1} \
+   CONFIG.PCW_USB_RESET_ENABLE {0} \
    CONFIG.PCW_USB_RESET_POLARITY {Active Low} \
    CONFIG.PCW_USB_RESET_SELECT {<Select>} \
    CONFIG.PCW_USE_AXI_FABRIC_IDLE {0} \
@@ -1286,6 +1286,7 @@ proc create_root_design { parentCell } {
   # Restore current instance
   current_bd_instance $oldCurInst
 
+  validate_bd_design
   save_bd_design
 }
 # End of create_root_design()
@@ -1297,6 +1298,4 @@ proc create_root_design { parentCell } {
 
 create_root_design ""
 
-
-common::send_msg_id "BD_TCL-1000" "WARNING" "This Tcl script was generated from a block design that has not been validated. It is possible that design <$design_name> may result in errors during validation."
 

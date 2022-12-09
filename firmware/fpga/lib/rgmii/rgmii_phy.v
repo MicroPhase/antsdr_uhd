@@ -38,16 +38,9 @@ module rgmii_phy(
 
     assign gmii_txc = gmii_rxc;
 
-    rgmii_clock_shift u_rgmii_clock_shift(
-        .clk_out1(rgmii_clk_90),     
-        .locked(locked),       
-        .clk_in1(rgmii_rxc)
-    );      
-
-
     rgmii_to_gmii u_rgmii_to_gmii(
         .rst           ( rst           ),
-        .rgmii_rxc     ( rgmii_clk_90  ),
+        .rgmii_rxc     ( rgmii_rxc  ),
         .rgmii_rx_ctl  ( rgmii_rx_ctl  ),
         .rgmii_rd      ( rgmii_rd      ),
         .gmii_rxc      ( gmii_rxc      ),

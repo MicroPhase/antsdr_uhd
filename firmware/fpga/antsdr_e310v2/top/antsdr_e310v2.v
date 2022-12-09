@@ -25,7 +25,7 @@
 //
 // Major Functions:	
 //  This is the top level of antsdr e200 fpga project, which is
-//  compatible to usrp b205mini.
+//  compatible to usrp b210.
 //
 //
 // --------------------------------------------------------------------------------
@@ -150,6 +150,7 @@ module antsdr_e310v2 (
     wire radio_clk;
     wire reg_clk;
     wire clk40;
+    wire clk200;
     wire FCLK_CLK0;
     wire FCLK_CLK1;
     wire FCLK_CLK2;
@@ -383,14 +384,16 @@ module antsdr_e310v2 (
     gen_clks u_gen_clocks_main(
         .clk_out1(),
         .clk_out2(bus_clk),
-        .clk_out3(),    
+        .clk_out3(clk200),    
 
         .locked(),      
         .clk_in1(clk_int40)
     ); 
 
 
-    ppsloop u_ppsloop(
+    ppsloop #(
+        .DEVICE("E310V2")
+    )u_ppsloop(
         .reset   ( 1'b0   ),
         .xoclk   ( CLK_40MHz_FPGA   ),
         .ppsgps  ( PPS_IN_INT  ),
@@ -416,7 +419,7 @@ module antsdr_e310v2 (
     wire [31:0] tx_data0, tx_data1;
     wire mimo;
 
-    antsdr_u205_io  u_antsdr_u220_io (
+    antsdr_u205_io  u_antsdr_e310v2_io (
        .areset                  ( global_rst        ),
        .mimo                    ( mimo              ),
        .rx_clk                  ( CAT_DCLK_P        ),
@@ -467,25 +470,9 @@ module antsdr_e310v2 (
 
     ///////////////////////////////////////////////////////////////////////
     // frontend assignments
-    ///////////////////////////////////////////////////////////////////////
-    wire 	 LED_RX1;
-    wire 	 LED_RX2;
-    wire 	 LED_TXRX1_RX;
-    wire 	 LED_TXRX1_TX;
-    wire 	 LED_TXRX2_RX;
-    wire 	 LED_TXRX2_TX;
-    wire 	 SFDX1_RX;
-    wire 	 SFDX1_TX;
-    wire 	 SFDX2_RX;
-    wire 	 SFDX2_TX;
-    wire 	 SRX1_RX;
-    wire 	 SRX1_TX;
-    wire 	 SRX2_RX;
-    wire 	 SRX2_TX;
-    wire   tx_enable1_r;
-    wire   tx_enable2_r;
+    //////////////////////////////////////////////////////////////////////
 
-
+    
     wire swap_atr_n;
     wire [7:0] radio0_gpio, radio1_gpio;
     reg [7:0] fe0_gpio, fe1_gpio;
@@ -498,8 +485,8 @@ module antsdr_e310v2 (
     // assign {tx_amp_en1, SFDX1_RX, SFDX1_TX, SRX1_RX, SRX1_TX, LED_RX1, LED_TXRX1_RX, LED_TXRX1_TX} = fe0_gpio;
     // assign {tx_amp_en2, SFDX2_RX, SFDX2_TX, SRX2_RX, SRX2_TX, LED_RX2, LED_TXRX2_RX, LED_TXRX2_TX} = fe1_gpio;
 
-    assign {tx_amp_en1, FE_RX1_SEL2, FE_TXRX1_SEL2, FE_TXRX1_SEL1, FE_RX1_SEL1, LED_RX1, LED_TXRX1_RX, LED_TXRX1_TX} = fe0_gpio;
-    assign {tx_amp_en2, FE_RX2_SEL1, FE_TXRX2_SEL1, FE_RX2_SEL2, FE_TXRX2_SEL2, LED_RX2, LED_TXRX2_RX, LED_TXRX2_TX} = fe1_gpio;
+    assign {tx_amp_en1, FE_RX1_SEL2, FE_TXRX1_SEL2, FE_TXRX1_SEL1, FE_RX1_SEL1} = fe0_gpio[7:3];
+    assign {tx_amp_en2, FE_RX2_SEL1, FE_TXRX2_SEL1, FE_RX2_SEL2, FE_TXRX2_SEL2} = fe1_gpio[7:3];
  
     wire [31:0] misc_outs; reg [31:0] misc_outs_r;
  
@@ -607,6 +594,19 @@ module antsdr_e310v2 (
     );
 
 
+    wire        rgmii_rx_ctl_dly;
+    wire [3:0]  rgmii_rxd_dly;
+    rgmii_if_idelay u_rgmii_if_idelay(
+        .ref_clk          ( clk200          ),
+        .rst              ( bus_rst          ),
+        .rgmii_rx_ctl     ( rgmii_rx_ctl     ),
+        .rgmii_rxd        ( rgmii_rxd        ),
+        .rgmii_rx_ctl_dly ( rgmii_rx_ctl_dly ),
+        .rgmii_rxd_dly    ( rgmii_rxd_dly    )
+    );
+
+
+
     e200_rgmii_wrapper #(
         .PROTOCOL(PROTOCOL),
         .MDIO_EN(MDIO_EN),
@@ -625,8 +625,8 @@ module antsdr_e310v2 (
         .mdio_tri       (mdio_tri),
         .mdio_in        (mdio_in),
         .rgmii_rxc      (rgmii_rxc),
-        .rgmii_rx_ctl   (rgmii_rx_ctl),
-        .rgmii_rxd      (rgmii_rxd),
+        .rgmii_rx_ctl   (rgmii_rx_ctl_dly),
+        .rgmii_rxd      (rgmii_rxd_dly),
         .rgmii_txc      (rgmii_txc),
         .rgmii_tx_ctl   (rgmii_tx_ctl),
         .rgmii_txd      (rgmii_txd),
