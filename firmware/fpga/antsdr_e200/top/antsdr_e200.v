@@ -355,6 +355,7 @@ module antsdr_e200 (
     reset_sync radio_sync(.clk(radio_clk), .reset_in(!clocks_ready), .reset_out(radio_rst));
 
     wire [1:0] refsel;
+    wire ref_sel;
     wire ext_ref;
     wire ext_ref_is_pps;
     wire ext_ref_locked;
@@ -365,7 +366,8 @@ module antsdr_e200 (
     // pps_select == 2'b10 ----> internal pps genreated by fpga
 
     assign ext_ref =    (pps_select == 2'b01)? PPS_IN_EXT :
-                        (pps_select == 2'b10)? pps_fpga_int : 1'b0;
+                        (pps_select == 2'b10 && ref_sel == 1'b0)? PPS_IN_EXT : // ref_sel selects the external or gpsdo clock source
+                        (pps_select == 2'b10)? pps_fpga_int: 1'b0;
     wire is10meg;
     wire ispps;
 
@@ -487,7 +489,7 @@ module antsdr_e200 (
  
     wire codec_arst;
     wire tx_bandsel_a, tx_bandsel_b, rx_bandsel_a, rx_bandsel_b, rx_bandsel_c;
-    wire ref_sel;
+    
     assign { swap_atr_n, tx_bandsel_a, tx_bandsel_b, rx_bandsel_a, rx_bandsel_b, rx_bandsel_c, codec_arst, mimo, ref_sel } = misc_outs_r[8:0];
  
     assign CAT_CTL_IN = 4'b1;
