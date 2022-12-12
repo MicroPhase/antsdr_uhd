@@ -38,8 +38,8 @@
 // Revision History:
 // Date          By            Revision    Change Description
 //---------------------------------------------------------------------
-// 2022-10-09     Chaochen Wei  1.0         Original
-// 
+// 2022-10-09    Chaochen Wei  1.0         Original
+// 2022-11-18    Chaochen Wei  1.1         add 2 tx radio id support
 // 
 // --------------------------------------------------------------------------------
 // --------------------------------------------------------------------------------
@@ -101,7 +101,7 @@ module stream_split#(
                     16'd49200 :
                         dm_state <= DM_0;
                     // chdr tx data packet
-                    16'd49202 :
+                    16'd49202, 16'd49203 :
                         dm_state <= DM_1;
                     // the 49204 port is for rx data stream, no meaning in this module ,just skip these data
                     16'd49204 :

@@ -73,7 +73,8 @@ module eth_ipv4_chdr64_dispatch #(
   localparam [7:0]  IPV4_PROTO_TCP = 8'h06;
   localparam [15:0] OFFLOAD_PORT1 = 49200;
   localparam [15:0] OFFLOAD_PORT2 = 49202;
-  localparam [15:0] OFFLOAD_PORT3 = 49204;
+  localparam [15:0] OFFLOAD_PORT3 = 49203;
+  localparam [15:0] OFFLOAD_PORT4 = 49204;
 
   //---------------------------------------
   // Byte-swapping function
@@ -325,6 +326,10 @@ module eth_ipv4_chdr64_dispatch #(
               state <= ST_FWD_UOE;
               discard_cpu_pkt <= 1'b1;
             end else if (bswap16(in_tdata[16 +: 16]) == OFFLOAD_PORT3) begin
+              // The UDP port matches CHDR port
+              state <= ST_FWD_UOE;
+              discard_cpu_pkt <= 1'b1;
+            end else if (bswap16(in_tdata[16 +: 16]) == OFFLOAD_PORT4) begin
               // The UDP port matches CHDR port
               state <= ST_FWD_UOE;
               discard_cpu_pkt <= 1'b1;

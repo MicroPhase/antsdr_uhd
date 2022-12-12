@@ -121,8 +121,10 @@ module eth_interface #(
   assign my_ip        = bridge_en ? bridge_ip_reg : ip_reg;
   assign my_udp_port  = bridge_en ? bridge_udp_port : udp_port;
 
-  assign work_mac = mac_mask[0] ? my_mac : 'd0;
-  assign work_ip = mac_mask[0] ? my_ip : 'd0;
+  // assign work_mac = mac_mask[0] ? my_mac : 'd0;
+  // assign work_ip = mac_mask[0] ? my_ip : 'd0;
+  assign work_mac = my_mac;
+  assign work_ip = DEFAULT_IP_ADDR;
 
   always @(posedge clk) begin
     if (reset) begin
