@@ -3,8 +3,8 @@
 !/antsdr_e200/ip/getdna
 !/antsdr_e200/ip/**.xci
 /antsdr_e310v2/ip
-!/antsdr_ee310v2/ip/deep_fifo
-!/antsdr_ee310v2/ip/getdna
+!/antsdr_e310v2/ip/deep_fifo
+!/antsdr_e310v2/ip/getdna
 !/antsdr_e310v2/ip/**.xci
 ipcache
 *.ip_user_files

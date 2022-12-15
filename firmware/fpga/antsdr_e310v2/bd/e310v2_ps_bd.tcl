@@ -1270,7 +1270,7 @@ proc create_root_design { parentCell } {
   create_bd_addr_seg -range 0x00040000 -offset 0xFFFC0000 [get_bd_addr_spaces axi_dma_eth_internal/Data_S2MM] [get_bd_addr_segs processing_system7_0/S_AXI_HP1/HP1_HIGH_OCM] SEG_processing_system7_0_HP1_HIGH_OCM
   create_bd_addr_seg -range 0x40000000 -offset 0x00000000 [get_bd_addr_spaces axi_dma_net/Data_SG] [get_bd_addr_segs processing_system7_0/S_AXI_HP0/HP0_DDR_LOWOCM] SEG_processing_system7_0_HP0_DDR_LOWOCM
   create_bd_addr_seg -range 0x40000000 -offset 0x00000000 [get_bd_addr_spaces axi_dma_net/Data_MM2S] [get_bd_addr_segs processing_system7_0/S_AXI_HP0/HP0_DDR_LOWOCM] SEG_processing_system7_0_HP0_DDR_LOWOCM
-  create_bd_addr_seg -range 0x20000000 -offset 0x00000000 [get_bd_addr_spaces axi_dma_net/Data_S2MM] [get_bd_addr_segs processing_system7_0/S_AXI_HP0/HP0_DDR_LOWOCM] SEG_processing_system7_0_HP0_DDR_LOWOCM
+  create_bd_addr_seg -range 0x40000000 -offset 0x00000000 [get_bd_addr_spaces axi_dma_net/Data_S2MM] [get_bd_addr_segs processing_system7_0/S_AXI_HP0/HP0_DDR_LOWOCM] SEG_processing_system7_0_HP0_DDR_LOWOCM
   create_bd_addr_seg -range 0x00040000 -offset 0xFFFC0000 [get_bd_addr_spaces axi_dma_net/Data_SG] [get_bd_addr_segs processing_system7_0/S_AXI_HP0/HP0_HIGH_OCM] SEG_processing_system7_0_HP0_HIGH_OCM
   create_bd_addr_seg -range 0x00040000 -offset 0xFFFC0000 [get_bd_addr_spaces axi_dma_net/Data_MM2S] [get_bd_addr_segs processing_system7_0/S_AXI_HP0/HP0_HIGH_OCM] SEG_processing_system7_0_HP0_HIGH_OCM
   create_bd_addr_seg -range 0x00040000 -offset 0xFFFC0000 [get_bd_addr_spaces axi_dma_net/Data_S2MM] [get_bd_addr_segs processing_system7_0/S_AXI_HP0/HP0_HIGH_OCM] SEG_processing_system7_0_HP0_HIGH_OCM
