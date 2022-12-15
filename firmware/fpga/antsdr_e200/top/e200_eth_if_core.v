@@ -368,8 +368,6 @@ module e200_eth_if_core #(
           .gmii_tx_er    ( gmii_tx_er    ),
           .gmii_td       ( gmii_txd      )
       );
-
-
     //   wire [255:0] probe0;
 
     //   assign probe0 ={
