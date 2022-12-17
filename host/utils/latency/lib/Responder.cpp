@@ -56,7 +56,7 @@ void Responder::register_stop_signal_handler()
 // For ncurses. Print everything in stream to screen
 void Responder::FLUSH_SCREEN()
 {
-    printw("%s", _ss.str().c_str());
+    printw(_ss.str().c_str());
     refresh();
     _ss.str("");
 }
@@ -284,7 +284,7 @@ void Responder::print_test_parameters()
 // available
 void Responder::set_usrp_rx_dc_offset(uhd::usrp::multi_usrp::sptr usrp, bool ena)
 {
-    uhd::property_tree::sptr tree = usrp->get_device()->get_tree();
+    uhd::property_tree::sptr tree = usrp->get_tree();
     // FIXME: Path needs to be build in a programmatic way.
     bool dc_offset_exists =
         tree->exists(uhd::fs_path("/mboards/0/rx_frontends/A/dc_offset"));
@@ -664,7 +664,7 @@ bool Responder::handle_interactive_control()
 // print updated interactive control value
 void Responder::print_interactive_msg(std::string msg)
 {
-    if (msg != "") {
+    if (!msg.empty()) {
         // move cursor back to beginning of line
         int y, x;
         getyx(_window, y, x);
@@ -1107,7 +1107,7 @@ void Responder::write_log_file()
             logs << boost::format("device=%s") % _usrp->get_mboard_name() << endl;
             logs << boost::format("device_args=%s") % _opt.device_args << endl;
             logs << boost::format("type=%s") % hw_info["type"] << endl;
-            if (hw_info.size() > 0) {
+            if (!hw_info.empty()) {
                 logs << boost::format("usrp_addr=%s") % hw_info["usrp_addr"] << endl;
                 logs << boost::format("usrp_name=%s") % hw_info["name"] << endl;
                 logs << boost::format("serial=%s") % hw_info["serial"] << endl;

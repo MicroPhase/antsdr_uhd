@@ -1,6 +1,7 @@
 //
 // Copyright 2014 Ettus Research LLC
 // Copyright 2018 Ettus Research, a National Instruments Company
+// Copyright 2019 Ettus Research, A National Instruments Brand
 //
 // SPDX-License-Identifier: GPL-3.0-or-later
 //
@@ -11,8 +12,8 @@
 #include <uhd/rfnoc/constants.hpp>
 #include <boost/format.hpp>
 #include <boost/lexical_cast.hpp>
-#include <boost/regex.hpp>
 #include <iostream>
+#include <regex>
 
 using namespace uhd::rfnoc;
 
@@ -22,7 +23,8 @@ block_id_t::block_id_t(const std::string& block_str)
     : _device_no(0), _block_name(""), _block_ctr(0)
 {
     if (not set(block_str)) {
-        throw uhd::value_error("block_id_t: Invalid block ID string.");
+        throw uhd::value_error(
+            "block_id_t: Invalid block ID string: `" + block_str + "'");
     }
 }
 
@@ -37,12 +39,12 @@ block_id_t::block_id_t(
 
 bool block_id_t::is_valid_blockname(const std::string& block_name)
 {
-    return boost::regex_match(block_name, boost::regex(VALID_BLOCKNAME_REGEX));
+    return std::regex_match(block_name, std::regex(VALID_BLOCKNAME_REGEX));
 }
 
 bool block_id_t::is_valid_block_id(const std::string& block_name)
 {
-    return boost::regex_match(block_name, boost::regex(VALID_BLOCKID_REGEX));
+    return std::regex_match(block_name, std::regex(VALID_BLOCKID_REGEX));
 }
 
 std::string block_id_t::to_string() const
@@ -52,7 +54,7 @@ std::string block_id_t::to_string() const
 
 std::string block_id_t::get_local() const
 {
-    return str(boost::format("%s_%d") % get_block_name() % get_block_count());
+    return str(boost::format("%s#%d") % get_block_name() % get_block_count());
 }
 
 uhd::fs_path block_id_t::get_tree_root() const
@@ -62,9 +64,9 @@ uhd::fs_path block_id_t::get_tree_root() const
 
 bool block_id_t::match(const std::string& block_str)
 {
-    boost::cmatch matches;
-    if (not boost::regex_match(
-            block_str.c_str(), matches, boost::regex(VALID_BLOCKID_REGEX))) {
+    std::cmatch matches;
+    if (not std::regex_match(
+            block_str.c_str(), matches, std::regex(VALID_BLOCKID_REGEX))) {
         return false;
     }
     try {
@@ -73,7 +75,7 @@ bool block_id_t::match(const std::string& block_str)
                and (matches[3] == ""
                        or boost::lexical_cast<size_t>(matches[3]) == _block_ctr)
                and not(matches[1] == "" and matches[2] == "" and matches[3] == "");
-    } catch (const std::bad_cast& e) {
+    } catch (const std::bad_cast&) {
         return false;
     }
     return false;
@@ -81,9 +83,9 @@ bool block_id_t::match(const std::string& block_str)
 
 bool block_id_t::set(const std::string& new_name)
 {
-    boost::cmatch matches;
-    if (not boost::regex_match(
-            new_name.c_str(), matches, boost::regex(VALID_BLOCKID_REGEX))) {
+    std::cmatch matches;
+    if (not std::regex_match(
+            new_name.c_str(), matches, std::regex(VALID_BLOCKID_REGEX))) {
         return false;
     }
     if (not(matches[1] == "")) {

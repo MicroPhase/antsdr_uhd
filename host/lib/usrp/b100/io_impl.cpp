@@ -10,10 +10,10 @@
 #include "b100_impl.hpp"
 #include <uhd/utils/log.hpp>
 #include <uhdlib/usrp/common/validate_subdev_spec.hpp>
-#include <boost/bind.hpp>
 #include <boost/format.hpp>
-#include <boost/make_shared.hpp>
 #include <boost/thread.hpp>
+#include <functional>
+#include <memory>
 
 using namespace uhd;
 using namespace uhd::usrp;
@@ -37,17 +37,15 @@ void b100_impl::update_tick_rate(const double rate)
 {
     // update the tick rate on all existing streamers -> thread safe
     for (size_t i = 0; i < _rx_streamers.size(); i++) {
-        boost::shared_ptr<sph::recv_packet_streamer> my_streamer =
-            boost::dynamic_pointer_cast<sph::recv_packet_streamer>(
-                _rx_streamers[i].lock());
+        std::shared_ptr<sph::recv_packet_streamer> my_streamer =
+            std::dynamic_pointer_cast<sph::recv_packet_streamer>(_rx_streamers[i].lock());
         if (my_streamer.get() == NULL)
             continue;
         my_streamer->set_tick_rate(rate);
     }
     for (size_t i = 0; i < _tx_streamers.size(); i++) {
-        boost::shared_ptr<sph::send_packet_streamer> my_streamer =
-            boost::dynamic_pointer_cast<sph::send_packet_streamer>(
-                _tx_streamers[i].lock());
+        std::shared_ptr<sph::send_packet_streamer> my_streamer =
+            std::dynamic_pointer_cast<sph::send_packet_streamer>(_tx_streamers[i].lock());
         if (my_streamer.get() == NULL)
             continue;
         my_streamer->set_tick_rate(rate);
@@ -56,9 +54,8 @@ void b100_impl::update_tick_rate(const double rate)
 
 void b100_impl::update_rx_samp_rate(const size_t dspno, const double rate)
 {
-    boost::shared_ptr<sph::recv_packet_streamer> my_streamer =
-        boost::dynamic_pointer_cast<sph::recv_packet_streamer>(
-            _rx_streamers[dspno].lock());
+    std::shared_ptr<sph::recv_packet_streamer> my_streamer =
+        std::dynamic_pointer_cast<sph::recv_packet_streamer>(_rx_streamers[dspno].lock());
     if (my_streamer.get() == NULL)
         return;
 
@@ -69,9 +66,8 @@ void b100_impl::update_rx_samp_rate(const size_t dspno, const double rate)
 
 void b100_impl::update_tx_samp_rate(const size_t dspno, const double rate)
 {
-    boost::shared_ptr<sph::send_packet_streamer> my_streamer =
-        boost::dynamic_pointer_cast<sph::send_packet_streamer>(
-            _tx_streamers[dspno].lock());
+    std::shared_ptr<sph::send_packet_streamer> my_streamer =
+        std::dynamic_pointer_cast<sph::send_packet_streamer>(_tx_streamers[dspno].lock());
     if (my_streamer.get() == NULL)
         return;
 
@@ -149,8 +145,8 @@ rx_streamer::sptr b100_impl::get_rx_stream(const uhd::stream_args_t& args_)
     const size_t spp = unsigned(args.args.cast<double>("spp", bpp / bpi));
 
     // make the new streamer given the samples per packet
-    boost::shared_ptr<sph::recv_packet_streamer> my_streamer =
-        boost::make_shared<sph::recv_packet_streamer>(spp);
+    std::shared_ptr<sph::recv_packet_streamer> my_streamer =
+        std::make_shared<sph::recv_packet_streamer>(spp);
 
     // init some streamer stuff
     my_streamer->resize(args.channels.size());
@@ -171,15 +167,17 @@ rx_streamer::sptr b100_impl::get_rx_stream(const uhd::stream_args_t& args_)
         _rx_dsps[dsp]->setup(args);
         _recv_demuxer->realloc_sid(B100_RX_SID_BASE + dsp);
         my_streamer->set_xport_chan_get_buff(chan_i,
-            boost::bind(&recv_packet_demuxer_3000::get_recv_buff,
+            std::bind(&recv_packet_demuxer_3000::get_recv_buff,
                 _recv_demuxer,
                 B100_RX_SID_BASE + dsp,
-                _1),
+                std::placeholders::_1),
             true /*flush*/);
         my_streamer->set_overflow_handler(
-            chan_i, boost::bind(&rx_dsp_core_200::handle_overflow, _rx_dsps[dsp]));
+            chan_i, std::bind(&rx_dsp_core_200::handle_overflow, _rx_dsps[dsp]));
         my_streamer->set_issue_stream_cmd(chan_i,
-            boost::bind(&rx_dsp_core_200::issue_stream_command, _rx_dsps[dsp], _1));
+            std::bind(&rx_dsp_core_200::issue_stream_command,
+                _rx_dsps[dsp],
+                std::placeholders::_1));
         _rx_streamers[dsp] = my_streamer; // store weak pointer
     }
 
@@ -212,8 +210,8 @@ tx_streamer::sptr b100_impl::get_tx_stream(const uhd::stream_args_t& args_)
     const size_t spp        = bpp / convert::get_bytes_per_item(args.otw_format);
 
     // make the new streamer given the samples per packet
-    boost::shared_ptr<sph::send_packet_streamer> my_streamer =
-        boost::make_shared<sph::send_packet_streamer>(spp);
+    std::shared_ptr<sph::send_packet_streamer> my_streamer =
+        std::make_shared<sph::send_packet_streamer>(spp);
 
     // init some streamer stuff
     my_streamer->resize(args.channels.size());
@@ -232,10 +230,13 @@ tx_streamer::sptr b100_impl::get_tx_stream(const uhd::stream_args_t& args_)
         const size_t dsp = args.channels[chan_i];
         UHD_ASSERT_THROW(dsp == 0); // always 0
         _tx_dsp->setup(args);
-        my_streamer->set_xport_chan_get_buff(
-            chan_i, boost::bind(&zero_copy_if::get_send_buff, _data_transport, _1));
-        my_streamer->set_async_receiver(
-            boost::bind(&fifo_ctrl_excelsior::pop_async_msg, _fifo_ctrl, _1, _2));
+        my_streamer->set_xport_chan_get_buff(chan_i,
+            std::bind(
+                &zero_copy_if::get_send_buff, _data_transport, std::placeholders::_1));
+        my_streamer->set_async_receiver(std::bind(&fifo_ctrl_excelsior::pop_async_msg,
+            _fifo_ctrl,
+            std::placeholders::_1,
+            std::placeholders::_2));
         _tx_streamers[dsp] = my_streamer; // store weak pointer
     }
 

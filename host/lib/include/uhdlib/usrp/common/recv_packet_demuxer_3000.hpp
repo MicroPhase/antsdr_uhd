@@ -5,26 +5,25 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 //
 
-#ifndef INCLUDED_LIBUHD_USRP_COMMON_RECV_PACKET_DEMUXER_3000_HPP
-#define INCLUDED_LIBUHD_USRP_COMMON_RECV_PACKET_DEMUXER_3000_HPP
+#pragma once
 
 #include <uhd/config.hpp>
 #include <uhd/transport/zero_copy.hpp>
 #include <uhd/types/time_spec.hpp>
 #include <uhd/utils/byteswap.hpp>
 #include <uhd/utils/log.hpp>
-#include <uhdlib/utils/system_time.hpp>
 #include <stdint.h>
-#include <boost/enable_shared_from_this.hpp>
 #include <boost/thread.hpp>
+#include <chrono>
 #include <map>
+#include <memory>
 #include <queue>
 
 namespace uhd { namespace usrp {
 
-struct recv_packet_demuxer_3000 : boost::enable_shared_from_this<recv_packet_demuxer_3000>
+struct recv_packet_demuxer_3000 : std::enable_shared_from_this<recv_packet_demuxer_3000>
 {
-    typedef boost::shared_ptr<recv_packet_demuxer_3000> sptr;
+    typedef std::shared_ptr<recv_packet_demuxer_3000> sptr;
     static sptr make(transport::zero_copy_if::sptr xport)
     {
         return sptr(new recv_packet_demuxer_3000(xport));
@@ -37,15 +36,18 @@ struct recv_packet_demuxer_3000 : boost::enable_shared_from_this<recv_packet_dem
     transport::managed_recv_buffer::sptr get_recv_buff(
         const uint32_t sid, const double timeout)
     {
-        const time_spec_t exit_time = time_spec_t(timeout) + uhd::get_system_time();
+        const auto exit_time = std::chrono::high_resolution_clock::now()
+                               + std::chrono::microseconds(int64_t(timeout * 1e6));
         transport::managed_recv_buffer::sptr buff;
         buff = _internal_get_recv_buff(sid, timeout);
         while (not buff) // loop until timeout
         {
-            const time_spec_t delta  = exit_time - uhd::get_system_time();
-            const double new_timeout = delta.get_real_secs();
-            if (new_timeout < 0.0)
+            const auto delta = exit_time - std::chrono::high_resolution_clock::now();
+            const double new_timeout =
+                std::chrono::duration_cast<std::chrono::duration<double>>(delta).count();
+            if (new_timeout < 0.0) {
                 break;
+            }
             buff = _internal_get_recv_buff(sid, new_timeout);
         }
         return buff;
@@ -115,32 +117,32 @@ struct recv_packet_demuxer_proxy_3000 : transport::zero_copy_if
         _demux->realloc_sid(_sid); // causes clear
     }
 
-    ~recv_packet_demuxer_proxy_3000(void)
+    ~recv_packet_demuxer_proxy_3000(void) override
     {
         _demux->realloc_sid(_sid); // causes clear
     }
 
-    size_t get_num_recv_frames(void) const
+    size_t get_num_recv_frames(void) const override
     {
         return _xport->get_num_recv_frames();
     }
-    size_t get_recv_frame_size(void) const
+    size_t get_recv_frame_size(void) const override
     {
         return _xport->get_recv_frame_size();
     }
-    transport::managed_recv_buffer::sptr get_recv_buff(double timeout)
+    transport::managed_recv_buffer::sptr get_recv_buff(double timeout) override
     {
         return _demux->get_recv_buff(_sid, timeout);
     }
-    size_t get_num_send_frames(void) const
+    size_t get_num_send_frames(void) const override
     {
         return _xport->get_num_send_frames();
     }
-    size_t get_send_frame_size(void) const
+    size_t get_send_frame_size(void) const override
     {
         return _xport->get_send_frame_size();
     }
-    transport::managed_send_buffer::sptr get_send_buff(double timeout)
+    transport::managed_send_buffer::sptr get_send_buff(double timeout) override
     {
         return _xport->get_send_buff(timeout);
     }
@@ -158,5 +160,3 @@ inline transport::zero_copy_if::sptr recv_packet_demuxer_3000::make_proxy(
 }
 
 }} // namespace uhd::usrp
-
-#endif /* INCLUDED_LIBUHD_USRP_COMMON_RECV_PACKET_DEMUXER_3000_HPP */

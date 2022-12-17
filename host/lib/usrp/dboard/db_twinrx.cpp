@@ -18,10 +18,9 @@
 #include <uhd/utils/log.hpp>
 #include <uhd/utils/static.hpp>
 #include <uhdlib/experts/expert_factory.hpp>
-#include <boost/bind.hpp>
-#include <boost/make_shared.hpp>
 #include <boost/thread.hpp>
 #include <boost/thread/mutex.hpp>
+#include <memory>
 //#include <fstream>    //Needed for _expert->to_dot() below
 
 using namespace uhd;
@@ -196,11 +195,14 @@ public:
             prepend_ch("enabled", _ch_name),
             false,
             AUTO_RESOLVE_ON_WRITE);
+        // ID for cal data lookup. This depends on how many channels are enabled
+        expert_factory::add_prop_node<std::string>(
+            _expert, get_rx_subtree(), "id", prepend_ch("id", _ch_name), "twinrx");
 
         // Readback
         get_rx_subtree()
             ->create<sensor_value_t>("sensors/lo_locked")
-            .set_publisher(boost::bind(&twinrx_rcvr_fe::get_lo_locked, this));
+            .set_publisher([this]() { return this->get_lo_locked(); });
 
         //---------------------------------------------------------
         // Add internal channel-specific data nodes to expert
@@ -245,7 +247,7 @@ public:
             _expert, prepend_ch("synth/LO2/mapping", _ch_name), MAPPING_NONE);
     }
 
-    virtual ~twinrx_rcvr_fe(void) {}
+    ~twinrx_rcvr_fe(void) override {}
 
     sensor_value_t get_lo_locked()
     {
@@ -273,19 +275,19 @@ private:
 class twinrx_rcvr : public rx_dboard_base
 {
 public:
-    typedef boost::shared_ptr<twinrx_rcvr> sptr;
+    typedef std::shared_ptr<twinrx_rcvr> sptr;
 
     twinrx_rcvr(ctor_args_t args) : rx_dboard_base(args)
     {
         _db_iface                          = get_iface();
-        twinrx_gpio::sptr gpio_iface       = boost::make_shared<twinrx_gpio>(_db_iface);
-        twinrx_cpld_regmap::sptr cpld_regs = boost::make_shared<twinrx_cpld_regmap>();
+        twinrx_gpio::sptr gpio_iface       = std::make_shared<twinrx_gpio>(_db_iface);
+        twinrx_cpld_regmap::sptr cpld_regs = std::make_shared<twinrx_cpld_regmap>();
         cpld_regs->initialize(*gpio_iface, false);
         _ctrl   = twinrx_ctrl::make(_db_iface, gpio_iface, cpld_regs, get_rx_id());
         _expert = expert_factory::create_container("twinrx_expert");
     }
 
-    virtual ~twinrx_rcvr(void) {}
+    ~twinrx_rcvr(void) override {}
 
     inline expert_container::sptr get_expert()
     {
@@ -297,7 +299,7 @@ public:
         return _ctrl;
     }
 
-    virtual void initialize()
+    void initialize() override
     {
         //---------------------------------------------------------
         // Add internal channel-agnostic data nodes to expert
@@ -359,7 +361,7 @@ public:
     static dboard_base::sptr make_twinrx_fe(dboard_base::ctor_args_t args)
     {
         const dboard_ctor_args_t& db_args = dboard_ctor_args_t::cast(args);
-        sptr container = boost::dynamic_pointer_cast<twinrx_rcvr>(db_args.rx_container);
+        sptr container = std::dynamic_pointer_cast<twinrx_rcvr>(db_args.rx_container);
         if (container) {
             dboard_base::sptr fe = dboard_base::sptr(
                 new twinrx_rcvr_fe(args, container->get_expert(), container->get_ctrl()));

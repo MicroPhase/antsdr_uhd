@@ -5,13 +5,12 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 //
 
-#ifndef INCLUDED_ZERO_COPY_FLOW_CTRL_HPP
-#define INCLUDED_ZERO_COPY_FLOW_CTRL_HPP
+#pragma once
 
 #include <uhd/config.hpp>
 #include <uhd/transport/zero_copy.hpp>
-#include <boost/function.hpp>
-#include <boost/shared_ptr.hpp>
+#include <functional>
+#include <memory>
 
 namespace uhd { namespace transport {
 
@@ -20,7 +19,7 @@ namespace uhd { namespace transport {
  * \param buff buffer to be sent or receive buffer being released
  * \return true if OK, false if not
  */
-typedef boost::function<bool(managed_buffer::sptr buff)> flow_ctrl_func;
+typedef std::function<bool(managed_buffer::sptr buff)> flow_ctrl_func;
 
 /*!
  * Adds flow control to any zero_copy_if transport.
@@ -28,7 +27,7 @@ typedef boost::function<bool(managed_buffer::sptr buff)> flow_ctrl_func;
 class UHD_API zero_copy_flow_ctrl : public virtual zero_copy_if
 {
 public:
-    typedef boost::shared_ptr<zero_copy_flow_ctrl> sptr;
+    typedef std::shared_ptr<zero_copy_flow_ctrl> sptr;
 
     /*!
      * Make flow controlled transport.
@@ -44,5 +43,3 @@ public:
 };
 
 }} // namespace uhd::transport
-
-#endif /* INCLUDED_ZERO_COPY_FLOW_CTRL_HPP */

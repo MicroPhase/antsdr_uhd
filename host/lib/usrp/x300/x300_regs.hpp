@@ -11,6 +11,7 @@
 #include <uhd/config.hpp>
 #include <uhd/utils/soft_register.hpp>
 #include <stdint.h>
+#include <memory>
 
 static const int BL_ADDRESS = 0;
 static const int BL_DATA    = 1;
@@ -26,16 +27,15 @@ static const int BL_DATA    = 1;
 // I2C1 device addresses
 #define MBOARD_EEPROM_ADDR 0x50
 
-static const int ZPU_SR_LEDS       = 00;
-static const int ZPU_SR_SW_RST     = 01;
-static const int ZPU_SR_CLOCK_CTRL = 02;
-static const int ZPU_SR_XB_LOCAL   = 03;
-static const int ZPU_SR_REF_FREQ   = 04;
-static const int ZPU_SR_SPI        = 32;
-static const int ZPU_SR_ETHINT0    = 40;
-static const int ZPU_SR_ETHINT1    = 56;
-static const int ZPU_SR_DRAM_FIFO0 = 72;
-static const int ZPU_SR_DRAM_FIFO1 = 80;
+static const int ZPU_SR_LEDS        = 00;
+static const int ZPU_SR_SW_RST      = 01;
+static const int ZPU_SR_CLOCK_CTRL  = 02;
+static const int ZPU_SR_XB_LOCAL    = 03;
+static const int ZPU_SR_REF_FREQ    = 04;
+static const int ZPU_SR_SPI         = 32;
+static const int ZPU_SR_ETHINT0     = 40;
+static const int ZPU_SR_ETHINT1     = 56;
+static const int ZPU_SR_FP_GPIO_SRC = 72;
 
 // reset bits
 #define ZPU_SR_SW_RST_ETH_PHY (1 << 0)
@@ -43,13 +43,14 @@ static const int ZPU_SR_DRAM_FIFO1 = 80;
 #define ZPU_SR_SW_RST_RADIO_CLK_PLL (1 << 2)
 #define ZPU_SR_SW_RST_ADC_IDELAYCTRL (1 << 3)
 
-static const int ZPU_RB_SPI        = 2;
-static const int ZPU_RB_CLK_STATUS = 3;
-static const int ZPU_RB_COMPAT_NUM = 6;
-static const int ZPU_RB_NUM_CE     = 7;
-static const int ZPU_RB_GIT_HASH   = 10;
-static const int ZPU_RB_SFP0_TYPE  = 4;
-static const int ZPU_RB_SFP1_TYPE  = 5;
+static const int ZPU_RB_SPI         = 2;
+static const int ZPU_RB_CLK_STATUS  = 3;
+static const int ZPU_RB_COMPAT_NUM  = 6;
+static const int ZPU_RB_NUM_CE      = 7;
+static const int ZPU_RB_GIT_HASH    = 10;
+static const int ZPU_RB_SFP0_TYPE   = 4;
+static const int ZPU_RB_SFP1_TYPE   = 5;
+static const int ZPU_RB_FP_GPIO_SRC = 13;
 
 static const uint32_t RB_SFP_1G_ETH  = 0;
 static const uint32_t RB_SFP_10G_ETH = 1;
@@ -171,7 +172,7 @@ namespace uhd { namespace usrp { namespace x300 {
 class fw_regmap_t : public uhd::soft_regmap_t
 {
 public:
-    typedef boost::shared_ptr<fw_regmap_t> sptr;
+    using sptr = std::shared_ptr<fw_regmap_t>;
 
     class clk_ctrl_reg_t : public uhd::soft_reg32_wo_t
     {

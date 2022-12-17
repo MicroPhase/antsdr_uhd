@@ -49,10 +49,10 @@ static uint32_t get_reg(wb_iface::wb_addr_type addr)
 }
 } // namespace cpld
 
-class twinrx_gpio : public timed_wb_iface
+class twinrx_gpio : public wb_iface
 {
 public:
-    typedef boost::shared_ptr<twinrx_gpio> sptr;
+    typedef std::shared_ptr<twinrx_gpio> sptr;
 
     //----------------------------------------------
     // Public GPIO fields
@@ -88,7 +88,7 @@ public:
         _db_iface->set_gpio_out(dboard_iface::UNIT_BOTH, 0, ~GPIO_PINCTRL_MASK);
     }
 
-    ~twinrx_gpio()
+    ~twinrx_gpio() override
     {
         _db_iface->set_gpio_ddr(dboard_iface::UNIT_BOTH, ~GPIO_OUTPUT_MASK, SET_ALL_BITS);
     }
@@ -111,7 +111,7 @@ public:
     }
 
     // CPLD register write-only interface
-    void poke32(const wb_addr_type addr, const uint32_t data)
+    void poke32(const wb_addr_type addr, const uint32_t data) override
     {
         boost::lock_guard<boost::mutex> lock(_mutex);
         using namespace soft_reg_field;
@@ -130,18 +130,6 @@ public:
             mask<uint32_t>(CPLD_FULL_ADDR) | mask<uint32_t>(CPLD_DATA));
     }
 
-    // Timed command interface
-    inline time_spec_t get_time()
-    {
-        return _db_iface->get_command_time();
-    }
-
-    void set_time(const time_spec_t& t)
-    {
-        boost::lock_guard<boost::mutex> lock(_mutex);
-        _db_iface->set_command_time(t);
-    }
-
 private: // Members/definitions
     static const uint32_t GPIO_OUTPUT_MASK  = 0xFC06FE03;
     static const uint32_t GPIO_PINCTRL_MASK = 0x00000000;
@@ -158,7 +146,7 @@ private: // Members/definitions
 class twinrx_cpld_regmap : public uhd::soft_regmap_t
 {
 public:
-    typedef boost::shared_ptr<twinrx_cpld_regmap> sptr;
+    typedef std::shared_ptr<twinrx_cpld_regmap> sptr;
 
     //----------------------------------------------
     // IF CCA: CPLD 1

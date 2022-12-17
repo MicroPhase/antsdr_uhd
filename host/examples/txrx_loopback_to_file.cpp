@@ -13,14 +13,14 @@
 #include <uhd/utils/static.hpp>
 #include <uhd/utils/thread.hpp>
 #include <boost/algorithm/string.hpp>
-#include <boost/bind.hpp>
 #include <boost/filesystem.hpp>
 #include <boost/format.hpp>
-#include <boost/math/special_functions/round.hpp>
 #include <boost/program_options.hpp>
 #include <boost/thread/thread.hpp>
+#include <cmath>
 #include <csignal>
 #include <fstream>
+#include <functional>
 #include <iostream>
 
 namespace po = boost::program_options;
@@ -118,10 +118,10 @@ void recv_to_file(uhd::usrp::multi_usrp::sptr usrp,
 
     // Create one ofstream object per channel
     // (use shared_ptr because ofstream is non-copyable)
-    std::vector<boost::shared_ptr<std::ofstream>> outfiles;
+    std::vector<std::shared_ptr<std::ofstream>> outfiles;
     for (size_t i = 0; i < buffs.size(); i++) {
         const std::string this_filename = generate_out_filename(file, buffs.size(), i);
-        outfiles.push_back(boost::shared_ptr<std::ofstream>(
+        outfiles.push_back(std::shared_ptr<std::ofstream>(
             new std::ofstream(this_filename.c_str(), std::ofstream::binary)));
     }
     UHD_ASSERT_THROW(outfiles.size() == buffs.size());
@@ -438,8 +438,7 @@ int UHD_SAFE_MAIN(int argc, char* argv[])
 
     // pre-compute the waveform values
     const wave_table_class wave_table(wave_type, ampl);
-    const size_t step =
-        boost::math::iround(wave_freq / tx_usrp->get_tx_rate() * wave_table_len);
+    const size_t step = std::lround(wave_freq / tx_usrp->get_tx_rate() * wave_table_len);
     size_t index = 0;
 
     // create a transmit streamer
@@ -527,7 +526,7 @@ int UHD_SAFE_MAIN(int argc, char* argv[])
 
     // start transmit worker thread
     boost::thread_group transmit_thread;
-    transmit_thread.create_thread(boost::bind(
+    transmit_thread.create_thread(std::bind(
         &transmit_worker, buff, wave_table, tx_stream, md, step, index, num_channels));
 
     // recv to file

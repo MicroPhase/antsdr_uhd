@@ -10,8 +10,8 @@
 #include <uhd/utils/algorithm.hpp>
 #include <uhd/utils/gain_group.hpp>
 #include <uhd/utils/log.hpp>
-#include <boost/bind.hpp>
 #include <algorithm>
+#include <functional>
 #include <vector>
 
 using namespace uhd;
@@ -63,7 +63,7 @@ public:
         /*NOP*/
     }
 
-    gain_range_t get_range(const std::string& name)
+    gain_range_t get_range(const std::string& name) override
     {
         if (not name.empty())
             return _name_to_fcns.get(name).get_range();
@@ -83,7 +83,7 @@ public:
         return gain_range_t(overall_min, overall_max, overall_step);
     }
 
-    double get_value(const std::string& name)
+    double get_value(const std::string& name) override
     {
         if (not name.empty())
             return _name_to_fcns.get(name).get_value();
@@ -95,13 +95,13 @@ public:
         return overall_gain;
     }
 
-    void set_value(double gain, const std::string& name)
+    void set_value(double gain, const std::string& name) override
     {
         if (not name.empty())
             return _name_to_fcns.get(name).set_value(gain);
 
         std::vector<gain_fcns_t> all_fcns = get_all_fcns();
-        if (all_fcns.size() == 0)
+        if (all_fcns.empty())
             return; // nothing to set!
 
         // get the max step size among the gains
@@ -130,7 +130,10 @@ public:
         }
         std::sort(indexes_step_size_dec.begin(),
             indexes_step_size_dec.end(),
-            boost::bind(&compare_by_step_size, _1, _2, all_fcns));
+            std::bind(&compare_by_step_size,
+                std::placeholders::_1,
+                std::placeholders::_2,
+                all_fcns));
         UHD_ASSERT_THROW(all_fcns.at(indexes_step_size_dec.front()).get_range().step()
                          >= all_fcns.at(indexes_step_size_dec.back()).get_range().step());
 
@@ -147,22 +150,20 @@ public:
             gain_bucket.at(i) += additional_gain;
             gain_left_to_distribute -= additional_gain;
         }
-        UHD_LOGGER_DEBUG("UHD") << "gain_left_to_distribute " << gain_left_to_distribute;
 
         // now write the bucket out to the individual gain values
         for (size_t i = 0; i < gain_bucket.size(); i++) {
-            UHD_LOGGER_DEBUG("UHD") << i << ": " << gain_bucket.at(i);
             all_fcns.at(i).set_value(gain_bucket.at(i));
         }
     }
 
-    const std::vector<std::string> get_names(void)
+    const std::vector<std::string> get_names(void) override
     {
         return _name_to_fcns.keys();
     }
 
     void register_fcns(
-        const std::string& name, const gain_fcns_t& gain_fcns, size_t priority)
+        const std::string& name, const gain_fcns_t& gain_fcns, size_t priority) override
     {
         if (name.empty() or _name_to_fcns.has_key(name)) {
             // ensure the name name is unique and non-empty
@@ -194,4 +195,15 @@ private:
 gain_group::sptr gain_group::make(void)
 {
     return sptr(new gain_group_impl());
+}
+
+gain_group::sptr gain_group::make_zero()
+{
+    gain_fcns_t gain_fcns;
+    gain_fcns.get_range = []() { return meta_range_t(0.0, 0.0); };
+    gain_fcns.get_value = []() { return 0.0; };
+    gain_fcns.set_value = [](const double) {};
+    auto gg             = make();
+    gg->register_fcns("null", gain_fcns);
+    return gg;
 }

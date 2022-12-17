@@ -5,12 +5,11 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 //
 
-#ifndef INCLUDED_UHD_TRANSPORT_BUFFER_POOL_HPP
-#define INCLUDED_UHD_TRANSPORT_BUFFER_POOL_HPP
+#pragma once
 
 #include <uhd/config.hpp>
 #include <uhd/utils/noncopyable.hpp>
-#include <boost/shared_ptr.hpp>
+#include <memory>
 
 namespace uhd { namespace transport {
 
@@ -21,7 +20,7 @@ namespace uhd { namespace transport {
 class UHD_API buffer_pool : uhd::noncopyable
 {
 public:
-    typedef boost::shared_ptr<buffer_pool> sptr;
+    typedef std::shared_ptr<buffer_pool> sptr;
     typedef void* ptr_type;
 
     virtual ~buffer_pool(void) = 0;
@@ -45,5 +44,3 @@ public:
 
 }} // namespace uhd::transport
 
-
-#endif /* INCLUDED_UHD_TRANSPORT_BUFFER_POOL_HPP */

@@ -7,10 +7,10 @@
 
 #include "../common/mock_zero_copy.hpp"
 #include "../lib/transport/super_recv_packet_handler.hpp"
-#include <boost/bind.hpp>
 #include <boost/shared_array.hpp>
 #include <boost/test/unit_test.hpp>
 #include <complex>
+#include <functional>
 #include <list>
 #include <vector>
 
@@ -263,7 +263,7 @@ BOOST_AUTO_TEST_CASE(test_sph_recv_one_channel_inline_message)
     // create an overflow handler
     overflow_handler_type overflow_handler;
     handler.set_overflow_handler(
-        0, boost::bind(&overflow_handler_type::handle, &overflow_handler));
+        0, std::bind(&overflow_handler_type::handle, &overflow_handler));
 
     // check the received packets
     size_t num_accum_samps = 0;
@@ -336,7 +336,7 @@ BOOST_AUTO_TEST_CASE(test_sph_recv_multi_channel_normal)
     std::vector<mock_zero_copy::sptr> xports;
     for (size_t i = 0; i < NCHANNELS; i++) {
         xports.push_back(
-            boost::make_shared<mock_zero_copy>(vrt::if_packet_info_t::LINK_TYPE_VRLP));
+            std::make_shared<mock_zero_copy>(vrt::if_packet_info_t::LINK_TYPE_VRLP));
     }
 
     // generate a bunch of packets
@@ -432,7 +432,7 @@ BOOST_AUTO_TEST_CASE(test_sph_recv_multi_channel_sequence_error)
     std::vector<mock_zero_copy::sptr> xports;
     for (size_t i = 0; i < NCHANNELS; i++) {
         xports.push_back(
-            boost::make_shared<mock_zero_copy>(vrt::if_packet_info_t::LINK_TYPE_VRLP));
+            std::make_shared<mock_zero_copy>(vrt::if_packet_info_t::LINK_TYPE_VRLP));
     }
 
     // generate a bunch of packets
@@ -540,7 +540,7 @@ BOOST_AUTO_TEST_CASE(test_sph_recv_multi_channel_time_error)
     std::vector<mock_zero_copy::sptr> xports;
     for (size_t i = 0; i < NCHANNELS; i++) {
         xports.push_back(
-            boost::make_shared<mock_zero_copy>(vrt::if_packet_info_t::LINK_TYPE_VRLP));
+            std::make_shared<mock_zero_copy>(vrt::if_packet_info_t::LINK_TYPE_VRLP));
     }
 
     // generate a bunch of packets
@@ -642,7 +642,7 @@ BOOST_AUTO_TEST_CASE(test_sph_recv_multi_channel_exception)
     std::vector<mock_zero_copy::sptr> xports;
     for (size_t i = 0; i < NCHANNELS; i++) {
         xports.push_back(
-            boost::make_shared<mock_zero_copy>(vrt::if_packet_info_t::LINK_TYPE_VRLP));
+            std::make_shared<mock_zero_copy>(vrt::if_packet_info_t::LINK_TYPE_VRLP));
     }
 
     // generate a bunch of packets
@@ -720,7 +720,7 @@ BOOST_AUTO_TEST_CASE(test_sph_recv_multi_channel_fragment)
     std::vector<mock_zero_copy::sptr> xports;
     for (size_t i = 0; i < NCHANNELS; i++) {
         xports.push_back(
-            boost::make_shared<mock_zero_copy>(vrt::if_packet_info_t::LINK_TYPE_VRLP));
+            std::make_shared<mock_zero_copy>(vrt::if_packet_info_t::LINK_TYPE_VRLP));
     }
 
     // generate a bunch of packets

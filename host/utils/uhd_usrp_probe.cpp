@@ -6,17 +6,20 @@
 //
 
 #include <uhd/device.hpp>
-#include <uhd/device3.hpp>
 #include <uhd/property_tree.hpp>
+#include <uhd/rfnoc/block_id.hpp>
+#include <uhd/rfnoc_graph.hpp>
 #include <uhd/types/ranges.hpp>
 #include <uhd/types/sensors.hpp>
 #include <uhd/usrp/dboard_eeprom.hpp>
 #include <uhd/usrp/dboard_id.hpp>
 #include <uhd/usrp/mboard_eeprom.hpp>
+#include <uhd/utils/cast.hpp>
 #include <uhd/utils/safe_main.hpp>
 #include <uhd/version.hpp>
 #include <boost/algorithm/string.hpp> //for split
 #include <boost/format.hpp>
+#include <boost/lexical_cast.hpp>
 #include <boost/program_options.hpp>
 #include <cstdlib>
 #include <iostream>
@@ -36,13 +39,11 @@ static std::string make_border(const std::string& text)
     boost::split(lines, text, boost::is_any_of("\n"));
     while (lines.back().empty())
         lines.pop_back(); // strip trailing newlines
-    if (lines.size())
+    if (!lines.empty())
         lines[0] = "    " + lines[0]; // indent the title line
     for (const std::string& line : lines) {
         ss << boost::format("|   %s") % line << std::endl;
     }
-    // ss << boost::format(" \\_____________________________________________________") <<
-    // std::endl;
     return ss.str();
 }
 
@@ -75,7 +76,6 @@ static std::string get_frontend_pp_string(
 {
     std::stringstream ss;
     ss << boost::format("%s Frontend: %s") % type % path.leaf() << std::endl;
-    // ss << std::endl;
 
     ss << boost::format("Name: %s") % (tree->access<std::string>(path / "name").get())
        << std::endl;
@@ -96,7 +96,7 @@ static std::string get_frontend_pp_string(
        << std::endl;
 
     std::vector<std::string> gain_names = tree->list(path / "gains");
-    if (gain_names.size() == 0)
+    if (gain_names.empty())
         ss << "Gain Elements: None" << std::endl;
     for (const std::string& name : gain_names) {
         meta_range_t gain_range =
@@ -136,7 +136,7 @@ static std::string get_codec_pp_string(
         ss << boost::format("Name: %s") % (tree->access<std::string>(path / "name").get())
            << std::endl;
         std::vector<std::string> gain_names = tree->list(path / "gains");
-        if (gain_names.size() == 0)
+        if (gain_names.empty())
             ss << "Gain Elements: None" << std::endl;
         for (const std::string& name : gain_names) {
             meta_range_t gain_range =
@@ -150,11 +150,13 @@ static std::string get_codec_pp_string(
 }
 
 static std::string get_dboard_pp_string(
-    const std::string& type, property_tree::sptr tree, const fs_path& path)
+    const std::string& type,
+    const std::string& name,
+    property_tree::sptr tree,
+    const fs_path& path)
 {
     std::stringstream ss;
-    ss << boost::format("%s Dboard: %s") % type % path.leaf() << std::endl;
-    // ss << std::endl;
+    ss << boost::format("%s Dboard: %s") % type % name << std::endl;
     const std::string prefix = (type == "RX") ? "rx" : "tx";
     if (tree->exists(path / (prefix + "_eeprom"))) {
         usrp::dboard_eeprom_t db_eeprom =
@@ -178,19 +180,44 @@ static std::string get_dboard_pp_string(
                 type, tree, path / (prefix + "_frontends") / name));
         }
     }
-    ss << make_border(get_codec_pp_string(type,
-        tree,
-        path.branch_path().branch_path() / (prefix + "_codecs") / path.leaf()));
+    const fs_path codec_path =
+        path.branch_path().branch_path() / (prefix + "_codecs") / path.leaf();
+    if (tree->exists(codec_path)) {
+        ss << make_border(get_codec_pp_string(type, tree, codec_path));
+    }
     return ss.str();
 }
 
-
-static std::string get_rfnoc_pp_string(property_tree::sptr tree, const fs_path& path)
+static std::string get_rfnoc_blocks_pp_string(rfnoc::rfnoc_graph::sptr graph)
 {
     std::stringstream ss;
     ss << "RFNoC blocks on this device:" << std::endl << std::endl;
-    for (const std::string& name : tree->list(path)) {
-        ss << "* " << name << std::endl;
+    for (const auto& name : graph->find_blocks("")) {
+        ss << "* " << name.to_string() << std::endl;
+    }
+    return ss.str();
+}
+
+static std::string get_rfnoc_connections_pp_string(rfnoc::rfnoc_graph::sptr graph)
+{
+    std::stringstream ss;
+    ss << "Static connections on this device:" << std::endl << std::endl;
+    for (const auto& edge : graph->enumerate_static_connections()) {
+        ss << "* " << edge.to_string() << std::endl;
+    }
+    return ss.str();
+}
+
+static std::string get_rfnoc_pp_string(
+    rfnoc::rfnoc_graph::sptr graph, property_tree::sptr tree)
+{
+    std::stringstream ss;
+    ss << make_border(get_rfnoc_blocks_pp_string(graph));
+    ss << make_border(get_rfnoc_connections_pp_string(graph));
+    auto radio_blocks = graph->find_blocks("Radio");
+    for (std::string block : radio_blocks) {
+        ss << make_border(get_dboard_pp_string("TX", block, tree, "blocks" / block / "dboard"));
+        ss << make_border(get_dboard_pp_string("RX", block, tree, "blocks" / block / "dboard"));
     }
     return ss.str();
 }
@@ -257,7 +284,7 @@ static std::string get_mboard_pp_string(property_tree::sptr tree, const fs_path&
         if (tree->exists(path / "dboards")) {
             for (const std::string& name : tree->list(path / "dboards")) {
                 ss << make_border(
-                    get_dboard_pp_string("RX", tree, path / "dboards" / name));
+                    get_dboard_pp_string("RX", name, tree, path / "dboards" / name));
             }
             if (tree->exists(path / "tx_dsps")) {
                 for (const std::string& name : tree->list(path / "tx_dsps")) {
@@ -267,11 +294,8 @@ static std::string get_mboard_pp_string(property_tree::sptr tree, const fs_path&
             }
             for (const std::string& name : tree->list(path / "dboards")) {
                 ss << make_border(
-                    get_dboard_pp_string("TX", tree, path / "dboards" / name));
+                    get_dboard_pp_string("TX", name, tree, path / "dboards" / name));
             }
-        }
-        if (tree->exists(path / "xbar")) {
-            ss << make_border(get_rfnoc_pp_string(tree, path / "xbar"));
         }
     } catch (const uhd::lookup_error& ex) {
         std::cout << "Exited device probe on " << ex.what() << std::endl;
@@ -285,7 +309,6 @@ static std::string get_device_pp_string(property_tree::sptr tree)
     std::stringstream ss;
     ss << boost::format("Device: %s") % (tree->access<std::string>("/name").get())
        << std::endl;
-    // ss << std::endl;
     for (const std::string& name : tree->list("/mboards")) {
         ss << make_border(get_mboard_pp_string(tree, "/mboards/" + name));
     }
@@ -299,6 +322,75 @@ void print_tree(const uhd::fs_path& path, uhd::property_tree::sptr tree)
         print_tree(path / name, tree);
     }
 }
+
+namespace {
+
+uint32_t str2uint32(const std::string& str)
+{
+    if (str.find("0x") == 0) {
+        return cast::hexstr_cast<uint32_t>(str);
+    }
+    return boost::lexical_cast<uint32_t>(str);
+}
+
+void shell_print_help()
+{
+    std::cout << "Commands:\n\n"
+              << "poke32 $addr $data     : Write $data to $addr\n"
+              << "peek32 $addr           : Read from $addr and print\n"
+              << "help                   : Show this\n"
+              << "quit                   : Terminate shell\n"
+              << std::endl;
+}
+
+void run_interactive_regs_shell(rfnoc::noc_block_base::sptr blk_ctrl)
+{
+    std::cout << "<<< Interactive Block Peeker/Poker >>>" << std::endl;
+    std::cout << "Type 'help' to get a list of commands." << std::endl;
+    while (true) {
+        std::string input;
+        std::cout << ">>> " << std::flush;
+        std::getline(std::cin, input);
+        std::stringstream ss(input);
+        std::string command;
+        ss >> command;
+        if (command == "poke32") {
+            std::string addr_s, data_s;
+            uint32_t addr, data;
+            try {
+                ss >> addr_s >> data_s;
+                addr = str2uint32(addr_s);
+                data = str2uint32(data_s);
+            } catch (std::exception&) {
+                std::cout << "Usage: poke32 $addr $data" << std::endl;
+                continue;
+            }
+            blk_ctrl->regs().poke32(addr, data);
+        }
+        if (command == "peek32") {
+            std::string addr_s;
+            uint32_t addr;
+            try {
+                ss >> addr_s;
+                addr = str2uint32(addr_s);
+            } catch (std::exception&) {
+                std::cout << "Usage: peek32 $addr" << std::endl;
+                continue;
+            }
+            std::cout << "==> " << std::hex << blk_ctrl->regs().peek32(addr) << std::dec
+                      << std::endl;
+        }
+
+        if (input == "help") {
+            shell_print_help();
+        }
+        if (input == "quit") {
+            return;
+        }
+    }
+}
+
+} // namespace
 
 int UHD_SAFE_MAIN(int argc, char* argv[])
 {
@@ -316,6 +408,7 @@ int UHD_SAFE_MAIN(int argc, char* argv[])
         ("range", po::value<std::string>(), "query a range (gain, bandwidth, frequency, ...)  from the property tree")
         ("vector", "when querying a string, interpret that as std::vector")
         ("init-only", "skip all queries, only initialize device")
+        ("interactive-reg-iface", po::value<std::string>(), "RFNoC devices only: Spawn a shell to interactively peek and poke registers on RFNoC blocks")
     ;
     // clang-format on
 
@@ -336,6 +429,12 @@ int UHD_SAFE_MAIN(int argc, char* argv[])
 
     device::sptr dev         = device::make(vm["args"].as<std::string>());
     property_tree::sptr tree = dev->get_tree();
+    rfnoc::rfnoc_graph::sptr graph;
+    try {
+        graph = rfnoc::rfnoc_graph::make(vm["args"].as<std::string>());
+    } catch (uhd::key_error&) {
+        // pass
+    }
 
     if (vm.count("string")) {
         if (vm.count("vector")) {
@@ -382,10 +481,27 @@ int UHD_SAFE_MAIN(int argc, char* argv[])
         return EXIT_SUCCESS;
     }
 
-    if (vm.count("tree") != 0)
+    if (vm.count("interactive-reg-iface")) {
+        if (!graph) {
+            std::cout << "ERROR: --interactive-reg-iface requires an RFNoC device!"
+                      << std::endl;
+            return EXIT_FAILURE;
+        }
+        const rfnoc::block_id_t block_id(vm["interactive-reg-iface"].as<std::string>());
+        auto block_ctrl = graph->get_block(block_id);
+        run_interactive_regs_shell(block_ctrl);
+        return EXIT_SUCCESS;
+    }
+
+    if (vm.count("tree") != 0) {
         print_tree("/", tree);
-    else if (not vm.count("init-only"))
-        std::cout << make_border(get_device_pp_string(tree)) << std::endl;
+    } else if (not vm.count("init-only")) {
+        std::string device_pp_string = get_device_pp_string(tree);
+        if (graph) {
+            device_pp_string += get_rfnoc_pp_string(graph, tree);
+        }
+        std::cout << make_border(device_pp_string) << std::endl;
+    }
 
     return EXIT_SUCCESS;
 }

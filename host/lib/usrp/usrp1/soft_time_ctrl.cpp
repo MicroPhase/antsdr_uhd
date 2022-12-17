@@ -8,11 +8,11 @@
 #include "soft_time_ctrl.hpp"
 #include <uhd/utils/tasks.hpp>
 #include <uhdlib/utils/system_time.hpp>
-#include <boost/bind.hpp>
 #include <boost/date_time/posix_time/posix_time.hpp>
-#include <boost/make_shared.hpp>
 #include <boost/thread/condition_variable.hpp>
+#include <functional>
 #include <iostream>
+#include <memory>
 
 using namespace uhd;
 using namespace uhd::usrp;
@@ -41,8 +41,7 @@ public:
         , _stream_on_off(stream_on_off)
     {
         // synchronously spawn a new thread
-        _recv_cmd_task =
-            task::make(boost::bind(&soft_time_ctrl_impl::recv_cmd_task, this));
+        _recv_cmd_task = task::make(std::bind(&soft_time_ctrl_impl::recv_cmd_task, this));
 
         // initialize the time to something
         this->set_time(time_spec_t(0.0));
@@ -51,13 +50,13 @@ public:
     /*******************************************************************
      * Time control
      ******************************************************************/
-    void set_time(const time_spec_t& time)
+    void set_time(const time_spec_t& time) override
     {
         boost::mutex::scoped_lock lock(_update_mutex);
         _time_offset = uhd::get_system_time() - time;
     }
 
-    time_spec_t get_time(void)
+    time_spec_t get_time(void) override
     {
         boost::mutex::scoped_lock lock(_update_mutex);
         return time_now();
@@ -81,7 +80,7 @@ public:
     /*******************************************************************
      * Receive control
      ******************************************************************/
-    size_t recv_post(rx_metadata_t& md, const size_t nsamps)
+    size_t recv_post(rx_metadata_t& md, const size_t nsamps) override
     {
         boost::mutex::scoped_lock lock(_update_mutex);
 
@@ -126,9 +125,9 @@ public:
         return nsamps;
     }
 
-    void issue_stream_cmd(const stream_cmd_t& cmd)
+    void issue_stream_cmd(const stream_cmd_t& cmd) override
     {
-        _cmd_queue.push_with_wait(boost::make_shared<stream_cmd_t>(cmd));
+        _cmd_queue.push_with_wait(std::make_shared<stream_cmd_t>(cmd));
     }
 
     void stream_on_off(bool enb)
@@ -140,7 +139,7 @@ public:
     /*******************************************************************
      * Transmit control
      ******************************************************************/
-    void send_pre(const tx_metadata_t& md, double& timeout)
+    void send_pre(const tx_metadata_t& md, double& timeout) override
     {
         if (not md.has_time_spec)
             return;
@@ -206,23 +205,23 @@ public:
 
     void recv_cmd_task(void)
     { // task is looped
-        boost::shared_ptr<stream_cmd_t> cmd;
+        std::shared_ptr<stream_cmd_t> cmd;
         if (_cmd_queue.pop_with_timed_wait(cmd, 0.25)) {
             recv_cmd_handle_cmd(*cmd);
         }
     }
 
-    bounded_buffer<async_metadata_t>& get_async_queue(void)
+    bounded_buffer<async_metadata_t>& get_async_queue(void) override
     {
         return _async_msg_queue;
     }
 
-    bounded_buffer<rx_metadata_t>& get_inline_queue(void)
+    bounded_buffer<rx_metadata_t>& get_inline_queue(void) override
     {
         return _inline_msg_queue;
     }
 
-    void stop(void)
+    void stop(void) override
     {
         _recv_cmd_task.reset();
     }
@@ -232,7 +231,7 @@ private:
     size_t _nsamps_remaining;
     stream_cmd_t::stream_mode_t _stream_mode;
     time_spec_t _time_offset;
-    bounded_buffer<boost::shared_ptr<stream_cmd_t>> _cmd_queue;
+    bounded_buffer<std::shared_ptr<stream_cmd_t>> _cmd_queue;
     bounded_buffer<async_metadata_t> _async_msg_queue;
     bounded_buffer<rx_metadata_t> _inline_msg_queue;
     const cb_fcn_type _stream_on_off;

@@ -8,23 +8,22 @@
 #include <uhd/exception.hpp>
 #include <uhd/utils/log.hpp>
 #include <uhdlib/experts/expert_container.hpp>
-#include <boost/bind.hpp>
 #include <boost/format.hpp>
-#include <boost/function.hpp>
 #include <boost/graph/adjacency_list.hpp>
 #include <boost/graph/depth_first_search.hpp>
 #include <boost/graph/graph_traits.hpp>
 #include <boost/graph/topological_sort.hpp>
-#include <boost/make_shared.hpp>
-#include <boost/scoped_ptr.hpp>
 #include <boost/thread.hpp>
 #include <boost/thread/mutex.hpp>
+#include <functional>
+#include <memory>
 
 #ifdef UHD_EXPERT_LOGGING
 #    define EX_LOG(depth, str) _log(depth, str)
 #else
 #    define EX_LOG(depth, str)
 #endif
+
 
 namespace uhd { namespace experts {
 
@@ -68,17 +67,17 @@ private: // Visitor class for cycle detection algorithm
 public:
     expert_container_impl(const std::string& name) : _name(name) {}
 
-    ~expert_container_impl()
+    ~expert_container_impl() override
     {
         clear();
     }
 
-    const std::string& get_name() const
+    const std::string& get_name() const override
     {
         return _name;
     }
 
-    void resolve_all(bool force = false)
+    void resolve_all(bool force = false) override
     {
         boost::lock_guard<boost::recursive_mutex> resolve_lock(_resolve_mutex);
         boost::lock_guard<boost::mutex> lock(_mutex);
@@ -87,7 +86,7 @@ public:
         _resolve_helper("", "", force);
     }
 
-    void resolve_from(const std::string&)
+    void resolve_from(const std::string&) override
     {
         boost::lock_guard<boost::recursive_mutex> resolve_lock(_resolve_mutex);
         boost::lock_guard<boost::mutex> lock(_mutex);
@@ -97,7 +96,7 @@ public:
         _resolve_helper("", "", false);
     }
 
-    void resolve_to(const std::string&)
+    void resolve_to(const std::string&) override
     {
         boost::lock_guard<boost::recursive_mutex> resolve_lock(_resolve_mutex);
         boost::lock_guard<boost::mutex> lock(_mutex);
@@ -107,7 +106,7 @@ public:
         _resolve_helper("", "", false);
     }
 
-    dag_vertex_t& retrieve(const std::string& name) const
+    dag_vertex_t& retrieve(const std::string& name) const override
     {
         try {
             expert_graph_t::vertex_descriptor vertex = _lookup_vertex(name);
@@ -117,17 +116,17 @@ public:
         }
     }
 
-    const dag_vertex_t& lookup(const std::string& name) const
+    const dag_vertex_t& lookup(const std::string& name) const override
     {
         return retrieve(name);
     }
 
-    const node_retriever_t& node_retriever() const
+    const node_retriever_t& node_retriever() const override
     {
         return *this;
     }
 
-    std::string to_dot() const
+    std::string to_dot() const override
     {
         static const std::string DATA_SHAPE("ellipse");
         static const std::string WORKER_SHAPE("box");
@@ -162,7 +161,7 @@ public:
         return dot_str;
     }
 
-    void debug_audit() const
+    void debug_audit() const override
     {
 #ifdef UHD_EXPERT_LOGGING
         EX_LOG(0, "debug_audit()");
@@ -272,13 +271,13 @@ public:
 #endif
     }
 
-    inline boost::recursive_mutex& resolve_mutex()
+    inline boost::recursive_mutex& resolve_mutex() override
     {
         return _resolve_mutex;
     }
 
 protected:
-    void add_data_node(dag_vertex_t* data_node, auto_resolve_mode_t resolve_mode)
+    void add_data_node(dag_vertex_t* data_node, auto_resolve_mode_t resolve_mode) override
     {
         boost::lock_guard<boost::mutex> lock(_mutex);
 
@@ -313,14 +312,14 @@ protected:
             if (resolve_mode == AUTO_RESOLVE_ON_WRITE
                 or resolve_mode == AUTO_RESOLVE_ON_READ_WRITE) {
                 EX_LOG(2, str(boost::format("added write callback")));
-                data_node->set_write_callback(
-                    boost::bind(&expert_container_impl::resolve_from, this, _1));
+                data_node->set_write_callback(std::bind(
+                    &expert_container_impl::resolve_from, this, std::placeholders::_1));
             }
             if (resolve_mode == AUTO_RESOLVE_ON_READ
                 or resolve_mode == AUTO_RESOLVE_ON_READ_WRITE) {
                 EX_LOG(2, str(boost::format("added read callback")));
-                data_node->set_read_callback(
-                    boost::bind(&expert_container_impl::resolve_to, this, _1));
+                data_node->set_read_callback(std::bind(
+                    &expert_container_impl::resolve_to, this, std::placeholders::_1));
             }
         } catch (...) {
             clear();
@@ -329,7 +328,7 @@ protected:
         }
     }
 
-    void add_worker(worker_node_t* worker)
+    void add_worker(worker_node_t* worker) override
     {
         boost::lock_guard<boost::mutex> lock(_mutex);
 
@@ -399,7 +398,7 @@ protected:
         }
     }
 
-    void clear()
+    void clear() override
     {
         boost::lock_guard<boost::mutex> lock(_mutex);
         EX_LOG(0, "clear()");
@@ -560,7 +559,7 @@ private:
 
 expert_container::sptr expert_container::make(const std::string& name)
 {
-    return boost::make_shared<expert_container_impl>(name);
+    return std::make_shared<expert_container_impl>(name);
 }
 
 }} // namespace uhd::experts

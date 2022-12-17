@@ -297,7 +297,7 @@ that will request a network address from your DHCP server (if available on your
 network).
 
 The SFP+ (sfp0, sfp1) ports are configured with static addresses 192.168.10.2/24
-and 192.168.20.2/24, respectively. Their default MTU value is 8000. These
+and 192.168.20.2/24, respectively. Their default MTU value is 9000. These
 settings are independent of the image type (HG vs. XG), i.e., the defaults are
 the same for 1 GigE and 10 GigE (unlike the X310!).
 
@@ -328,7 +328,7 @@ The factory settings are as follows:
         Address=192.168.10.2/24
 
         [Link]
-        MTUBytes=8000
+        MTUBytes=9000
 
     sfp1 (static):
 
@@ -339,7 +339,7 @@ The factory settings are as follows:
         Address=192.168.20.2/24
 
         [Link]
-        MTUBytes=8000
+        MTUBytes=9000
 
 
 Additional notes on networking:
@@ -389,6 +389,30 @@ will force a reload of the FPGA, which will temporarily take down the SFP
 network interfaces (and temporary settings, such as applied via `ifconfig` on
 the command line, will be lost).
 
+\subsubsection n3xx_getting_started_fpga_update_flavors FPGA Image Flavors
+
+The USRP-N300 Series devices contains two SFP+ ports for the two Ethernet channels.
+Because SFP+ ports can be used for either 1 Gigabit (SFP) or 10 Gigabit (SFP+)
+transceivers, several FPGA images are shipped with UHD to determine the
+behavior of the above interfaces.
+
+Interfaces can be used for either 1 Gigabit Ethernet, 10 Gigabit Ethernet,
+Aurora (using 10 Gigabit speeds), and White Rabbit (the White Rabbit interface
+does *not* support streaming, it only provides a time reference). See also
+\ref n3xx_synchronization_whiterabbit. We provide the following flavors of FPGA
+images in our default image set:
+
+|  FPGA Image Flavor  |  SFP+ Port 0 Interface |  SFP+ Port 1 Interface |
+|---------------------|------------------------|------------------------|
+|  HG (Default)       |  1 Gigabit Ethernet    |  10 Gigabit Ethernet   |
+|  XG                 |  10 Gigabit Ethernet   |  10 Gigabit Ethernet   |
+|  HA                 |  1 Gigabit Ethernet    |  Aurora                |
+|  XA                 |  10 Gigabit Ethernet   |  Aurora                |
+|  AA                 |  Aurora                |  Aurora                |
+|  WX                 |  White Rabbit          |  10 Gigabit Ethernet   |
+
+The N320 has an additional QSFP port, and therefore has additional FPGA flavors
+(AQ, XQ). For more information on those, see \ref n3xx_rh_sfp_protocols.
 
 \section n3xx_usage Using an N3XX USRP from UHD
 
@@ -510,7 +534,8 @@ The following motherboard sensors are always available:
 
 - `ref_locked`: This will check that all the daughterboards have locked to the
   external reference.
-- `temperature`: The temperature of the die itself
+- `temp`: The temperature of the die itself
+- `fan`: The current fan speed
 - `gps_lock`: GPS lock
 - `gps_time`: GPS time in seconds sin ce the epch
 - `gps_tpv`: A TPV report from GPSd serialized as JSON
@@ -546,11 +571,11 @@ containing the update itself. These are files with a `.mender` suffix.
 
 Then run mender on the command line:
 
-    $ mender -rootfs /path/to/latest.mender
+    $ mender install /path/to/latest.mender
 
 The artifact can also be stored on a remote server:
 
-    $ mender -rootfs http://server.name/path/to/latest.mender
+    $ mender install http://server.name/path/to/latest.mender
 
 This procedure will take a while. After mender has logged a successful update,
 reboot the device:
@@ -560,7 +585,7 @@ reboot the device:
 If the reboot worked, and the device seems functional, commit the changes so
 the boot loader knows to permanently boot into this partition:
 
-    $ mender -commit
+    $ mender commit
 
 To identify the currently installed Mender artifact from the command line, the
 following file can be queried:
@@ -570,8 +595,8 @@ following file can be queried:
 If you are running a hosted server, the updates can be initiated from a web
 dashboard. From there, you can start the updates without having to log into the
 device, and can update groups of USRPs with a few clicks in a web GUI. The
-dashboard can also be used to inspect the state of USRPs. This is simple way to
-update groups of rack-mounted USRPs with custom file systems.
+dashboard can also be used to inspect the state of USRPs. This is a simple way
+to update groups of rack-mounted USRPs with custom file systems.
 
 \subsection n3xx_rasm_salt Salt: Remote configuration management and execution
 
@@ -712,6 +737,61 @@ usrp->set_clock_source("internal");
 For more information, refer to the [White Rabbit Homepage](https://www.ohwr.org/projects/white-rabbit),
 or the [Ettus Research Knowledge Base](https://kb.ettus.com/Using_Ethernet-Based_Synchronization_on_the_USRP%E2%84%A2_N3xx_Devices).
 
+\section n3xx_fpgio The Front-Panel GPIO
+
+\b Note: The N321 does not have a front-panel GPIO due to lack of panel space.
+
+\b Note: Do not source high currents (more than 5 mA) per pin. The GPIOs are not
+designed to drive high loads!
+
+\b Note: Unlike the X300 series, the N3XX series does not have user-programmable
+daughterboard GPIOs. The front-panel GPIOs can still be used to track the ATR
+state of the radios, though (see below).
+
+The USRP N3xx series has 12 programmable GPIO pins, accessible through the DB15
+connector on the front panel. The front-panel GPIO on the N3xx series has a
+programmable source per pin. For every pin, it is possible to either drive it
+from the PS (i.e., from Linux), or via UHD.
+
+When UHD is driving a pin, each one of the radios (up to four in the case of the
+N310) can drive the GPIO pin. In that case, the pin can either track the ATR
+register of that radio channel, or it can be freely programmed.
+
+When the PS is driving the pin, UHD releases control of the GPIO pin and it can
+be programmed from Linux using udev.
+
+The following example demonstrates how the GPIO can be used:
+
+~~~{.cpp}
+auto usrp = uhd::usrp::multi_usrp::make("type=n3xx");
+auto banks = usrp->get_gpio_src_banks();
+// banks[0] == "FP0"
+auto gpio_src = usrp->get_gpio_src("FP0");
+// Pin 0 shall be controlled by the PS:
+gpio_src[0] = "PS";
+// Pin 1 and 2 shall be controlled by channel 0:
+gpio_src[1] = "RF0";
+gpio_src[2] = "RF0";
+// Pin 3 shall be controlled by channel 1:
+gpio_src[3] = "RF1";
+// Now update who is driving which pin:
+usrp->set_gpio_src("FP0", gpio_src);
+// Pin 0 is no longer accessible from UHD.
+// Pin 1 shall go high when channel 0 is receiving, or during full-duplex
+// Pin 2 shall be hard-coded to go high (GPIO mode)
+usrp->set_gpio_attr("FP0A", "CTRL", 0x2, 0x6); // 1 == ATR, 0 == GPIO
+// Set the pins to be outputs:
+usrp->set_gpio_attr("FP0A", "DDR", 0x6, 0x6); // 1 == output, 0 == input
+// ATR on pin 1 is off when not receiving:
+usrp->set_gpio_attr("FP0A", "ATR_0X", 0x0, 0x2);
+usrp->set_gpio_attr("FP0A", "ATR_TX", 0x0, 0x2);
+usrp->set_gpio_attr("FP0A", "ATR_RX", 0x2, 0x2);
+usrp->set_gpio_attr("FP0A", "ATR_XX", 0x2, 0x2);
+// Hard-code pin 2 to stay high:
+usrp->set_gpio_attr("FP0A", "OUT", 0x4, 0x4);
+~~~
+
+
 \section n3xx_troubleshooting Troubleshooting
 
 \subsection n3xx_troubleshooting_seqerrs Errors while streaming
@@ -723,10 +803,10 @@ incorrect values. Often, the host computer MTU is set smaller than the device
 MTU, but the MTU discovery will detect a larger MTU than the host computer MTU
 in this error case.
 
-The default MTU for the N3x0 series is 8000. The simplest solution is often to
-set the host computer MTU to 8000 as well:
+The default MTU for the N3x0 series is 9000. The simplest solution is often to
+set the host computer MTU to 9000 as well:
 
-    $ [sudo] ifconfig eth0 mtu 8000 # Replace eth0 with the device you're using
+    $ [sudo] ifconfig eth0 mtu 9000 # Replace eth0 with the device you're using
 
 Of course, you can also reduce the MTU on the device to match your host
 computer, see Section \ref n3xx_getting_started_connectivity.
@@ -1114,9 +1194,9 @@ Slave 6   | 4001_8000 - 4001_bfff | dboard-regs1     | Daughterboard control, sl
 <tr><td rowspan="1">Slave 0    <td rowspan="1">axi_eth_dma0     <td>4000_0000 - 4000_4fff <td>Ethernet DMA    <td>RW          <td>See Linux Driver
 <tr><td rowspan="44">Slave 1   <td rowspan="7">n3xx_mgt_io_core <td>4000_4000             <td>PORT_INFO       <td>RO          <td>SFP port information
 <tr>                                                            <td>[31:24]               <td>COMPAT_NUM      <td>RO          <td>-
-<tr>                                                            <td>[23:18]               <td>6'h0	      <td>RO          <td>-
+<tr>                                                            <td>[23:18]               <td>6'h0	          <td>RO          <td>-
 <tr>                                                            <td>[17]                  <td>activity	      <td>RO          <td>-
-<tr>                                                            <td>[16]                  <td>link_up	      <td>RO          <td>-
+<tr>                                                            <td>[16]                  <td>link_up	        <td>RO          <td>-
 <tr>                                                            <td>[15:8]                <td>mgt_protocol    <td>RO          <td>0 - None, 1 - 1G, 2 - XG, 3 - Aurora
 <tr>                                                            <td>[7:0]                 <td>PORTNUM         <td>RO          <td>-
 <tr>                           <td rowspan="8">n3xx_mgt_io_core <td>4000_4004             <td>MAC_CTRL_STATUS <td>RW          <td>Control 10gE and Aurora mac
@@ -1156,21 +1236,20 @@ Slave 6   | 4001_8000 - 4001_bfff | dboard-regs1     | Daughterboard control, sl
 <tr>                                                            <td>4000_7000 onwards     <td>REMOTE_DST_IP   <td>W           <td>Destination IP, MAC, UDP for Outgoing Packet for 16 local addrs
 <tr>                                                            <td>4000_7400 onwards     <td>REMOTE_DST_UDP_MAC_HI<td>W      <td>Destination MAC (MSB)
 <tr>                                                            <td>4000_7800 onwards     <td>REMOTE_DST_MAC_LO<td>W          <td>Destination MAC (LSB)
-
 <tr><td rowspan="1">Slave 2    <td>axi_eth_dma1                 <td>4000_8000             <td>-               <td>            <td>Same as Slave 0, different base address
-
 <tr><td rowspan="3">Slave 3    <td>n3xx_mgt_io_core             <td>4000_c001 - 4000_cfff <td>-               <td>-           <td>Same as Slave 1, different base address
 <tr>                           <td>eth_dispatch                 <td>4000_d000 - 4000_dfff <td>-               <td>-           <td>Same as Slave 1, different base address
 <tr>                           <td>eth_switch                   <td>4000_e000 - 4000_efff <td>-               <td>-           <td>Same as Slave 1, different base address
-
-<tr><td rowspan="69">Slave 4   <td rowspan="22">n310_core       <td>4001_0000             <td>COMPAT_NUM      <td>R           <td>FPGA Compat Number
+<tr><td rowspan="71">Slave 4   <td rowspan="29">n3xx_core       <td>4001_0000             <td>COMPAT_NUM      <td>R           <td>FPGA Compat Number
 <tr>                                                            <td>[31:16]               <td>Major           <td>RO          <td>-
 <tr>                                                            <td>[15:0]                <td>Minor           <td>RO          <td>-
 <tr>                                                            <td>4001_0004             <td>DATESTAMP       <td>RO          <td>-
 <tr>                                                            <td>4001_0008             <td>GIT_HASH        <td>RO          <td>-
 <tr>                                                            <td>4001_000C             <td>SCRATCH         <td>RO          <td>-
-<tr>                                                            <td>4001_0010             <td>NUM_CE          <td>RO          <td>Number of Computation Engines (RFNoC Blocks)
-<tr>                                                            <td>4001_0014             <td>NUM_IO_CE       <td>RO          <td>Number of fixed IO CEs - Radios + DMA Fifo
+<tr>                                                            <td>4001_0010             <td>REG_DEVICE_ID   <td>RW          <td>RFNoC Device ID
+<tr>                                                            <td>4001_0014             <td>REG_RFNOC_INFO  <td>RO          <td>RFNoC Information
+<tr>                                                            <td>[31:16]               <td>CHDR_W          <td>RO          <td>RFNoC CHDR Width in Bits
+<tr>                                                            <td>[15:0]                <td>RFNOC_PROTOVER  <td>RO          <td>RFNoC Protocol Version
 <tr>                                                            <td>4001_0018             <td>CLOCK_CTRL      <td>            <td>
 <tr>                                                            <td>[0]                   <td>pps select (internal 10 MHz)<td>RW<td>One-hot encoded pps_select to use the external PPS input.
 <tr>                                                            <td>[1]                   <td>pps select (internal 25 MHz)<td>RW<td>One-hot encoded pps_select to use the internally generated PPS with a 10 MHz ref_clk.
@@ -1185,54 +1264,53 @@ Slave 6   | 4001_8000 - 4001_bfff | dboard-regs1     | Daughterboard control, sl
 <tr>                                                            <td>[11:0]                <td>FPGA temperature<td>RO
 <tr>                                                            <td>4001_0020             <td>BUS_CLK_RATE    <td>RO          <td>-
 <tr>                                                            <td>4001_0024             <td>BUS_CLK_COUNT   <td>RO          <td>-
-<tr>                           <td rowspan="5">axi_crossbar     <td>4001_1010             <td>XBAR_VERSION    <td>RO          <td>See crossbar kernel driver
-<tr>                                                            <td>4001_1014             <td>XBAR_NUM_PORTS  <td>RO          <td>See crossbar kernel driver
-<tr>                                                            <td>4001_1018             <td>LOCAL_ADDR      <td>RW          <td>See crossbar kernel driver
-<tr>                                                            <td>4001_1020             <td>remote_offset   <td>WO          <td>XBAR settings reg
-<tr>                                                            <td>4001_1420             <td>local_offset    <td>WO          <td>XBAR settings reg
-<tr>                           <td rowspan="7">n3xx_mgt_io_core (NPIO0)  <td>4001_0200    <td>PORT_INFO       <td>RO          <td>
+<tr>                                                            <td>4001_0028             <td>SFP_PORT0_INFO  <td>RO          <td>-
+<tr>                                                            <td>4001_002C             <td>SFP_PORT1_INFO  <td>RO          <td>-
+<tr>                                                            <td>4001_0030             <td>FP_GPIO_MASTER  <td>RO          <td>GPIO master select bits. One bit per GPIO. LSB is for GPIO 0. Set bit to 0 for Radio, 1 for PS.
+<tr>                                                            <td>4001_0034             <td>FP_GPIO_RADIO_SRC <td>RO        <td>Radio channel source select bits. Two bits per GPIO. Bits [1:0] are for GPIO 0. Set to 00 for channel 0, 01 for channel 1, etc.
+<tr>                                                            <td>4001_0048             <td>NUM_TIMEKEEPERS <td>RO          <td>Number of radio timekeepers
+<tr>                  <td rowspan="7">n3xx_mgt_io_core (NPIO0)  <td>4001_0200             <td>PORT_INFO       <td>RO          <td>
 <tr>                                                            <td>4001_0204             <td>MAC_CTRL_STATUS <td>RW          <td>
 <tr>                                                            <td>4001_0208             <td>PHY_CTRL_STATUS <td>RW          <td>
 <tr>                                                            <td>4001_0220             <td>AURORA_OVERUNS  <td>RO          <td>
 <tr>                                                            <td>4001_0224             <td>AURORA_CHECKSUM_ERRORS<td>RO    <td>
 <tr>                                                            <td>4001_0228             <td>AURORA_BIST_CHECKER_SAMPS<td>RO <td>
 <tr>                                                            <td>4001_022c             <td>AURORA_BIST_CHECKER_ERRORS<td>RO<td>
-<tr>                           <td rowspan="7">n3xx_mgt_io_core (NPIO1)     <td>4001_0240 <td>PORT_INFO       <td>RO          <td>
+<tr>                  <td rowspan="7">n3xx_mgt_io_core (NPIO1)  <td>4001_0240             <td>PORT_INFO       <td>RO          <td>
 <tr>                                                            <td>4001_0244             <td>MAC_CTRL_STATUS <td>RW          <td>
 <tr>                                                            <td>4001_0248             <td>PHY_CTRL_STATUS <td>RW          <td>
 <tr>                                                            <td>4001_0260             <td>AURORA_OVERUNS  <td>RO          <td>
 <tr>                                                            <td>4001_0264             <td>AURORA_CHECKSUM_ERRORS<td>RO<td>
 <tr>                                                            <td>4001_0268             <td>AURORA_BIST_CHECKER_SAMPS<td>RO<td>
 <tr>                                                            <td>4001_026c             <td>AURORA_BIST_CHECKER_ERRORS<td>RO<td>
-<tr>                           <td rowspan="7">n3xx_mgt_io_core (QSFP0)     <td>4001_0280 <td>PORT_INFO<td>RO<td>
+<tr>                  <td rowspan="7">n3xx_mgt_io_core (QSFP0)  <td>4001_0280             <td>PORT_INFO<td>RO<td>
 <tr>                                                            <td>4001_0284             <td>MAC_CTRL_STATUS<td>RW<td>
 <tr>                                                            <td>4001_0288             <td>PHY_CTRL_STATUS<td>RW<td>
 <tr>                                                            <td>4001_02a0             <td>AURORA_OVERUNS<td>RO<td>
 <tr>                                                            <td>4001_02a4             <td>AURORA_CHECKSUM_ERRORS<td>RO<td>
 <tr>                                                            <td>4001_02a8             <td>AURORA_BIST_CHECKER_SAMPS<td>RO<td>
 <tr>                                                            <td>4001_02ac             <td>AURORA_BIST_CHECKER_ERRORS<td>RO<td>
-<tr>                           <td rowspan="7">n3xx_mgt_io_core (QSFP1)     <td>4001_02c0 <td>PORT_INFO<td>RO<td>
+<tr>                  <td rowspan="7">n3xx_mgt_io_core (QSFP1)  <td>4001_02c0             <td>PORT_INFO<td>RO<td>
 <tr>                                                            <td>4001_02c4             <td>MAC_CTRL_STATUS<td>RW<td>
 <tr>                                                            <td>4001_02c8             <td>PHY_CTRL_STATUS<td>RW<td>
 <tr>                                                            <td>4001_02e0             <td>AURORA_OVERUNS<td>RO<td>
 <tr>                                                            <td>4001_02e4             <td>AURORA_CHECKSUM_ERRORS<td>RO<td>
 <tr>                                                            <td>4001_02e8             <td>AURORA_BIST_CHECKER_SAMPS<td>RO<td>
 <tr>                                                            <td>4001_02ec             <td>AURORA_BIST_CHECKER_ERRORS<td>RO<td>
-<tr>                           <td rowspan="7">n3xx_mgt_io_core (QSFP2)     <td>4001_0300 <td>PORT_INFO<td>RO<td>
+<tr>                  <td rowspan="7">n3xx_mgt_io_core (QSFP2)  <td>4001_0300             <td>PORT_INFO<td>RO<td>
 <tr>                                                            <td>4001_0304             <td>MAC_CTRL_STATUS<td>RW<td>
 <tr>                                                            <td>4001_0308             <td>PHY_CTRL_STATUS<td>RW<td>
 <tr>                                                            <td>4001_0320             <td>AURORA_OVERUNS<td>RO<td>
 <tr>                                                            <td>4001_0324             <td>AURORA_CHECKSUM_ERRORS<td>RO<td>
 <tr>                                                            <td>4001_0328             <td>AURORA_BIST_CHECKER_SAMPS<td>RO<td>
 <tr>                                                            <td>4001_032c             <td>AURORA_BIST_CHECKER_ERRORS<td>RO<td>
-<tr>                           <td rowspan="7">n3xx_mgt_io_core (QSFP3)   <td>4001_0340   <td>PORT_INFO<td>RO<td>
+<tr>                  <td rowspan="7">n3xx_mgt_io_core (QSFP3)  <td>4001_0340             <td>PORT_INFO<td>RO<td>
 <tr>                                                            <td>4001_0344             <td>MAC_CTRL_STATUS<td>RW<td>
 <tr>                                                            <td>4001_0348             <td>PHY_CTRL_STATUS<td>RW<td>
 <tr>                                                            <td>4001_0360             <td>AURORA_OVERUNS<td>RO<td>
 <tr>                                                            <td>4001_0364             <td>AURORA_CHECKSUM_ERRORS<td>RO<td>
 <tr>                                                            <td>4001_0368             <td>AURORA_BIST_CHECKER_SAMPS<td>RO<td>
 <tr>                                                            <td>4001_036C             <td>AURORA_BIST_CHECKER_ERRORS<td>RO<td>
-
 <tr><td rowspan="6">Slave 5                                     <td>4001_4000<td>4001_41FF<td>Clocking<td>see Clocking regmap<td>
 <tr>                                                            <td>4001_4200<td>4001_43FF<td>Sync<td>see Sync regmap<td>
 <tr>                                                            <td>4001_4400<td>4001_45FF<td>open<td>open<td>open<td>
@@ -1392,14 +1470,72 @@ channel configuration with a single shared LO source.
 The protocols supported on the SFP+ and QSFP+ ports depend on the FPGA image
 currently loaded.
 
-Interface    | HG     | XG     | XQ           | AQ
--------------|--------|--------|--------------|--------
-SFP+ 0       | 1 GbE  | 10 GbE | White Rabbit | 10 GbE
-SFP+ 1       | 10 GbE | 10 GbE | Unused       | 10 GbE
-QSFP+ lane 0 | Unused | Unused | 10 GbE       | Aurora
-QSFP+ lane 1 | Unused | Unused | 10 GbE       | Aurora
-QSFP+ lane 2 | Unused | Unused | Unused       | Aurora
-QSFP+ lane 3 | Unused | Unused | Unused       | Aurora
+Interface    | HG     | XG     | WX           | XQ           | AQ
+-------------|--------|--------|--------------|--------------|--------
+SFP+ 0       | 1 GbE  | 10 GbE | White Rabbit | White Rabbit | 10 GbE
+SFP+ 1       | 10 GbE | 10 GbE | 10 GbE       | Unused       | 10 GbE
+QSFP+ lane 0 | Unused | Unused | Unused       | 10 GbE       | Aurora
+QSFP+ lane 1 | Unused | Unused | Unused       | 10 GbE       | Aurora
+QSFP+ lane 2 | Unused | Unused | Unused       | Unused       | Aurora
+QSFP+ lane 3 | Unused | Unused | Unused       | Unused       | Aurora
+
+\subsection n3xx_rh_frontend_corrections N320/N321 Frontend Corrections
+
+In an unmodified FPGA image, N320/N321 perform several steps of digital signal
+processing between the RFNoC Radio block and the ADC/DAC.
+
+It should be noted that the DACs/ADCs run at twice the master clock rate (e.g.,
+if the master clock rate is 250 MHz, the DACs/ADCs are clocked at 500 MHz). We
+perform a sample rate conversion to the master clock rate within the FPGA.
+
+```
+  ┌───────┐  ┌──────────────┐   ┌─────────────┐  ┌──────────────┐         ┌─────┐
+  │       │  │ TX           │   │TX           │  │ Halfband     │ 2x MCR  │     │
+  │       ├─>│ IQ Offset    ├──>│DC Offset    ├─>│ Interpolator ├────────>│ DAC │
+  │       │  │ Compensation │   │Compensation │  │ (47 taps)    │         │     │
+  │ RFNoC │  └──────────────┘   └─────────────┘  └──────────────┘         └─────┘
+  │ Radio │
+  │ Block │  ┌──────────────┐   ┌─────────────┐  ┌──────────────┐         ┌─────┐
+  │       │  │ RX           │   │RX           │  │Halfband      │ 2x MCR  │     │
+  │       │<─┤ IQ Offset    │<──┤DC Offset    │<─┤Decimator     │<────────┤ ADC │
+  │       │  │ Compensation │   │Compensation │  │(47 taps)     │         │     │
+  └───────┘  └──────────────┘   └─────────────┘  └──────────────┘         └─────┘
+```
+
+The IQ and DC offset compensation components can be controlled from the host
+side using the correction APIs. The following snippet shows the control of these
+APIs from the host side using the multi_usrp APIs:
+
+~~~{.cpp}
+// Generate an N320/N321 multi_usrp object
+auto usrp = uhd::usrp::multi_usrp::make("type=n3xx");
+// Set TX IQ offset value on channel zero:
+usrp->set_tx_iq_balance(my_tx_iq_offset_value, 0);
+// Set TX DC offset value on channel zero:
+usrp->set_tx_dc_offset(my_tx_dc_offset_value, 0);
+// Set RX IQ offset value on channel zero:
+usrp->set_tx_iq_balance(my_rx_iq_offset_value, 0);
+// Enable auto-RX-DC-offset on all channels:
+usrp->set_rx_dc_offset(true);
+// Set RX DC offset value to specific value on channel zero:
+usrp->set_tx_dc_offset(my_tx_dc_offset_value, 0);
+~~~
+
+When using the RFNoC API, use the uhd::rfnoc::radio_control API calls with the
+same names.
+
+Notes:
+- Other than the RX DC offset calibration, there are no automatic compensation
+  procedures. N320 uses a simple, single-tap IIR filter for automatic DC offset
+  correction (like X310).
+- The automatic RX DC offset correction acts as a notch filter around the LO
+  frequency.
+- For more details on the internals of these corrections, see \ref calibration_fe_corr.
+
+The halfband decimators/interpolators are not configurable. They are 47-tap
+halfband filters with the following coefficients:
+
+-62, 0, 194, 0, -440, 0, 855, 0, -1505, 0, 2478, 0, -3900, 0, 5990, 0, -9187, 0, 14632, 0, -26536, 0, 83009, 131071, 83009, 0, -26536, 0, 14632, 0, -9187, 0, 5990, 0, -3900, 0, 2478, 0, -1505, 0, 855, 0, -440, 0 194, 0, -62.
 
 \subsection n3xx_rh_eeprom_flags EEPROM flags
 
