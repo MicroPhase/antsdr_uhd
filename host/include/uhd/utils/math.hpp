@@ -5,10 +5,10 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 //
 
-#ifndef INCLUDED_UHD_UTILS_MATH_HPP
-#define INCLUDED_UHD_UTILS_MATH_HPP
+#pragma once
 
 #include <uhd/config.hpp>
+#include <uhd/exception.hpp>
 #include <stdint.h>
 #include <boost/numeric/conversion/bounds.hpp>
 #include <cmath>
@@ -29,6 +29,8 @@ namespace uhd {
  * be used in UHD when portable / `std` options are not available.
  */
 namespace math {
+
+static const double PI = 3.14159265358979323846;
 
 /*!
  * Define epsilon values for floating point comparisons.
@@ -234,6 +236,17 @@ UHD_INLINE bool frequencies_are_equal(double lhs, double rhs)
             == fp_compare::fp_compare_delta<double>(rhs, FREQ_COMPARISON_DELTA_HZ));
 }
 
+inline double dB_to_lin(const double dB_val)
+{
+    return std::pow(10, (dB_val) / 10.0);
+}
+
+inline double lin_to_dB(const double val)
+{
+    return 10 * std::log10(val);
+}
+
+
 //! Portable version of lcm() across Boost versions
 template <typename IntegerType>
 inline IntegerType lcm(IntegerType x, IntegerType y)
@@ -255,5 +268,3 @@ inline IntegerType gcd(IntegerType x, IntegerType y)
 
 #include <uhd/utils/fp_compare_delta.ipp>
 #include <uhd/utils/fp_compare_epsilon.ipp>
-
-#endif /* INCLUDED_UHD_UTILS_MATH_HPP */

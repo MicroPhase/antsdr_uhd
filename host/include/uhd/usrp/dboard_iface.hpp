@@ -5,8 +5,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 //
 
-#ifndef INCLUDED_UHD_USRP_DBOARD_IFACE_HPP
-#define INCLUDED_UHD_USRP_DBOARD_IFACE_HPP
+#pragma once
 
 #include <uhd/config.hpp>
 #include <uhd/types/serial.hpp>
@@ -15,8 +14,8 @@
 #include <uhd/usrp/gpio_defs.hpp>
 #include <uhd/utils/pimpl.hpp>
 #include <stdint.h>
-#include <boost/shared_ptr.hpp>
 #include <boost/thread/thread.hpp>
+#include <memory>
 #include <string>
 #include <vector>
 
@@ -53,7 +52,7 @@ struct UHD_API dboard_iface_special_props_t
 class UHD_API dboard_iface : public uhd::i2c_iface
 {
 public:
-    typedef boost::shared_ptr<dboard_iface> sptr;
+    typedef std::shared_ptr<dboard_iface> sptr;
     typedef dboard_iface_special_props_t special_props_t;
 
     //! tells the host which unit to use
@@ -76,7 +75,7 @@ public:
 
     typedef uhd::usrp::gpio_atr::gpio_atr_reg_t atr_reg_t;
 
-    virtual ~dboard_iface(void){};
+    ~dboard_iface(void) override{};
 
     /*!
      * Get special properties information for this dboard slot.
@@ -285,5 +284,3 @@ public:
 };
 
 }} // namespace uhd::usrp
-
-#endif /* INCLUDED_UHD_USRP_DBOARD_IFACE_HPP */

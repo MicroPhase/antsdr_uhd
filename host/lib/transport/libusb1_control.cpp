@@ -28,7 +28,7 @@ public:
         _handle->claim_interface(interface);
     }
 
-    virtual ~libusb_control_impl(void);
+    ~libusb_control_impl(void) override;
 
     int submit(uint8_t request_type,
         uint8_t request,
@@ -36,7 +36,7 @@ public:
         uint16_t index,
         unsigned char* buff,
         uint16_t length,
-        uint32_t libusb_timeout = 0)
+        uint32_t libusb_timeout = 0) override
     {
         boost::mutex::scoped_lock lock(_mutex);
         return libusb_control_transfer(_handle->get(),
@@ -66,6 +66,6 @@ usb_control::sptr usb_control::make(usb_device_handle::sptr handle, const int in
 {
     return sptr(new libusb_control_impl(
         libusb::device_handle::get_cached_handle(
-            boost::static_pointer_cast<libusb::special_handle>(handle)->get_device()),
+            std::static_pointer_cast<libusb::special_handle>(handle)->get_device()),
         interface));
 }

@@ -13,15 +13,15 @@
 #include <boost/algorithm/string.hpp>
 #include <boost/date_time.hpp>
 #include <boost/format.hpp>
-#include <boost/regex.hpp>
 #include <boost/thread/mutex.hpp>
 #include <boost/thread/thread.hpp>
 #include <boost/tokenizer.hpp>
-#include <boost/tuple/tuple.hpp>
 #include <chrono>
 #include <ctime>
+#include <regex>
 #include <string>
 #include <thread>
+#include <tuple>
 
 using namespace uhd;
 using namespace boost::posix_time;
@@ -48,7 +48,7 @@ gps_ctrl::~gps_ctrl(void)
 class gps_ctrl_impl : public gps_ctrl
 {
 private:
-    std::map<std::string, boost::tuple<std::string, boost::system_time, bool>> sentences;
+    std::map<std::string, std::tuple<std::string, boost::system_time, bool>> sentences;
     boost::mutex cache_mutex;
     boost::system_time _last_cache_update;
 
@@ -67,7 +67,7 @@ private:
             update_cache();
             // mark sentence as touched
             if (sentences.find(which) != sentences.end())
-                sentences[which].get<2>() = true;
+                std::get<2>(sentences[which]) = true;
         }
         while (1) {
             try {
@@ -81,12 +81,12 @@ private:
                 if (sentences.find(which) == sentences.end()) {
                     age = milliseconds(max_age_ms);
                 } else {
-                    age = boost::get_system_time() - sentences[which].get<1>();
+                    age = boost::get_system_time() - std::get<1>(sentences[which]);
                 }
                 if (age < milliseconds(max_age_ms)
-                    and (not(wait_for_next and sentences[which].get<2>()))) {
-                    sentence                  = sentences[which].get<0>();
-                    sentences[which].get<2>() = true;
+                    and (not(wait_for_next and std::get<2>(sentences[which])))) {
+                    sentence                      = std::get<0>(sentences[which]);
+                    std::get<2>(sentences[which]) = true;
                 }
             } catch (std::exception& e) {
                 UHD_LOGGER_DEBUG("GPS") << "get_sentence: " << e.what();
@@ -135,8 +135,8 @@ private:
         }
 
         const std::list<std::string> keys{"GPGGA", "GPRMC", "SERVO"};
-        static const boost::regex servo_regex("^\\d\\d-\\d\\d-\\d\\d.*$");
-        static const boost::regex gp_msg_regex("^\\$GP.*,\\*[0-9A-F]{2}$");
+        static const std::regex servo_regex("^\\d\\d-\\d\\d-\\d\\d.*$");
+        static const std::regex gp_msg_regex("^\\$GP.*,\\*[0-9A-F]{2}$");
         std::map<std::string, std::string> msgs;
 
         // Get all GPSDO messages available
@@ -158,11 +158,10 @@ private:
             }
 
             // Look for SERVO message
-            if (boost::regex_search(
-                    msg, servo_regex, boost::regex_constants::match_continuous)) {
+            if (std::regex_search(
+                    msg, servo_regex, std::regex_constants::match_continuous)) {
                 msgs["SERVO"] = msg;
-            } else if (boost::regex_match(msg, gp_msg_regex)
-                       and is_nmea_checksum_ok(msg)) {
+            } else if (std::regex_match(msg, gp_msg_regex) and is_nmea_checksum_ok(msg)) {
                 msgs[msg.substr(1, 5)] = msg;
             } else {
                 UHD_LOGGER_WARNING("GPS")
@@ -175,7 +174,7 @@ private:
         // Update sentences with newly read data
         for (std::string key : keys) {
             if (not msgs[key].empty()) {
-                sentences[key] = boost::make_tuple(msgs[key], time, false);
+                sentences[key] = std::make_tuple(msgs[key], time, false);
             }
         }
 
@@ -249,20 +248,20 @@ public:
         update_cache();
     }
 
-    ~gps_ctrl_impl(void)
+    ~gps_ctrl_impl(void) override
     {
         /* NOP */
     }
 
     // return a list of supported sensors
-    std::vector<std::string> get_sensors(void)
+    std::vector<std::string> get_sensors(void) override
     {
         std::vector<std::string> ret{
             "gps_gpgga", "gps_gprmc", "gps_time", "gps_locked", "gps_servo"};
         return ret;
     }
 
-    uhd::sensor_value_t get_sensor(std::string key)
+    uhd::sensor_value_t get_sensor(std::string key) override
     {
         if (key == "gps_gpgga" or key == "gps_gprmc") {
             return sensor_value_t(boost::to_upper_copy(key),
@@ -334,7 +333,7 @@ private:
                 std::string datestr = get_token(reply, 9);
                 std::string timestr = get_token(reply, 1);
 
-                if (datestr.size() == 0 or timestr.size() == 0) {
+                if (datestr.empty() or timestr.empty()) {
                     throw uhd::value_error(
                         str(boost::format("Invalid response \"%s\"") % reply));
                 }
@@ -369,7 +368,7 @@ private:
         return (get_time() - from_time_t(0)).total_seconds();
     }
 
-    bool gps_detected(void)
+    bool gps_detected(void) override
     {
         return (_gps_type != GPS_TYPE_NONE);
     }

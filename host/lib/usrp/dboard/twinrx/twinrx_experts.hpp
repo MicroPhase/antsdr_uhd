@@ -77,7 +77,7 @@ public:
     }
 
 private:
-    virtual void resolve();
+    void resolve() override;
 
     // Inputs
     experts::data_reader_t<time_spec_t> _command_time;
@@ -126,7 +126,7 @@ public:
     }
 
 private:
-    virtual void resolve();
+    void resolve() override;
     static lo_inj_side_t _compute_lo2_inj_side(
         double lo1_freq, double if1_freq, double if2_freq, double bandwidth);
     static bool _has_mixer_spurs(double lo1_freq,
@@ -189,7 +189,7 @@ public:
     }
 
 private:
-    virtual void resolve();
+    void resolve() override;
 
     // Inputs
     experts::data_reader_t<std::string> _lo_source_ch0;
@@ -240,7 +240,7 @@ public:
     }
 
 private:
-    virtual void resolve();
+    void resolve() override;
 
     // Inputs
     experts::data_reader_t<twinrx_ctrl::lo_source_t> _lox_src_ch0;
@@ -282,7 +282,7 @@ public:
     }
 
 private:
-    virtual void resolve();
+    void resolve() override;
 
     // Inputs
     experts::data_reader_t<double> _lo1_freq_c;
@@ -331,7 +331,7 @@ public:
     }
 
 private:
-    virtual void resolve();
+    void resolve() override;
 
     // Inputs
     const std::string _channel;
@@ -374,6 +374,8 @@ public:
         , _lo_export_ch1(db, prepend_ch("los/all/export", "1"))
         , _ant_mapping(db, "com/ant_mapping")
         , _cal_mode(db, "com/cal_mode")
+        , _id_ch0(db, prepend_ch("id", "0"))
+        , _id_ch1(db, prepend_ch("id", "1"))
     {
         bind_accessor(_antenna_ch0);
         bind_accessor(_antenna_ch1);
@@ -383,10 +385,12 @@ public:
         bind_accessor(_lo_export_ch1);
         bind_accessor(_ant_mapping);
         bind_accessor(_cal_mode);
+        bind_accessor(_id_ch0);
+        bind_accessor(_id_ch1);
     }
 
 private:
-    virtual void resolve();
+    void resolve() override;
 
     // Inputs
     experts::data_reader_t<std::string> _antenna_ch0;
@@ -398,6 +402,9 @@ private:
     // Outputs
     experts::data_writer_t<twinrx_ctrl::antenna_mapping_t> _ant_mapping;
     experts::data_writer_t<twinrx_ctrl::cal_mode_t> _cal_mode;
+
+    experts::data_writer_t<std::string> _id_ch0;
+    experts::data_writer_t<std::string> _id_ch1;
 };
 
 /*!---------------------------------------------------------
@@ -442,7 +449,7 @@ public:
     }
 
 private:
-    virtual void resolve();
+    void resolve() override;
 
     // Inputs
     experts::data_reader_t<double> _gain;
@@ -512,7 +519,7 @@ public:
     }
 
 private:
-    virtual void resolve();
+    void resolve() override;
 
     // Inputs
     experts::data_reader_t<twinrx_ctrl::antenna_mapping_t> _ant_mapping;
@@ -603,7 +610,7 @@ public:
     }
 
 private:
-    virtual void resolve();
+    void resolve() override;
     void _resolve_lox_freq(lo_stage_t lo_stage,
         experts::data_reader_t<double>& ch0_freq_d,
         experts::data_reader_t<double>& ch1_freq_d,

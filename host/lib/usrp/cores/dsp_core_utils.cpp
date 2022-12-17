@@ -8,8 +8,8 @@
 #include <uhd/exception.hpp>
 #include <uhd/utils/math.hpp>
 #include <uhdlib/usrp/cores/dsp_core_utils.hpp>
-#include <boost/math/special_functions/round.hpp>
 #include <boost/math/special_functions/sign.hpp>
+#include <cmath>
 
 static const int32_t MAX_FREQ_WORD = boost::numeric::bounds<int32_t>::highest();
 static const int32_t MIN_FREQ_WORD = boost::numeric::bounds<int32_t>::lowest();
@@ -47,8 +47,17 @@ void get_freq_and_freq_word(const double requested_freq,
 
     } else {
         /* The operation is safe. Perform normally. */
-        freq_word = int32_t(boost::math::round((freq / tick_rate) * scale_factor));
+        freq_word = int32_t(std::lround((freq / tick_rate) * scale_factor));
     }
 
     actual_freq = (double(freq_word) / scale_factor) * tick_rate;
+}
+
+std::tuple<double, int> get_freq_and_freq_word(
+    const double requested_freq, const double tick_rate)
+{
+    double actual_freq;
+    int32_t freq_word;
+    get_freq_and_freq_word(requested_freq, tick_rate, actual_freq, freq_word);
+    return std::make_tuple(actual_freq, freq_word);
 }

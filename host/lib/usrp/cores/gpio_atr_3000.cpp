@@ -8,6 +8,7 @@
 #include <uhd/types/dict.hpp>
 #include <uhd/utils/soft_register.hpp>
 #include <uhdlib/usrp/cores/gpio_atr_3000.hpp>
+#include <unordered_map>
 
 using namespace uhd;
 using namespace usrp;
@@ -16,12 +17,18 @@ using namespace usrp;
 // gpio_atr_3000
 //-------------------------------------------------------------
 
-#define REG_ATR_IDLE_OFFSET (base + 0)
-#define REG_ATR_RX_OFFSET (base + 4)
-#define REG_ATR_TX_OFFSET (base + 8)
-#define REG_ATR_FDX_OFFSET (base + 12)
-#define REG_DDR_OFFSET (base + 16)
-#define REG_ATR_DISABLE_OFFSET (base + 20)
+#define REG_ATR_IDLE_OFFSET (base + reg_offset * 0)
+#define REG_ATR_RX_OFFSET (base + reg_offset * 1)
+#define REG_ATR_TX_OFFSET (base + reg_offset * 2)
+#define REG_ATR_FDX_OFFSET (base + reg_offset * 3)
+#define REG_DDR_OFFSET (base + reg_offset * 4)
+#define REG_ATR_DISABLE_OFFSET (base + reg_offset * 5)
+
+namespace {
+// Special RB addr value to indicate no readback
+// This value is invalid as a real address because it is not a multiple of 4
+static constexpr wb_iface::wb_addr_type READBACK_DISABLED = 0xFFFFFFFF;
+}; // namespace
 
 namespace uhd { namespace usrp { namespace gpio_atr {
 
@@ -30,7 +37,8 @@ class gpio_atr_3000_impl : public gpio_atr_3000
 public:
     gpio_atr_3000_impl(wb_iface::sptr iface,
         const wb_iface::wb_addr_type base,
-        const wb_iface::wb_addr_type rb_addr = READBACK_DISABLED)
+        const wb_iface::wb_addr_type rb_addr,
+        const size_t reg_offset)
         : _iface(iface)
         , _rb_addr(rb_addr)
         , _atr_idle_reg(REG_ATR_IDLE_OFFSET, _atr_disable_reg)
@@ -46,64 +54,88 @@ public:
         _atr_fdx_reg.initialize(*_iface, true);
         _ddr_reg.initialize(*_iface, true);
         _atr_disable_reg.initialize(*_iface, true);
+        for (const auto& attr : gpio_attr_map) {
+            if (attr.first == usrp::gpio_atr::GPIO_SRC
+                || attr.first == usrp::gpio_atr::GPIO_READBACK) {
+                // Don't set the SRC and READBACK, they're handled elsewhere.
+                continue;
+            }
+            _attr_reg_state.emplace(attr.first, 0);
+        }
     }
 
-    virtual void set_atr_mode(const gpio_atr_mode_t mode, const uint32_t mask)
+    void set_atr_mode(const gpio_atr_mode_t mode, const uint32_t mask) override
     {
         // Each bit in the "ATR Disable" register determines whether the respective bit in
         // the GPIO output bus is driven by the ATR engine or a static register. For each
         // bit position, a 1 means that the bit is static and 0 means that the bit is
         // driven by the ATR state machine. This setting will only get applied to all bits
         // in the "mask" that are 1. All other bits will retain their old value.
-        _atr_disable_reg.set_with_mask(
-            (mode == MODE_ATR) ? ~MASK_SET_ALL : MASK_SET_ALL, mask);
+        auto value = (mode == MODE_ATR) ? ~MASK_SET_ALL : MASK_SET_ALL;
+        _atr_disable_reg.set_with_mask(value, mask);
         _atr_disable_reg.flush();
+        // The attr state is inverted from _atr_disable_reg. In _atr_disable_reg,
+        // 1 == disable, whereas in CTRL, 1 means enable ATR.
+        _update_attr_state(GPIO_CTRL, ~value, mask);
     }
 
-    virtual void set_gpio_ddr(const gpio_ddr_t dir, const uint32_t mask)
+    void set_gpio_ddr(const gpio_ddr_t dir, const uint32_t mask) override
     {
         // Each bit in the "DDR" register determines whether the respective bit in the
         // GPIO bus is an input or an output. For each bit position, a 1 means that the
         // bit is an output and 0 means that the bit is an input. This setting will only
         // get applied to all bits in the "mask" that are 1. All other bits will retain
         // their old value.
-        _ddr_reg.set_with_mask((dir == DDR_INPUT) ? ~MASK_SET_ALL : MASK_SET_ALL, mask);
+        auto value = (dir == DDR_INPUT) ? ~MASK_SET_ALL : MASK_SET_ALL;
+        _ddr_reg.set_with_mask(value, mask);
         _ddr_reg.flush();
+        _update_attr_state(GPIO_DDR, value, mask);
     }
 
-    virtual void set_atr_reg(const gpio_atr_reg_t atr,
+    void set_atr_reg(const gpio_atr_reg_t atr,
         const uint32_t value,
-        const uint32_t mask = MASK_SET_ALL)
+        const uint32_t mask = MASK_SET_ALL) override
     {
         // Set the value of the specified ATR register. For bits with ATR Disable set to
         // 1, the IDLE register will hold the output state This setting will only get
         // applied to all bits in the "mask" that are 1. All other bits will retain their
         // old value.
         masked_reg_t* reg = NULL;
+        gpio_attr_t attr;
         switch (atr) {
             case ATR_REG_IDLE:
-                reg = &_atr_idle_reg;
+                reg  = &_atr_idle_reg;
+                attr = GPIO_ATR_0X;
+
                 break;
             case ATR_REG_RX_ONLY:
-                reg = &_atr_rx_reg;
+                reg  = &_atr_rx_reg;
+                attr = GPIO_ATR_RX;
+
                 break;
             case ATR_REG_TX_ONLY:
-                reg = &_atr_tx_reg;
+                reg  = &_atr_tx_reg;
+                attr = GPIO_ATR_TX;
+
                 break;
             case ATR_REG_FULL_DUPLEX:
-                reg = &_atr_fdx_reg;
+                reg  = &_atr_fdx_reg;
+                attr = GPIO_ATR_XX;
+
                 break;
             default:
-                reg = &_atr_idle_reg;
+                reg  = &_atr_idle_reg;
+                attr = GPIO_ATR_0X;
                 break;
         }
         // For protection we only write to bits that have the mode ATR by masking the user
         // specified "mask" with ~atr_disable.
         reg->set_with_mask(value, mask);
         reg->flush();
+        _update_attr_state(attr, value, mask);
     }
 
-    virtual void set_gpio_out(const uint32_t value, const uint32_t mask = MASK_SET_ALL)
+    void set_gpio_out(const uint32_t value, const uint32_t mask = MASK_SET_ALL) override
     {
         // Set the value of the specified GPIO output register.
         // This setting will only get applied to all bits in the "mask" that are 1. All
@@ -113,9 +145,10 @@ public:
         // user specified "mask" with atr_disable.
         _atr_idle_reg.set_gpio_out_with_mask(value, mask);
         _atr_idle_reg.flush();
+        _update_attr_state(GPIO_OUT, value, mask);
     }
 
-    virtual uint32_t read_gpio()
+    uint32_t read_gpio() override
     {
         // Read the state of the GPIO pins
         // If a pin is configured as an input, reads the actual value of the pin
@@ -127,7 +160,22 @@ public:
         }
     }
 
-    inline virtual void set_gpio_attr(const gpio_attr_t attr, const uint32_t value)
+    uint32_t get_attr_reg(const gpio_attr_t attr) override
+    {
+        if (attr == GPIO_SRC) {
+            throw uhd::runtime_error("Can't get GPIO source by GPIO ATR interface.");
+        }
+        if (attr == GPIO_READBACK) {
+            return read_gpio();
+        }
+        if (!_attr_reg_state.count(attr)) {
+            throw uhd::runtime_error("Invalid GPIO attr!");
+        }
+        // Return the cached value of the requested attr
+        return _attr_reg_state.at(attr);
+    }
+
+    inline void set_gpio_attr(const gpio_attr_t attr, const uint32_t value) override
     {
         // An attribute based API to configure all settings for the GPIO bus in one
         // function call. This API does not have a mask so it configures all bits at the
@@ -176,10 +224,6 @@ public:
     }
 
 protected:
-    // Special RB addr value to indicate no readback
-    // This value is invalid as a real address because it is not a multiple of 4
-    static const wb_iface::wb_addr_type READBACK_DISABLED = 0xFFFFFFFF;
-
     class masked_reg_t : public uhd::soft_reg32_wo_t
     {
     public:
@@ -199,7 +243,7 @@ protected:
             return uhd::soft_reg32_wo_t::get(uhd::soft_reg32_wo_t::REGISTER);
         }
 
-        virtual void flush()
+        void flush() override
         {
             uhd::soft_reg32_wo_t::flush();
         }
@@ -216,12 +260,12 @@ protected:
         {
         }
 
-        virtual void set_with_mask(const uint32_t value, const uint32_t mask)
+        void set_with_mask(const uint32_t value, const uint32_t mask) override
         {
             _atr_idle_cache = (value & mask) | (_atr_idle_cache & (~mask));
         }
 
-        virtual uint32_t get()
+        uint32_t get() override
         {
             return _atr_idle_cache;
         }
@@ -236,7 +280,7 @@ protected:
             return _gpio_out_cache;
         }
 
-        virtual void flush()
+        void flush() override
         {
             set(REGISTER,
                 (_atr_idle_cache & (~_atr_disable_reg.get()))
@@ -250,6 +294,7 @@ protected:
         masked_reg_t& _atr_disable_reg;
     };
 
+    std::unordered_map<gpio_attr_t, uint32_t, std::hash<size_t>> _attr_reg_state;
     wb_iface::sptr _iface;
     wb_iface::wb_addr_type _rb_addr;
     atr_idle_reg_t _atr_idle_reg;
@@ -258,19 +303,27 @@ protected:
     masked_reg_t _atr_fdx_reg;
     masked_reg_t _ddr_reg;
     masked_reg_t _atr_disable_reg;
+
+    void _update_attr_state(
+        const gpio_attr_t attr, const uint32_t val, const uint32_t mask)
+    {
+        _attr_reg_state[attr] = (_attr_reg_state.at(attr) & ~mask) | (val & mask);
+    }
 };
 
 gpio_atr_3000::sptr gpio_atr_3000::make(wb_iface::sptr iface,
     const wb_iface::wb_addr_type base,
-    const wb_iface::wb_addr_type rb_addr)
+    const wb_iface::wb_addr_type rb_addr,
+    const size_t reg_offset)
 {
-    return sptr(new gpio_atr_3000_impl(iface, base, rb_addr));
+    return sptr(new gpio_atr_3000_impl(iface, base, rb_addr, reg_offset));
 }
 
 gpio_atr_3000::sptr gpio_atr_3000::make_write_only(
-    wb_iface::sptr iface, const wb_iface::wb_addr_type base)
+    wb_iface::sptr iface, const wb_iface::wb_addr_type base, const size_t reg_offset)
 {
-    gpio_atr_3000::sptr gpio_iface(new gpio_atr_3000_impl(iface, base));
+    gpio_atr_3000::sptr gpio_iface(
+        new gpio_atr_3000_impl(iface, base, READBACK_DISABLED, reg_offset));
     gpio_iface->set_gpio_ddr(DDR_OUTPUT, MASK_SET_ALL);
     return gpio_iface;
 }
@@ -284,32 +337,33 @@ class db_gpio_atr_3000_impl : public gpio_atr_3000_impl, public db_gpio_atr_3000
 public:
     db_gpio_atr_3000_impl(wb_iface::sptr iface,
         const wb_iface::wb_addr_type base,
-        const wb_iface::wb_addr_type rb_addr)
-        : gpio_atr_3000_impl(iface, base, rb_addr)
+        const wb_iface::wb_addr_type rb_addr,
+        const size_t reg_offset)
+        : gpio_atr_3000_impl(iface, base, rb_addr, reg_offset)
     { /* NOP */
     }
 
     inline void set_pin_ctrl(
-        const db_unit_t unit, const uint32_t value, const uint32_t mask)
+        const db_unit_t unit, const uint32_t value, const uint32_t mask) override
     {
         gpio_atr_3000_impl::set_atr_mode(MODE_ATR, compute_mask(unit, value & mask));
         gpio_atr_3000_impl::set_atr_mode(MODE_GPIO, compute_mask(unit, (~value) & mask));
     }
 
-    inline uint32_t get_pin_ctrl(const db_unit_t unit)
+    inline uint32_t get_pin_ctrl(const db_unit_t unit) override
     {
         return (~_atr_disable_reg.get()) >> compute_shift(unit);
     }
 
     using gpio_atr_3000_impl::set_gpio_ddr;
     inline void set_gpio_ddr(
-        const db_unit_t unit, const uint32_t value, const uint32_t mask)
+        const db_unit_t unit, const uint32_t value, const uint32_t mask) override
     {
         gpio_atr_3000_impl::set_gpio_ddr(DDR_OUTPUT, compute_mask(unit, value & mask));
         gpio_atr_3000_impl::set_gpio_ddr(DDR_INPUT, compute_mask(unit, (~value) & mask));
     }
 
-    inline uint32_t get_gpio_ddr(const db_unit_t unit)
+    inline uint32_t get_gpio_ddr(const db_unit_t unit) override
     {
         return _ddr_reg.get() >> compute_shift(unit);
     }
@@ -318,13 +372,13 @@ public:
     inline void set_atr_reg(const db_unit_t unit,
         const gpio_atr_reg_t atr,
         const uint32_t value,
-        const uint32_t mask)
+        const uint32_t mask) override
     {
         gpio_atr_3000_impl::set_atr_reg(
             atr, value << compute_shift(unit), compute_mask(unit, mask));
     }
 
-    inline uint32_t get_atr_reg(const db_unit_t unit, const gpio_atr_reg_t atr)
+    inline uint32_t get_atr_reg(const db_unit_t unit, const gpio_atr_reg_t atr) override
     {
         masked_reg_t* reg = NULL;
         switch (atr) {
@@ -349,21 +403,21 @@ public:
 
     using gpio_atr_3000_impl::set_gpio_out;
     inline void set_gpio_out(
-        const db_unit_t unit, const uint32_t value, const uint32_t mask)
+        const db_unit_t unit, const uint32_t value, const uint32_t mask) override
     {
         gpio_atr_3000_impl::set_gpio_out(
             static_cast<uint32_t>(value) << compute_shift(unit),
             compute_mask(unit, mask));
     }
 
-    inline uint32_t get_gpio_out(const db_unit_t unit)
+    inline uint32_t get_gpio_out(const db_unit_t unit) override
     {
         return (_atr_idle_reg.get_gpio_out() & compute_mask(unit, MASK_SET_ALL))
                >> compute_shift(unit);
     }
 
     using gpio_atr_3000_impl::read_gpio;
-    inline uint32_t read_gpio(const db_unit_t unit)
+    inline uint32_t read_gpio(const db_unit_t unit) override
     {
         return (gpio_atr_3000_impl::read_gpio() & compute_mask(unit, MASK_SET_ALL))
                >> compute_shift(unit);
@@ -391,9 +445,10 @@ private:
 
 db_gpio_atr_3000::sptr db_gpio_atr_3000::make(wb_iface::sptr iface,
     const wb_iface::wb_addr_type base,
-    const wb_iface::wb_addr_type rb_addr)
+    const wb_iface::wb_addr_type rb_addr,
+    const size_t reg_offset)
 {
-    return sptr(new db_gpio_atr_3000_impl(iface, base, rb_addr));
+    return sptr(new db_gpio_atr_3000_impl(iface, base, rb_addr, reg_offset));
 }
 
 }}} // namespace uhd::usrp::gpio_atr

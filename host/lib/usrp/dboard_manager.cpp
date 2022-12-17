@@ -11,10 +11,9 @@
 #include <uhd/utils/log.hpp>
 #include <uhd/utils/safe_call.hpp>
 #include <uhd/utils/static.hpp>
-#include <boost/assign/list_of.hpp>
-#include <boost/bind.hpp>
 #include <boost/format.hpp>
-#include <boost/tuple/tuple.hpp>
+#include <functional>
+#include <tuple>
 
 using namespace uhd;
 using namespace uhd::usrp;
@@ -84,7 +83,7 @@ bool operator==(const dboard_key_t& lhs, const dboard_key_t& rhs)
  **********************************************************************/
 // dboard registry tuple: dboard constructor, canonical name, subdev names, container
 // constructor
-typedef boost::tuple<dboard_manager::dboard_ctor_t,
+typedef std::tuple<dboard_manager::dboard_ctor_t,
     std::string,
     std::vector<std::string>,
     dboard_manager::dboard_ctor_t>
@@ -106,13 +105,13 @@ static void register_dboard_key(const dboard_key_t& dboard_key,
             throw uhd::key_error(str(
                 boost::format("The dboard id pair [%s, %s] is already registered to %s.")
                 % dboard_key.rx_id().to_string() % dboard_key.tx_id().to_string()
-                % get_id_to_args_map()[dboard_key].get<1>()));
+                % std::get<1>(get_id_to_args_map()[dboard_key])));
 
         else
             throw uhd::key_error(
                 str(boost::format("The dboard id %s is already registered to %s.")
                     % dboard_key.xx_id().to_string()
-                    % get_id_to_args_map()[dboard_key].get<1>()));
+                    % std::get<1>(get_id_to_args_map()[dboard_key])));
     }
     get_id_to_args_map()[dboard_key] =
         args_t(db_subdev_ctor, name, subdev_names, db_container_ctor);
@@ -177,7 +176,7 @@ std::string dboard_id_t::to_cname(void) const
             or (key.is_xcvr() and (*this == key.rx_id() or *this == key.tx_id()))) {
             if (not cname.empty())
                 cname += ", ";
-            cname += get_id_to_args_map()[key].get<1>();
+            cname += std::get<1>(get_id_to_args_map()[key]);
         }
     }
     return (cname.empty()) ? "Unknown" : cname;
@@ -199,19 +198,19 @@ public:
         dboard_iface::sptr iface,
         property_tree::sptr subtree,
         bool defer_db_init);
-    virtual ~dboard_manager_impl(void);
+    ~dboard_manager_impl(void) override;
 
-    inline const std::vector<std::string>& get_rx_frontends() const
+    inline const std::vector<std::string>& get_rx_frontends() const override
     {
         return _rx_frontends;
     }
 
-    inline const std::vector<std::string>& get_tx_frontends() const
+    inline const std::vector<std::string>& get_tx_frontends() const override
     {
         return _tx_frontends;
     }
 
-    void initialize_dboards();
+    void initialize_dboards() override;
 
 private:
     void init(dboard_eeprom_t, dboard_eeprom_t, property_tree::sptr, bool);
@@ -346,7 +345,7 @@ void dboard_manager_impl::init(dboard_eeprom_t rx_eeprom,
         std::string name;
         std::vector<std::string> subdevs;
         dboard_ctor_t container_ctor;
-        boost::tie(subdev_ctor, name, subdevs, container_ctor) =
+        std::tie(subdev_ctor, name, subdevs, container_ctor) =
             get_id_to_args_map()[xcvr_dboard_key];
 
         // create the container class.
@@ -405,7 +404,7 @@ void dboard_manager_impl::init(dboard_eeprom_t rx_eeprom,
         std::string rx_name;
         std::vector<std::string> rx_subdevs;
         dboard_ctor_t rx_cont_ctor;
-        boost::tie(rx_dboard_ctor, rx_name, rx_subdevs, rx_cont_ctor) =
+        std::tie(rx_dboard_ctor, rx_name, rx_subdevs, rx_cont_ctor) =
             get_id_to_args_map()[rx_dboard_key];
 
         // create the container class.
@@ -450,7 +449,7 @@ void dboard_manager_impl::init(dboard_eeprom_t rx_eeprom,
         std::string tx_name;
         std::vector<std::string> tx_subdevs;
         dboard_ctor_t tx_cont_ctor;
-        boost::tie(tx_dboard_ctor, tx_name, tx_subdevs, tx_cont_ctor) =
+        std::tie(tx_dboard_ctor, tx_name, tx_subdevs, tx_cont_ctor) =
             get_id_to_args_map()[tx_dboard_key];
 
         // create the container class.

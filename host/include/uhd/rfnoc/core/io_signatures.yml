@@ -1,0 +1,268 @@
+ctrl_port:
+  type: master-slave
+  ports:
+  - name: ctrlport_req_wr
+    type: from-master
+  - name: ctrlport_req_rd
+    type: from-master
+  - name: ctrlport_req_addr
+    type: from-master
+    width: 20
+  - name: ctrlport_req_data
+    type: from-master
+    width: 32
+  - name: ctrlport_req_byte_en
+    type: from-master
+    width: 4
+  - name: ctrlport_req_has_time
+    type: from-master
+  - name: ctrlport_req_time
+    type: from-master
+    width: 64
+  - name: ctrlport_resp_ack
+    type: to-master
+  - name: ctrlport_resp_status
+    type: to-master
+    width: 2
+  - name: ctrlport_resp_data
+    type: to-master
+    width: 32
+
+time_keeper:
+  type: broadcaster-listener
+  ports:
+  - name: radio_time
+    width: 64
+
+# Single channel radio interface
+radio_1x32:
+  type: master-slave
+  ports:
+  - name: radio_rx_data
+    type: from-master
+    width: 32
+  - name: radio_rx_stb
+    type: from-master
+    width: 1
+  - name: radio_rx_running
+    type: to-master
+    width: 1
+  - name: radio_tx_data
+    type: to-master
+    width: 32
+  - name: radio_tx_stb
+    type: from-master
+    width: 1
+  - name: radio_tx_running
+    type: to-master
+    width: 1
+
+# Two channel radio interface, or single channel with 2 SPC
+radio_2x32:
+  type: master-slave
+  ports:
+  - name: radio_rx_data
+    type: from-master
+    width: 64
+  - name: radio_rx_stb
+    type: from-master
+    width: 2
+  - name: radio_rx_running
+    type: to-master
+    width: 2
+  - name: radio_tx_data
+    type: to-master
+    width: 64
+  - name: radio_tx_stb
+    type: from-master
+    width: 2
+  - name: radio_tx_running
+    type: to-master
+    width: 2
+
+# Same as radio_2x32, but kept for backwards compatibility with the old name
+x300_radio:
+  type: master-slave
+  ports:
+  - name: radio_rx_data
+    type: from-master
+    width: 64
+  - name: radio_rx_stb
+    type: from-master
+    width: 2
+  - name: radio_rx_running
+    type: to-master
+    width: 2
+  - name: radio_tx_data
+    type: to-master
+    width: 64
+  - name: radio_tx_stb
+    type: from-master
+    width: 2
+  - name: radio_tx_running
+    type: to-master
+    width: 2
+
+# Eight channel radio interface, or two channels with 4 SPC
+radio_8x32:
+  type: master-slave
+  ports:
+  - name: radio_rx_data
+    type: from-master
+    width: 256
+  - name: radio_rx_stb
+    type: from-master
+    width: 8
+  - name: radio_rx_running
+    type: to-master
+    width: 8
+  - name: radio_tx_data
+    type: to-master
+    width: 256
+  - name: radio_tx_stb
+    type: from-master
+    width: 8
+  - name: radio_tx_running
+    type: to-master
+    width: 8
+
+# A 4-port AXI4 memory-mapped interface with 64-bit data, and 4 GiB address
+# space (32-bit).
+axi4_mm_4x64_4g:
+  type: master-slave
+  ports:
+  - name: axi_rst
+    type: to-master
+    width: 1
+  - name: m_axi_awid
+    type: from-master
+    width: 4
+  - name: m_axi_awaddr
+    type: from-master
+    width: 128
+  - name: m_axi_awlen
+    type: from-master
+    width: 32
+  - name: m_axi_awsize
+    type: from-master
+    width: 12
+  - name: m_axi_awburst
+    type: from-master
+    width: 8
+  - name: m_axi_awlock
+    type: from-master
+    width: 4
+  - name: m_axi_awcache
+    type: from-master
+    width: 16
+  - name: m_axi_awprot
+    type: from-master
+    width: 12
+  - name: m_axi_awqos
+    type: from-master
+    width: 16
+  - name: m_axi_awregion
+    type: from-master
+    width: 16
+  - name: m_axi_awuser
+    type: from-master
+    width: 4
+  - name: m_axi_awvalid
+    type: from-master
+    width: 4
+  - name: m_axi_awready
+    type: to-master
+    width: 4
+  - name: m_axi_wdata
+    type: from-master
+    width: 256
+  - name: m_axi_wstrb
+    type: from-master
+    width: 32
+  - name: m_axi_wlast
+    type: from-master
+    width: 4
+  - name: m_axi_wuser
+    type: from-master
+    width: 4
+  - name: m_axi_wvalid
+    type: from-master
+    width: 4
+  - name: m_axi_wready
+    type: to-master
+    width: 4
+  - name: m_axi_bid
+    type: to-master
+    width: 4
+  - name: m_axi_bresp
+    type: to-master
+    width: 8
+  - name: m_axi_buser
+    type: to-master
+    width: 4
+  - name: m_axi_bvalid
+    type: to-master
+    width: 4
+  - name: m_axi_bready
+    type: from-master
+    width: 4
+  - name: m_axi_arid
+    type: from-master
+    width: 4
+  - name: m_axi_araddr
+    type: from-master
+    width: 128
+  - name: m_axi_arlen
+    type: from-master
+    width: 32
+  - name: m_axi_arsize
+    type: from-master
+    width: 12
+  - name: m_axi_arburst
+    type: from-master
+    width: 8
+  - name: m_axi_arlock
+    type: from-master
+    width: 4
+  - name: m_axi_arcache
+    type: from-master
+    width: 16
+  - name: m_axi_arprot
+    type: from-master
+    width: 12
+  - name: m_axi_arqos
+    type: from-master
+    width: 16
+  - name: m_axi_arregion
+    type: from-master
+    width: 16
+  - name: m_axi_aruser
+    type: from-master
+    width: 4
+  - name: m_axi_arvalid
+    type: from-master
+    width: 4
+  - name: m_axi_arready
+    type: to-master
+    width: 4
+  - name: m_axi_rid
+    type: to-master
+    width: 4
+  - name: m_axi_rdata
+    type: to-master
+    width: 256
+  - name: m_axi_rresp
+    type: to-master
+    width: 8
+  - name: m_axi_rlast
+    type: to-master
+    width: 4
+  - name: m_axi_ruser
+    type: to-master
+    width: 4
+  - name: m_axi_rvalid
+    type: to-master
+    width: 4
+  - name: m_axi_rready
+    type: from-master
+    width: 4

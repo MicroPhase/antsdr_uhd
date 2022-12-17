@@ -18,10 +18,10 @@
 #include <uhd/utils/log.hpp>
 #include <uhd/utils/static.hpp>
 #include <boost/assign/list_of.hpp>
-#include <boost/bind.hpp>
 #include <boost/format.hpp>
-#include <boost/math/special_functions/round.hpp>
 #include <boost/thread.hpp>
+#include <cmath>
+#include <functional>
 #include <utility>
 
 using namespace uhd;
@@ -50,7 +50,7 @@ class dbsrx2 : public rx_dboard_base
 {
 public:
     dbsrx2(ctor_args_t args);
-    virtual ~dbsrx2(void);
+    ~dbsrx2(void) override;
 
 private:
     double _lo_freq;
@@ -187,11 +187,11 @@ dbsrx2::dbsrx2(ctor_args_t args) : rx_dboard_base(args)
     this->get_rx_subtree()->create<std::string>("name").set("DBSRX");
     this->get_rx_subtree()
         ->create<sensor_value_t>("sensors/lo_locked")
-        .set_publisher(boost::bind(&dbsrx2::get_locked, this));
+        .set_publisher(std::bind(&dbsrx2::get_locked, this));
     for (const std::string& name : dbsrx2_gain_ranges.keys()) {
         this->get_rx_subtree()
             ->create<double>("gains/" + name + "/value")
-            .set_coercer(boost::bind(&dbsrx2::set_gain, this, _1, name))
+            .set_coercer(std::bind(&dbsrx2::set_gain, this, std::placeholders::_1, name))
             .set(dbsrx2_gain_ranges[name].start());
         this->get_rx_subtree()
             ->create<meta_range_t>("gains/" + name + "/range")
@@ -199,7 +199,7 @@ dbsrx2::dbsrx2(ctor_args_t args) : rx_dboard_base(args)
     }
     this->get_rx_subtree()
         ->create<double>("freq/value")
-        .set_coercer(boost::bind(&dbsrx2::set_lo_freq, this, _1))
+        .set_coercer(std::bind(&dbsrx2::set_lo_freq, this, std::placeholders::_1))
         .set(dbsrx2_freq_range.start());
     this->get_rx_subtree()->create<meta_range_t>("freq/range").set(dbsrx2_freq_range);
     this->get_rx_subtree()
@@ -216,7 +216,7 @@ dbsrx2::dbsrx2(ctor_args_t args) : rx_dboard_base(args)
 
     this->get_rx_subtree()
         ->create<double>("bandwidth/value")
-        .set_coercer(boost::bind(&dbsrx2::set_bandwidth, this, _1))
+        .set_coercer(std::bind(&dbsrx2::set_bandwidth, this, std::placeholders::_1))
         .set(2.0
              * (0.8 * codec_rate
                    / 2.0)); // bandwidth in lowpass, convert to complex bandpass
@@ -258,7 +258,7 @@ double dbsrx2::set_lo_freq(double target_freq)
 
     N       = (target_freq * R * ext_div) / (ref_freq); // actual spec range is (19, 251)
     intdiv  = int(std::floor(N)); //  if (intdiv < 19  or intdiv > 251) continue;
-    fracdiv = boost::math::iround((N - intdiv) * double(1 << 20));
+    fracdiv = static_cast<int>(std::lround((N - intdiv) * double(1 << 20)));
 
     // calculate the actual freq from the values above
     N        = double(intdiv) + double(fracdiv) / double(1 << 20);
@@ -305,7 +305,7 @@ double dbsrx2::set_lo_freq(double target_freq)
  */
 static int gain_to_bbg_vga_reg(double& gain)
 {
-    int reg = boost::math::iround(dbsrx2_gain_ranges["BBG"].clip(gain));
+    int reg = static_cast<int>(std::lround(dbsrx2_gain_ranges["BBG"].clip(gain)));
 
     gain = double(reg);
 

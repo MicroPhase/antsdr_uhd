@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 #
 # Copyright 2015-2016 Ettus Research LLC
 # Copyright 2018 Ettus Research, a National Instruments Company
@@ -7,7 +7,6 @@
 #
 """ Run uhd_find_devices and parse the output. """
 
-from __future__ import print_function
 import re
 import subprocess
 

@@ -13,10 +13,10 @@
 #include <uhd/utils/safe_call.hpp>
 #include <uhdlib/usrp/common/async_packet_handler.hpp>
 #include <uhdlib/usrp/cores/radio_ctrl_core_3000.hpp>
-#include <boost/bind.hpp>
 #include <boost/format.hpp>
 #include <boost/thread/mutex.hpp>
 #include <boost/thread/thread.hpp>
+#include <functional>
 #include <queue>
 
 using namespace uhd;
@@ -60,7 +60,7 @@ public:
         this->set_tick_rate(1.0); // something possible but bogus
     }
 
-    ~radio_ctrl_core_3000_impl(void)
+    ~radio_ctrl_core_3000_impl(void) override
     {
         _timeout = ACK_TIMEOUT; // reset timeout to something small
         UHD_SAFE_CALL(
@@ -72,14 +72,14 @@ public:
     /*******************************************************************
      * Peek and poke 32 bit implementation
      ******************************************************************/
-    void poke32(const wb_addr_type addr, const uint32_t data)
+    void poke32(const wb_addr_type addr, const uint32_t data) override
     {
         boost::mutex::scoped_lock lock(_mutex);
         this->send_pkt(addr / 4, data);
         this->wait_for_ack(false);
     }
 
-    uint32_t peek32(const wb_addr_type addr)
+    uint32_t peek32(const wb_addr_type addr) override
     {
         boost::mutex::scoped_lock lock(_mutex);
         this->send_pkt(SR_READBACK, addr / 8);
@@ -89,7 +89,7 @@ public:
         return ((addr / 4) & 0x1) ? hi : lo;
     }
 
-    uint64_t peek64(const wb_addr_type addr)
+    uint64_t peek64(const wb_addr_type addr) override
     {
         boost::mutex::scoped_lock lock(_mutex);
         this->send_pkt(SR_READBACK, addr / 8);
@@ -99,7 +99,7 @@ public:
     /*******************************************************************
      * Update methods for time
      ******************************************************************/
-    void set_time(const uhd::time_spec_t& time)
+    void set_time(const uhd::time_spec_t& time) override
     {
         boost::mutex::scoped_lock lock(_mutex);
         _time     = time;
@@ -108,13 +108,13 @@ public:
             _timeout = MASSIVE_TIMEOUT; // permanently sets larger timeout
     }
 
-    uhd::time_spec_t get_time(void)
+    uhd::time_spec_t get_time(void) override
     {
         boost::mutex::scoped_lock lock(_mutex);
         return _time;
     }
 
-    void set_tick_rate(const double rate)
+    void set_tick_rate(const double rate) override
     {
         boost::mutex::scoped_lock lock(_mutex);
         _tick_rate = rate;
@@ -132,7 +132,7 @@ private:
      ******************************************************************/
     UHD_INLINE void send_pkt(const uint32_t addr, const uint32_t data = 0)
     {
-        managed_send_buffer::sptr buff = _ctrl_xport->get_send_buff(0);
+        managed_send_buffer::sptr buff = _ctrl_xport->get_send_buff(0.0);
         if (not buff) {
             throw uhd::runtime_error("fifo ctrl timed out getting a send buffer");
         }
@@ -298,7 +298,7 @@ private:
         uhd::msg_task::msg_payload_t msg;
         do {
             msg = _async_task->get_msg_from_dump_queue(recv_sid);
-        } while (msg.size() < min_buff_size && msg.size() != 0);
+        } while (msg.size() < min_buff_size && !msg.empty());
 
         if (msg.size() >= min_buff_size) {
             memcpy(b.data, &msg.front(), std::min(msg.size(), sizeof(b.data)));
@@ -307,14 +307,14 @@ private:
         return false;
     }
 
-    void push_response(const uint32_t* buff)
+    void push_response(const uint32_t* buff) override
     {
         resp_buff_type resp_buff;
         std::memcpy(resp_buff.data, buff, sizeof(resp_buff));
         _resp_queue.push_with_haste(resp_buff);
     }
 
-    void hold_task(uhd::msg_task::sptr task)
+    void hold_task(uhd::msg_task::sptr task) override
     {
         _async_task = task;
     }
