@@ -1,0 +1,12 @@
+[Match]
+Name=eth0
+KernelCommandLine=!nfsroot
+
+[Network]
+DHCP=ipv4
+IPForward=ipv4
+
+[DHCP]
+UseHostname=true
+UseDomains=true
+ClientIdentifier=mac
