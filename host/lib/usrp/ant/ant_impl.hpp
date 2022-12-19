@@ -9,7 +9,6 @@
 #define INCLUDED_B200_IMPL_HPP
 
 #include "ant_cores.hpp"
-#include "ant_iface.hpp"
 #include "ant_uart.hpp"
 #include "uhd/device.hpp"
 #include "uhd/property_tree.hpp"
@@ -50,6 +49,12 @@
  * UDP ports for the E310 communication
  * ports 49200 - 49210
  * */
+
+/* microphase */
+enum microphase_produce_t {E310 ,E200 ,ETTUS};
+
+enum b200_product_t { B200, B210, B200MINI, B205MINI };
+
 #define MICROPHASE_ANT_UDP_FIND_PORT 49100
 #define MICROPHASE_ANT_UDP_CTRL_PORT 49200
 #define MICROPHASE_ANT_UDP_DATA_TX_PORT 49202
@@ -150,7 +155,6 @@ private:
     const bool _enable_user_regs;
 
     // controllers
-    ant_iface::sptr _iface;
     radio_ctrl_core_3000::sptr _local_ctrl;
     uhd::usrp::ad9361_ctrl::sptr _codec_ctrl;
     uhd::usrp::ad936x_manager::sptr _codec_mgr;
