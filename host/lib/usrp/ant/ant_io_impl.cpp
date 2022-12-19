@@ -514,11 +514,11 @@ void ant_impl::handle_overflow(const size_t radio_index)
             // my_streamer->issue_stream_cmd(stream_cmd);
         }
     } else {
-//        while (_data_rx_transport->get_recv_buff(0.001)) {
-//        }
+        while (_data_rx_transport->get_recv_buff(0.001)) {
+        }
         // FIXME: temporarily remove the overflow handling that re-issues a stream
         //        command. This will avoid an issue that gets the b210 in a bad state.
-         _radio_perifs[radio_index].framer->handle_overflow();
+//         _radio_perifs[radio_index].framer->handle_overflow();
     }
 }
 
