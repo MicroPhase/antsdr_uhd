@@ -246,7 +246,7 @@
 	"bitstream_image=antsdr_e200.bit\0"	\
 	"boot_image=BOOT.bin\0"	\
 	"uenvcmd=run sdboot\0" \
-	"bootargs=console=ttyPS0,115200 root=/dev/mmcblk0p2 rw earlyprintk rootfstype=ext4 rootwait\0" \
+	"bootargs=console=ttyPS0,115200 root=/dev/ram0 rw earlyprintk rootfstype=ext4 rootwait\0" \
 	"loadbit_addr=0x100000\0"	\
 	"loadbootenv_addr=0x2000000\0" \
 	"fit_size=0x900000\0"	\
@@ -283,7 +283,8 @@
 			"fpga loadb 0 ${loadbit_addr} ${bitstream_size}  &&" \
 			"load mmc 0 ${fit_load_address} ${kernel_image} && " \
 			"load mmc 0 ${devicetree_load_address} ${devicetree_image} && " \
-			"bootm ${fit_load_address} - ${devicetree_load_address}; " \
+			"load mmc 0 ${ramdisk_load_address} ${ramdisk_image} && " \
+			"bootm ${fit_load_address} ${ramdisk_load_address} ${devicetree_load_address}; " \
 		"fi\0" \
 	"usbboot=if usb start; then " \
 			"run uenvboot; " \

@@ -5,12 +5,10 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 //
 
-#ifndef INCLUDED_IHEX_READER_HPP
-#define INCLUDED_IHEX_READER_HPP
+#pragma once
 
 #include <stdint.h>
-#include <boost/bind.hpp>
-#include <boost/function.hpp>
+#include <functional>
 #include <string>
 #include <vector>
 
@@ -20,7 +18,7 @@ class ihex_reader
 {
 public:
     // Arguments are: lower address bits, upper address bits, buff, length
-    typedef boost::function<int(uint16_t, uint16_t, unsigned char*, uint16_t)>
+    typedef std::function<int(uint16_t, uint16_t, unsigned char*, uint16_t)>
         record_handle_type;
 
     /*
@@ -65,5 +63,3 @@ private:
 };
 
 }; /* namespace uhd */
-
-#endif /* INCLUDED_IHEX_READER_HPP */

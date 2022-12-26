@@ -13,6 +13,11 @@
 #include <uhd/types/ranges.hpp>
 #include <stdint.h>
 
+// Turn off optimization on macOS/Clang. With optimizations
+// on, twinrx_gain_tables hours to build
+#if defined(UHD_PLATFORM_MACOS)
+#   pragma clang optimize off
+#endif
 namespace uhd { namespace usrp { namespace dboard { namespace twinrx {
 
 class twinrx_gain_config_t
@@ -32,6 +37,9 @@ public:
         , amp2(amp2_)
     {
     }
+
+    twinrx_gain_config_t(const twinrx_gain_config_t& gc) = default;
+    ~twinrx_gain_config_t()                              = default;
 
     twinrx_gain_config_t& operator=(const twinrx_gain_config_t& src)
     {
@@ -78,5 +86,9 @@ private:
 
 
 }}}} // namespace uhd::usrp::dboard::twinrx
+
+#if defined(UHD_PLATFORM_MACOS)
+#   pragma clang optimize on
+#endif
 
 #endif /* INCLUDED_DBOARD_TWINRX_GAIN_TABLES_HPP */

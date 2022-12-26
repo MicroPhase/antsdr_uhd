@@ -28,8 +28,6 @@ public:
 
     double get_gain(const size_t chan, const uhd::direction_t dir);
 
-    double set_master_clock_rate(const double freq);
-
     double set_bandwidth(
         const double bandwidth, const size_t chan, const uhd::direction_t dir);
 
@@ -62,9 +60,6 @@ private:
 
     //! Reference to the RPC client
     uhd::rpc_client::sptr _rpcc;
-
-    //! Slot index
-    const size_t _slot_idx;
 
     //! Stores the prefix to RPC calls
     const std::string _rpc_prefix;

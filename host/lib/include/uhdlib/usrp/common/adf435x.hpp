@@ -1,12 +1,12 @@
 //
 // Copyright 2015 Ettus Research LLC
 // Copyright 2018 Ettus Research, a National Instruments Company
+// Copyright 2019 Ettus Research, A National Instruments Brand
 //
 // SPDX-License-Identifier: GPL-3.0-or-later
 //
 
-#ifndef INCLUDED_ADF435X_HPP
-#define INCLUDED_ADF435X_HPP
+#pragma once
 
 #include "adf4350_regs.hpp"
 #include "adf4351_regs.hpp"
@@ -15,16 +15,17 @@
 #include <uhd/types/ranges.hpp>
 #include <uhd/utils/log.hpp>
 #include <uhdlib/utils/math.hpp>
-#include <boost/function.hpp>
+#include <uhdlib/utils/narrow.hpp>
 #include <boost/math/special_functions/round.hpp>
 #include <boost/thread.hpp>
+#include <functional>
 #include <vector>
 
 class adf435x_iface
 {
 public:
-    typedef boost::shared_ptr<adf435x_iface> sptr;
-    typedef boost::function<void(std::vector<uint32_t>)> write_fn_t;
+    typedef std::shared_ptr<adf435x_iface> sptr;
+    typedef std::function<void(std::vector<uint32_t>)> write_fn_t;
 
     static sptr make_adf4350(write_fn_t write);
     static sptr make_adf4351(write_fn_t write);
@@ -112,7 +113,8 @@ public:
 
     virtual void set_charge_pump_current(charge_pump_current_t cp_current) = 0;
 
-    virtual double set_charge_pump_current(double current, bool flush = false) = 0;
+    virtual double set_charge_pump_current(
+        const double current, const bool flush = false) = 0;
 
     virtual uhd::meta_range_t get_charge_pump_current_range() = 0;
 
@@ -137,19 +139,19 @@ public:
     {
     }
 
-    virtual ~adf435x_impl(){};
+    ~adf435x_impl() override{};
 
-    void set_reference_freq(double fref)
+    void set_reference_freq(double fref) override
     {
         _reference_freq = fref;
     }
 
-    void set_feedback_select(feedback_sel_t fb_sel)
+    void set_feedback_select(feedback_sel_t fb_sel) override
     {
         _fb_after_divider = (fb_sel == FB_SEL_DIVIDED);
     }
 
-    void set_prescaler(prescaler_t prescaler)
+    void set_prescaler(prescaler_t prescaler) override
     {
         if (prescaler == PRESCALER_8_9) {
             _regs.prescaler = adf435x_regs_t::PRESCALER_8_9;
@@ -160,7 +162,7 @@ public:
         }
     }
 
-    void set_output_power(output_t output, output_power_t power)
+    void set_output_power(output_t output, output_power_t power) override
     {
         switch (output) {
             case RF_OUTPUT_A:
@@ -204,7 +206,7 @@ public:
         }
     }
 
-    void set_output_enable(output_t output, bool enable)
+    void set_output_enable(output_t output, bool enable) override
     {
         switch (output) {
             case RF_OUTPUT_A:
@@ -220,7 +222,7 @@ public:
         }
     }
 
-    void set_muxout_mode(muxout_t mode)
+    void set_muxout_mode(muxout_t mode) override
     {
         switch (mode) {
             case MUXOUT_3STATE:
@@ -249,7 +251,7 @@ public:
         }
     }
 
-    void set_tuning_mode(tuning_mode_t mode)
+    void set_tuning_mode(tuning_mode_t mode) override
     {
         // New mode applies to subsequent tunes i.e. do not re-tune now
         _tuning_mode = mode;
@@ -260,7 +262,7 @@ public:
         _regs.phase_12_bit = (_tuning_mode == TUNING_MODE_HIGH_RESOLUTION) ? 0 : 1;
     }
 
-    void set_charge_pump_current(charge_pump_current_t cp_current)
+    void set_charge_pump_current(charge_pump_current_t cp_current) override
     {
         switch (cp_current) {
             case CHARGE_PUMP_CURRENT_0_31MA:
@@ -316,12 +318,13 @@ public:
         }
     }
 
-    double set_charge_pump_current(const double current, const bool flush)
+    double set_charge_pump_current(const double current, const bool flush) override
     {
         const auto cp_range = get_charge_pump_current_range();
 
         const auto coerced_current = cp_range.clip(current, true);
-        const int current_step     = std::round((coerced_current / cp_range.step()) - 1);
+        const int current_step =
+            uhd::narrow_cast<int>(std::round((coerced_current / cp_range.step()) - 1));
 
         UHD_ASSERT_THROW(current_step >= 0 and current_step < 16);
         set_charge_pump_current(
@@ -341,19 +344,19 @@ public:
         return coerced_current;
     }
 
-    uhd::meta_range_t get_charge_pump_current_range()
+    uhd::meta_range_t get_charge_pump_current_range() override
     {
         return uhd::meta_range_t(.3125e-6, 5e-6, .3125e-6);
     }
 
-    uhd::range_t get_int_range()
+    uhd::range_t get_int_range() override
     {
         if (_N_min < 0)
             throw uhd::runtime_error("set_prescaler must be called before get_int_range");
         return uhd::range_t(_N_min, 4095);
     }
 
-    double set_frequency(double target_freq, bool int_n_mode, bool flush = false)
+    double set_frequency(double target_freq, bool int_n_mode, bool flush = false) override
     {
         static const double REF_DOUBLER_THRESH_FREQ = 12.5e6;
         static const double PFD_FREQ_MAX            = 25.0e6;
@@ -528,7 +531,7 @@ public:
         return actual_freq;
     }
 
-    void commit()
+    void commit() override
     {
         // reset counters
         _regs.counter_reset = adf435x_regs_t::COUNTER_RESET_ENABLED;
@@ -611,5 +614,3 @@ inline int adf435x_impl<adf4351_regs_t>::_get_rfdiv_setting(uint16_t div)
             UHD_THROW_INVALID_CODE_PATH();
     }
 }
-
-#endif // INCLUDED_ADF435X_HPP

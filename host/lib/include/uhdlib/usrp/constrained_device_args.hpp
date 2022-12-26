@@ -5,14 +5,13 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 //
 
-#ifndef INCLUDED_LIBUHD_USRP_COMMON_CONSTRAINED_DEV_ARGS_HPP
-#define INCLUDED_LIBUHD_USRP_COMMON_CONSTRAINED_DEV_ARGS_HPP
+#pragma once
 
 #include <uhd/exception.hpp>
 #include <uhd/types/device_addr.hpp>
+#include <uhd/utils/cast.hpp>
 #include <unordered_map>
 #include <boost/algorithm/string.hpp>
-#include <boost/assign/list_of.hpp>
 #include <boost/format.hpp>
 #include <sstream>
 #include <string>
@@ -79,7 +78,7 @@ public: // Types
         {
             set(str_rep);
         }
-        inline virtual std::string to_string() const
+        inline std::string to_string() const override
         {
             return key() + "=" + get();
         }
@@ -125,7 +124,7 @@ public: // Types
                         % ex.what()));
             }
         }
-        inline virtual std::string to_string() const
+        inline std::string to_string() const override
         {
             return key() + "=" + std::to_string(get());
         }
@@ -179,7 +178,7 @@ public: // Types
 
             set(_str_values.at(str_rep_lowercase));
         }
-        inline virtual std::string to_string() const
+        inline std::string to_string() const override
         {
             std::string repr;
             for (const auto& value : _str_values) {
@@ -220,30 +219,19 @@ public: // Types
         inline void parse(const std::string& str_rep)
         {
             try {
-                _value = (std::stoi(str_rep) != 0);
-            } catch (std::exception& ex) {
                 if (str_rep.empty()) {
-                    // If str_rep is empty then the device_addr was set
-                    // without a value which means that the user "set" the flag
+                    // If str_rep is empty, the flag is interpreted as set
                     _value = true;
-                } else if (boost::algorithm::to_lower_copy(str_rep) == "true"
-                           || boost::algorithm::to_lower_copy(str_rep) == "yes"
-                           || boost::algorithm::to_lower_copy(str_rep) == "y"
-                           || str_rep == "1") {
-                    _value = true;
-                } else if (boost::algorithm::to_lower_copy(str_rep) == "false"
-                           || boost::algorithm::to_lower_copy(str_rep) == "no"
-                           || boost::algorithm::to_lower_copy(str_rep) == "n"
-                           || str_rep == "0") {
-                    _value = false;
                 } else {
-                    throw uhd::value_error(
-                        str(boost::format("Error parsing boolean parameter %s: %s.")
-                            % key() % ex.what()));
+                    _value = uhd::cast::from_str<bool>(str_rep);
                 }
+            } catch (std::exception& ex) {
+                throw uhd::value_error(
+                    str(boost::format("Error parsing boolean parameter %s: %s.")
+                        % key() % ex.what()));
             }
         }
-        inline virtual std::string to_string() const
+        inline std::string to_string() const override
         {
             return key() + "=" + (get() ? "true" : "false");
         }
@@ -337,5 +325,3 @@ protected: // Methods
     }
 };
 }} // namespace uhd::usrp
-
-#endif /* INCLUDED_LIBUHD_USRP_COMMON_CONSTRAINED_DEV_ARGS_HPP */

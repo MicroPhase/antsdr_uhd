@@ -5,11 +5,11 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 //
 
-#include "udp_common.hpp"
 #include <uhd/transport/buffer_pool.hpp>
 #include <uhd/transport/udp_simple.hpp> //mtu
 #include <uhd/transport/udp_zero_copy.hpp>
 #include <uhd/utils/log.hpp>
+#include <uhdlib/transport/udp_common.hpp>
 #include <boost/format.hpp>
 #include <vector>
 
@@ -91,12 +91,12 @@ public:
         this->release(); // makes buffer available via get_new
     }
 
-    ~udp_zero_copy_asio_mrb(void)
+    ~udp_zero_copy_asio_mrb(void) override
     {
         WSACloseEvent(_overlapped.hEvent);
     }
 
-    void release(void)
+    void release(void) override
     {
         _wsa_buff.len = _frame_size;
         _flags        = 0;
@@ -143,12 +143,12 @@ public:
         WSASetEvent(_overlapped.hEvent); // makes buffer available via get_new
     }
 
-    ~udp_zero_copy_asio_msb(void)
+    ~udp_zero_copy_asio_msb(void) override
     {
         WSACloseEvent(_overlapped.hEvent);
     }
 
-    void release(void)
+    void release(void) override
     {
         _wsa_buff.len = size();
         WSASend(_sock_fd, &_wsa_buff, 1, NULL, 0, &_overlapped, NULL);
@@ -187,7 +187,7 @@ private:
 class udp_zero_copy_wsa_impl : public udp_zero_copy
 {
 public:
-    typedef boost::shared_ptr<udp_zero_copy_wsa_impl> sptr;
+    typedef std::shared_ptr<udp_zero_copy_wsa_impl> sptr;
 
     udp_zero_copy_wsa_impl(const std::string& addr,
         const std::string& port,
@@ -272,19 +272,19 @@ public:
         // allocate re-usable managed receive buffers
         for (size_t i = 0; i < get_num_recv_frames(); i++) {
             _mrb_pool.push_back(
-                boost::shared_ptr<udp_zero_copy_asio_mrb>(new udp_zero_copy_asio_mrb(
+                std::shared_ptr<udp_zero_copy_asio_mrb>(new udp_zero_copy_asio_mrb(
                     _recv_buffer_pool->at(i), _sock_fd, get_recv_frame_size())));
         }
 
         // allocate re-usable managed send buffers
         for (size_t i = 0; i < get_num_send_frames(); i++) {
             _msb_pool.push_back(
-                boost::shared_ptr<udp_zero_copy_asio_msb>(new udp_zero_copy_asio_msb(
+                std::shared_ptr<udp_zero_copy_asio_msb>(new udp_zero_copy_asio_msb(
                     _send_buffer_pool->at(i), _sock_fd, get_send_frame_size())));
         }
     }
 
-    ~udp_zero_copy_wsa_impl(void)
+    ~udp_zero_copy_wsa_impl(void) override
     {
         closesocket(_sock_fd);
     }
@@ -293,18 +293,18 @@ public:
      * Receive implementation:
      * Block on the managed buffer's get call and advance the index.
      ******************************************************************/
-    managed_recv_buffer::sptr get_recv_buff(double timeout)
+    managed_recv_buffer::sptr get_recv_buff(double timeout) override
     {
         if (_next_recv_buff_index == _num_recv_frames)
             _next_recv_buff_index = 0;
         return _mrb_pool[_next_recv_buff_index]->get_new(timeout, _next_recv_buff_index);
     }
 
-    size_t get_num_recv_frames(void) const
+    size_t get_num_recv_frames(void) const override
     {
         return _num_recv_frames;
     }
-    size_t get_recv_frame_size(void) const
+    size_t get_recv_frame_size(void) const override
     {
         return _recv_frame_size;
     }
@@ -313,23 +313,23 @@ public:
      * Send implementation:
      * Block on the managed buffer's get call and advance the index.
      ******************************************************************/
-    managed_send_buffer::sptr get_send_buff(double timeout)
+    managed_send_buffer::sptr get_send_buff(double timeout) override
     {
         if (_next_send_buff_index == _num_send_frames)
             _next_send_buff_index = 0;
         return _msb_pool[_next_send_buff_index]->get_new(timeout, _next_send_buff_index);
     }
 
-    size_t get_num_send_frames(void) const
+    size_t get_num_send_frames(void) const override
     {
         return _num_send_frames;
     }
-    size_t get_send_frame_size(void) const
+    size_t get_send_frame_size(void) const override
     {
         return _send_frame_size;
     }
 
-    uint16_t get_local_port(void) const
+    uint16_t get_local_port(void) const override
     {
         struct sockaddr_in addr_info;
         int addr_len        = sizeof(addr_info);
@@ -340,7 +340,7 @@ public:
         return local_port;
     }
 
-    std::string get_local_addr(void) const
+    std::string get_local_addr(void) const override
     {
         // Behold the beauty of winsock
         struct sockaddr_in addr_info;
@@ -383,8 +383,8 @@ private:
     const size_t _recv_frame_size, _num_recv_frames;
     const size_t _send_frame_size, _num_send_frames;
     buffer_pool::sptr _recv_buffer_pool, _send_buffer_pool;
-    std::vector<boost::shared_ptr<udp_zero_copy_asio_msb>> _msb_pool;
-    std::vector<boost::shared_ptr<udp_zero_copy_asio_mrb>> _mrb_pool;
+    std::vector<std::shared_ptr<udp_zero_copy_asio_msb>> _msb_pool;
+    std::vector<std::shared_ptr<udp_zero_copy_asio_mrb>> _mrb_pool;
     size_t _next_recv_buff_index, _next_send_buff_index;
 
     // socket guts
@@ -419,6 +419,7 @@ udp_zero_copy::sptr udp_zero_copy::make(const std::string& addr,
 {
     // Initialize xport_params
     zero_copy_xport_params xport_params = default_buff_args;
+
     xport_params.recv_frame_size =
         size_t(hints.cast<double>("recv_frame_size", default_buff_args.recv_frame_size));
     xport_params.num_recv_frames =
@@ -434,43 +435,38 @@ udp_zero_copy::sptr udp_zero_copy::make(const std::string& addr,
 
     if (xport_params.num_recv_frames == 0) {
         UHD_LOG_TRACE("UDP",
-            "Using default value for num_recv_frames: "
-                << UDP_ZERO_COPY_DEFAULT_NUM_FRAMES);
+            "Default value for num_recv_frames: " << UDP_ZERO_COPY_DEFAULT_NUM_FRAMES);
         xport_params.num_recv_frames = UDP_ZERO_COPY_DEFAULT_NUM_FRAMES;
     }
     if (xport_params.num_send_frames == 0) {
         UHD_LOG_TRACE("UDP",
-            "Using default value for num_send_frames: "
-                << UDP_ZERO_COPY_DEFAULT_NUM_FRAMES);
+            "Default value for no num_send_frames: " << UDP_ZERO_COPY_DEFAULT_NUM_FRAMES);
         xport_params.num_send_frames = UDP_ZERO_COPY_DEFAULT_NUM_FRAMES;
     }
     if (xport_params.recv_frame_size == 0) {
         UHD_LOG_TRACE("UDP",
-            "Using default value for recv_frame_size: "
+            "Using default value for  recv_frame_size: "
                 << UDP_ZERO_COPY_DEFAULT_FRAME_SIZE);
         xport_params.recv_frame_size = UDP_ZERO_COPY_DEFAULT_FRAME_SIZE;
     }
     if (xport_params.send_frame_size == 0) {
         UHD_LOG_TRACE("UDP",
-            "Using default value for send_frame_size: "
+            "Using default value for send_frame_size, "
                 << UDP_ZERO_COPY_DEFAULT_FRAME_SIZE);
         xport_params.send_frame_size = UDP_ZERO_COPY_DEFAULT_FRAME_SIZE;
     }
 
-    UHD_LOG_TRACE("UDP", "send_frame_size: " << xport_params.send_frame_size);
-    UHD_LOG_TRACE("UDP", "recv_frame_size: " << xport_params.recv_frame_size);
-
     if (xport_params.recv_buff_size == 0) {
+        UHD_LOG_TRACE("UDP", "Using default value for recv_buff_size");
         xport_params.recv_buff_size = std::max(UDP_ZERO_COPY_DEFAULT_BUFF_SIZE,
             xport_params.num_recv_frames * MAX_ETHERNET_MTU);
         UHD_LOG_TRACE("UDP",
-            "Using default value for recv_buff_size: " << xport_params.recv_buff_size);
+            "Using default value for recv_buff_size" << xport_params.recv_buff_size);
     }
     if (xport_params.send_buff_size == 0) {
+        UHD_LOG_TRACE("UDP", "default_buff_args has no send_buff_size");
         xport_params.send_buff_size = std::max(UDP_ZERO_COPY_DEFAULT_BUFF_SIZE,
             xport_params.num_send_frames * MAX_ETHERNET_MTU);
-        UHD_LOG_TRACE("UDP",
-            "Using default value for send_buff_size: " << xport_params.send_buff_size);
     }
 
     // extract buffer size hints from the device addr and check if they match up
@@ -498,6 +494,7 @@ udp_zero_copy::sptr udp_zero_copy::make(const std::string& addr,
                     .str());
         }
     }
+
     udp_zero_copy_wsa_impl::sptr udp_trans(
         new udp_zero_copy_wsa_impl(addr, port, xport_params, hints));
 

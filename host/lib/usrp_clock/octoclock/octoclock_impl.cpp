@@ -22,9 +22,9 @@
 #include <stdint.h>
 #include <boost/asio.hpp>
 #include <boost/assign.hpp>
-#include <boost/bind.hpp>
 #include <boost/filesystem.hpp>
 #include <boost/format.hpp>
+#include <boost/thread.hpp>
 
 using namespace uhd;
 using namespace uhd::usrp_clock;
@@ -151,7 +151,7 @@ device_addrs_t octoclock_find(const device_addr_t& hint)
                     // Filter based on optional keys (if any)
                     if ((not _hint.has_key("name") or (_hint["name"] == new_addr["name"]))
                         and (not _hint.has_key("serial")
-                                or (_hint["serial"] == new_addr["serial"]))) {
+                             or (_hint["serial"] == new_addr["serial"]))) {
                         octoclock_addrs.push_back(new_addr);
                     }
                 }
@@ -264,24 +264,27 @@ octoclock_impl::octoclock_impl(const device_addr_t& _device_addr)
         // Set up EEPROM
         ////////////////////////////////////////////////////////////////////
         _oc_dict[oc].eeprom = octoclock_eeprom_t(_oc_dict[oc].ctrl_xport, _proto_ver);
-        _tree->create<octoclock_eeprom_t>(oc_path / "eeprom")
+        _tree->create<uhd::usrp::mboard_eeprom_t>(oc_path / "eeprom")
             .set(_oc_dict[oc].eeprom)
             .add_coerced_subscriber(
-                boost::bind(&octoclock_impl::_set_eeprom, this, oc, _1));
+                std::bind(&octoclock_impl::_set_eeprom, this, oc, std::placeholders::_1))
+            .set_publisher([this, oc]() {
+                return static_cast<uhd::usrp::mboard_eeprom_t>(this->_oc_dict[oc].eeprom);
+            });
 
         ////////////////////////////////////////////////////////////////////
         // Initialize non-GPSDO sensors
         ////////////////////////////////////////////////////////////////////
         _tree->create<uint32_t>(oc_path / "time")
-            .set_publisher(boost::bind(&octoclock_impl::_get_time, this, oc));
+            .set_publisher(std::bind(&octoclock_impl::_get_time, this, oc));
         _tree->create<sensor_value_t>(oc_path / "sensors/ext_ref_detected")
-            .set_publisher(boost::bind(&octoclock_impl::_ext_ref_detected, this, oc));
+            .set_publisher(std::bind(&octoclock_impl::_ext_ref_detected, this, oc));
         _tree->create<sensor_value_t>(oc_path / "sensors/gps_detected")
-            .set_publisher(boost::bind(&octoclock_impl::_gps_detected, this, oc));
+            .set_publisher(std::bind(&octoclock_impl::_gps_detected, this, oc));
         _tree->create<sensor_value_t>(oc_path / "sensors/using_ref")
-            .set_publisher(boost::bind(&octoclock_impl::_which_ref, this, oc));
+            .set_publisher(std::bind(&octoclock_impl::_which_ref, this, oc));
         _tree->create<sensor_value_t>(oc_path / "sensors/switch_pos")
-            .set_publisher(boost::bind(&octoclock_impl::_switch_pos, this, oc));
+            .set_publisher(std::bind(&octoclock_impl::_switch_pos, this, oc));
 
         ////////////////////////////////////////////////////////////////////
         // Check reference and GPSDO
@@ -303,8 +306,8 @@ octoclock_impl::octoclock_impl(const device_addr_t& _device_addr)
                 if (_oc_dict[oc].gps and _oc_dict[oc].gps->gps_detected()) {
                     for (const std::string& name : _oc_dict[oc].gps->get_sensors()) {
                         _tree->create<sensor_value_t>(oc_path / "sensors" / name)
-                            .set_publisher(boost::bind(
-                                &gps_ctrl::get_sensor, _oc_dict[oc].gps, name));
+                            .set_publisher(
+                                std::bind(&gps_ctrl::get_sensor, _oc_dict[oc].gps, name));
                     }
                 } else {
                     // If GPSDO communication failed, set gps_detected to false
@@ -352,7 +355,7 @@ bool octoclock_impl::recv_async_msg(
 }
 
 void octoclock_impl::_set_eeprom(
-    const std::string& oc, const octoclock_eeprom_t& oc_eeprom)
+    const std::string& oc, const uhd::usrp::mboard_eeprom_t& oc_eeprom)
 {
     /*
      * The OctoClock needs a full octoclock_eeprom_t so as to not erase

@@ -7,7 +7,7 @@
 
 #include "convert_common.hpp"
 #include <uhd/utils/byteswap.hpp>
-#include <boost/math/special_functions/round.hpp>
+#include <cmath>
 #include <vector>
 
 using namespace uhd::convert;
@@ -26,16 +26,17 @@ class convert_sc16_1_to_sc8_item32_1 : public converter
 public:
     convert_sc16_1_to_sc8_item32_1(void) : _table(sc16_table_len) {}
 
-    void set_scalar(const double scalar)
+    void set_scalar(const double scalar) override
     {
         for (size_t i = 0; i < sc16_table_len; i++) {
             const int16_t val = uint16_t(i);
-            _table[i]         = int8_t(boost::math::iround(val * scalar / 32767.));
+            _table[i]         = int8_t(std::lround(val * scalar / 32767.));
         }
     }
 
-    void operator()(
-        const input_type& inputs, const output_type& outputs, const size_t nsamps)
+    void operator()(const input_type& inputs,
+        const output_type& outputs,
+        const size_t nsamps) override
     {
         const sc16_t* input = reinterpret_cast<const sc16_t*>(inputs[0]);
         item32_t* output    = reinterpret_cast<item32_t*>(outputs[0]);
@@ -79,7 +80,7 @@ class convert_sc16_item32_1_to_fcxx_1 : public converter
 public:
     convert_sc16_item32_1_to_fcxx_1(void) : _table(sc16_table_len) {}
 
-    void set_scalar(const double scalar)
+    void set_scalar(const double scalar) override
     {
         for (size_t i = 0; i < sc16_table_len; i++) {
             const uint16_t val = tohost(uint16_t(i & 0xffff));
@@ -87,8 +88,9 @@ public:
         }
     }
 
-    void operator()(
-        const input_type& inputs, const output_type& outputs, const size_t nsamps)
+    void operator()(const input_type& inputs,
+        const output_type& outputs,
+        const size_t nsamps) override
     {
         const item32_t* input      = reinterpret_cast<const item32_t*>(inputs[0]);
         std::complex<type>* output = reinterpret_cast<std::complex<type>*>(outputs[0]);
@@ -118,12 +120,12 @@ public:
     static type conv(const int8_t& num, const double scalar)
     {
         if (sizeof(type) == sizeof(s16_t)) {
-            return type(boost::math::iround(num * scalar * 32767));
+            return type(std::lround(num * scalar * 32767));
         }
         return type(num * scalar);
     }
 
-    void set_scalar(const double scalar)
+    void set_scalar(const double scalar) override
     {
         for (size_t i = 0; i < sc16_table_len; i++) {
             const uint16_t val = tohost(uint16_t(i & 0xffff));
@@ -133,8 +135,9 @@ public:
         }
     }
 
-    void operator()(
-        const input_type& inputs, const output_type& outputs, const size_t nsamps)
+    void operator()(const input_type& inputs,
+        const output_type& outputs,
+        const size_t nsamps) override
     {
         const item32_t* input =
             reinterpret_cast<const item32_t*>(size_t(inputs[0]) & ~0x3);

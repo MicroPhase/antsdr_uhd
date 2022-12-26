@@ -1,5 +1,6 @@
 //
 // Copyright 2015-2017 Ettus Research, A National Instruments Company
+// Copyright 2019 Ettus Research, A National Instruments Brand
 //
 // SPDX-License-Identifier: GPL-3.0-or-later
 //
@@ -10,7 +11,9 @@
 #include <uhd/utils/safe_call.hpp>
 #include <uhdlib/usrp/common/adf435x.hpp>
 #include <uhdlib/usrp/common/adf535x.hpp>
+#include <uhdlib/utils/narrow.hpp>
 #include <chrono>
+#include <cmath>
 #include <thread>
 
 using namespace uhd;
@@ -27,10 +30,10 @@ inline uint32_t bool2bin(bool x)
     return x ? 1 : 0;
 }
 
-const double TWINRX_DESIRED_REFERENCE_FREQ = 50e6;
-const double TWINRX_REV_AB_PFD_FREQ        = 6.25e6;
-const double TWINRX_REV_C_PFD_FREQ         = 12.5e6;
-const double TWINRX_SPI_CLOCK_FREQ         = 3e6;
+const double TWINRX_REV_AB_PFD_FREQ = 6.25e6;
+const double TWINRX_REV_C_PFD_FREQ  = 12.5e6;
+const double TWINRX_SPI_CLOCK_FREQ  = 3e6;
+const uint32_t TWINRX_LO1_MOD2      = 2;
 } // namespace
 
 class twinrx_ctrl_impl : public twinrx_ctrl
@@ -44,25 +47,32 @@ public:
     {
         // SPI configuration
         _spi_config.use_custom_divider = true;
-        _spi_config.divider            = std::ceil(
-            _db_iface->get_codec_rate(dboard_iface::UNIT_TX) / TWINRX_SPI_CLOCK_FREQ);
+        _spi_config.divider            = uhd::narrow_cast<size_t>(std::ceil(
+            _db_iface->get_codec_rate(dboard_iface::UNIT_TX) / TWINRX_SPI_CLOCK_FREQ));
 
+        // Daughterboard clock rates must be a multiple of the pfd frequency
+        if (rx_id == twinrx::TWINRX_REV_C_ID) {
+            if (fmod(_db_iface->get_clock_rate(dboard_iface::UNIT_RX),
+                    TWINRX_REV_C_PFD_FREQ)
+                != 0) {
+                throw uhd::value_error(
+                    str(boost::format(
+                            "TwinRX clock rate %f is not a multiple of the pfd freq %f.")
+                        % _db_iface->get_clock_rate(dboard_iface::UNIT_RX)
+                        % TWINRX_REV_C_PFD_FREQ));
+            }
+        } else {
+            if (fmod(_db_iface->get_clock_rate(dboard_iface::UNIT_RX),
+                    TWINRX_REV_AB_PFD_FREQ)
+                != 0) {
+                throw uhd::value_error(
+                    str(boost::format(
+                            "TwinRX clock rate %f is not a multiple of the pfd freq %f.")
+                        % _db_iface->get_clock_rate(dboard_iface::UNIT_RX)
+                        % TWINRX_REV_AB_PFD_FREQ));
+            }
+        }
         // Initialize dboard clocks
-        bool found_rate = false;
-        for (double rate : _db_iface->get_clock_rates(dboard_iface::UNIT_TX)) {
-            found_rate |=
-                uhd::math::frequencies_are_equal(rate, TWINRX_DESIRED_REFERENCE_FREQ);
-        }
-        for (double rate : _db_iface->get_clock_rates(dboard_iface::UNIT_RX)) {
-            found_rate |=
-                uhd::math::frequencies_are_equal(rate, TWINRX_DESIRED_REFERENCE_FREQ);
-        }
-        if (not found_rate) {
-            throw uhd::runtime_error("TwinRX not supported on this motherboard");
-        }
-        _db_iface->set_clock_rate(dboard_iface::UNIT_TX, TWINRX_DESIRED_REFERENCE_FREQ);
-        _db_iface->set_clock_rate(dboard_iface::UNIT_RX, TWINRX_DESIRED_REFERENCE_FREQ);
-
         _db_iface->set_clock_enabled(dboard_iface::UNIT_TX, true);
         _db_iface->set_clock_enabled(dboard_iface::UNIT_RX, true);
 
@@ -112,7 +122,7 @@ public:
                     [this](uint32_t microseconds) {
                         _db_iface->sleep(boost::chrono::microseconds(microseconds));
                     });
-                _lo1_iface[i]->set_pfd_freq(TWINRX_REV_C_PFD_FREQ);
+                _lo1_pfd_freq = TWINRX_REV_C_PFD_FREQ;
             } else {
                 _lo1_iface[i] = adf535x_iface::make_adf5355(
                     [this](const std::vector<uint32_t>& regs) {
@@ -121,12 +131,14 @@ public:
                     [this](uint32_t microseconds) {
                         _db_iface->sleep(boost::chrono::microseconds(microseconds));
                     });
-                _lo1_iface[i]->set_pfd_freq(TWINRX_REV_AB_PFD_FREQ);
+                _lo1_pfd_freq = TWINRX_REV_AB_PFD_FREQ;
             }
+            _lo1_iface[i]->set_pfd_freq(_lo1_pfd_freq);
             _lo1_iface[i]->set_output_power(adf535x_iface::OUTPUT_POWER_5DBM);
-            _lo1_iface[i]->set_reference_freq(TWINRX_DESIRED_REFERENCE_FREQ);
+            _lo1_iface[i]->set_reference_freq(
+                _db_iface->get_clock_rate(dboard_iface::UNIT_TX));
             _lo1_iface[i]->set_muxout_mode(adf535x_iface::MUXOUT_DLD);
-            _lo1_iface[i]->set_frequency(3e9, 1.0e3);
+            _lo1_iface[i]->set_frequency(3e9, TWINRX_LO1_MOD2);
 
             // LO2
             _lo2_iface[i] =
@@ -135,7 +147,8 @@ public:
                 });
             _lo2_iface[i]->set_feedback_select(adf435x_iface::FB_SEL_DIVIDED);
             _lo2_iface[i]->set_output_power(adf435x_iface::OUTPUT_POWER_5DBM);
-            _lo2_iface[i]->set_reference_freq(TWINRX_DESIRED_REFERENCE_FREQ);
+            _lo2_iface[i]->set_reference_freq(
+                _db_iface->get_clock_rate(dboard_iface::UNIT_RX));
             _lo2_iface[i]->set_muxout_mode(adf435x_iface::MUXOUT_DLD);
             _lo2_iface[i]->set_tuning_mode(adf435x_iface::TUNING_MODE_LOW_SPUR);
             _lo2_iface[i]->set_prescaler(adf435x_iface::PRESCALER_8_9);
@@ -143,19 +156,19 @@ public:
         commit();
     }
 
-    ~twinrx_ctrl_impl()
+    ~twinrx_ctrl_impl() override
     {
         UHD_SAFE_CALL(boost::lock_guard<boost::mutex> lock(_mutex);
                       _gpio_iface->set_field(twinrx_gpio::FIELD_SWPS_EN, 0);)
     }
 
-    void commit()
+    void commit() override
     {
         boost::lock_guard<boost::mutex> lock(_mutex);
         _commit();
     }
 
-    void set_chan_enabled(channel_t ch, bool enabled, bool commit = true)
+    void set_chan_enabled(channel_t ch, bool enabled, bool commit = true) override
     {
         boost::lock_guard<boost::mutex> lock(_mutex);
         if (ch == CH1 or ch == BOTH) {
@@ -176,7 +189,7 @@ public:
             _commit();
     }
 
-    void set_preamp1(channel_t ch, preamp_state_t value, bool commit = true)
+    void set_preamp1(channel_t ch, preamp_state_t value, bool commit = true) override
     {
         boost::lock_guard<boost::mutex> lock(_mutex);
         if (ch == CH1 or ch == BOTH) {
@@ -203,7 +216,7 @@ public:
             _commit();
     }
 
-    void set_preamp2(channel_t ch, bool enabled, bool commit = true)
+    void set_preamp2(channel_t ch, bool enabled, bool commit = true) override
     {
         boost::lock_guard<boost::mutex> lock(_mutex);
         if (ch == CH1 or ch == BOTH) {
@@ -220,7 +233,8 @@ public:
             _commit();
     }
 
-    void set_lb_preamp_preselector(channel_t ch, bool enabled, bool commit = true)
+    void set_lb_preamp_preselector(
+        channel_t ch, bool enabled, bool commit = true) override
     {
         boost::lock_guard<boost::mutex> lock(_mutex);
         if (ch == CH1 or ch == BOTH) {
@@ -235,7 +249,7 @@ public:
             _commit();
     }
 
-    void set_signal_path(channel_t ch, signal_path_t path, bool commit = true)
+    void set_signal_path(channel_t ch, signal_path_t path, bool commit = true) override
     {
         boost::lock_guard<boost::mutex> lock(_mutex);
         if (ch == CH1 or ch == BOTH) {
@@ -282,7 +296,8 @@ public:
             _commit();
     }
 
-    void set_lb_preselector(channel_t ch, preselector_path_t path, bool commit = true)
+    void set_lb_preselector(
+        channel_t ch, preselector_path_t path, bool commit = true) override
     {
         boost::lock_guard<boost::mutex> lock(_mutex);
         uint32_t sw7val = 0, sw8val = 0;
@@ -318,7 +333,8 @@ public:
             _commit();
     }
 
-    void set_hb_preselector(channel_t ch, preselector_path_t path, bool commit = true)
+    void set_hb_preselector(
+        channel_t ch, preselector_path_t path, bool commit = true) override
     {
         boost::lock_guard<boost::mutex> lock(_mutex);
         uint32_t sw9ch1val = 0, sw10ch1val = 0, sw9ch2val = 0, sw10ch2val = 0;
@@ -362,7 +378,7 @@ public:
             _commit();
     }
 
-    void set_input_atten(channel_t ch, uint8_t atten, bool commit = true)
+    void set_input_atten(channel_t ch, uint8_t atten, bool commit = true) override
     {
         boost::lock_guard<boost::mutex> lock(_mutex);
         if (ch == CH1 or ch == BOTH) {
@@ -375,7 +391,7 @@ public:
             _commit();
     }
 
-    void set_lb_atten(channel_t ch, uint8_t atten, bool commit = true)
+    void set_lb_atten(channel_t ch, uint8_t atten, bool commit = true) override
     {
         boost::lock_guard<boost::mutex> lock(_mutex);
         if (ch == CH1 or ch == BOTH) {
@@ -388,7 +404,7 @@ public:
             _commit();
     }
 
-    void set_hb_atten(channel_t ch, uint8_t atten, bool commit = true)
+    void set_hb_atten(channel_t ch, uint8_t atten, bool commit = true) override
     {
         boost::lock_guard<boost::mutex> lock(_mutex);
         if (ch == CH1 or ch == BOTH) {
@@ -401,7 +417,7 @@ public:
             _commit();
     }
 
-    void set_lo1_source(channel_t ch, lo_source_t source, bool commit = true)
+    void set_lo1_source(channel_t ch, lo_source_t source, bool commit = true) override
     {
         boost::lock_guard<boost::mutex> lock(_mutex);
         if (ch == CH1 or ch == BOTH) {
@@ -429,7 +445,7 @@ public:
             _commit();
     }
 
-    void set_lo2_source(channel_t ch, lo_source_t source, bool commit = true)
+    void set_lo2_source(channel_t ch, lo_source_t source, bool commit = true) override
     {
         boost::lock_guard<boost::mutex> lock(_mutex);
         if (ch == CH1 or ch == BOTH) {
@@ -454,7 +470,7 @@ public:
             _commit();
     }
 
-    void set_lo1_export_source(lo_export_source_t source, bool commit = true)
+    void set_lo1_export_source(lo_export_source_t source, bool commit = true) override
     {
         boost::lock_guard<boost::mutex> lock(_mutex);
         // SW22 may conflict with the cal switch but this attr takes priority and we
@@ -468,7 +484,7 @@ public:
             _commit();
     }
 
-    void set_lo2_export_source(lo_export_source_t source, bool commit = true)
+    void set_lo2_export_source(lo_export_source_t source, bool commit = true) override
     {
         boost::lock_guard<boost::mutex> lock(_mutex);
         _cpld_regs->if0_reg7.set(
@@ -483,7 +499,7 @@ public:
             _commit();
     }
 
-    void set_antenna_mapping(antenna_mapping_t mapping, bool commit = true)
+    void set_antenna_mapping(antenna_mapping_t mapping, bool commit = true) override
     {
         boost::lock_guard<boost::mutex> lock(_mutex);
 
@@ -530,7 +546,7 @@ public:
             _commit();
     }
 
-    void set_crossover_cal_mode(cal_mode_t cal_mode, bool commit = true)
+    void set_crossover_cal_mode(cal_mode_t cal_mode, bool commit = true) override
     {
         boost::lock_guard<boost::mutex> lock(_mutex);
         if (_lo1_export == LO_CH1_SYNTH && cal_mode == CAL_CH2) {
@@ -547,20 +563,19 @@ public:
             _commit();
     }
 
-    double set_lo1_synth_freq(channel_t ch, double freq, bool commit = true)
+    double set_lo1_synth_freq(channel_t ch, double freq, bool commit = true) override
     {
         boost::lock_guard<boost::mutex> lock(_mutex);
-        static const double RESOLUTION = 1e3;
 
         double coerced_freq = 0.0;
         if (ch == CH1 or ch == BOTH) {
             coerced_freq =
-                _lo1_iface[size_t(CH1)]->set_frequency(freq, RESOLUTION, false);
+                _lo1_iface[size_t(CH1)]->set_frequency(freq, TWINRX_LO1_MOD2, false);
             _lo1_freq[size_t(CH1)] = tune_freq_t(freq);
         }
         if (ch == CH2 or ch == BOTH) {
             coerced_freq =
-                _lo1_iface[size_t(CH2)]->set_frequency(freq, RESOLUTION, false);
+                _lo1_iface[size_t(CH2)]->set_frequency(freq, TWINRX_LO1_MOD2, false);
             _lo1_freq[size_t(CH2)] = tune_freq_t(freq);
         }
 
@@ -569,7 +584,7 @@ public:
         return coerced_freq;
     }
 
-    double set_lo2_synth_freq(channel_t ch, double freq, bool commit = true)
+    double set_lo2_synth_freq(channel_t ch, double freq, bool commit = true) override
     {
         boost::lock_guard<boost::mutex> lock(_mutex);
 
@@ -588,7 +603,7 @@ public:
         return coerced_freq;
     }
 
-    double set_lo1_charge_pump(channel_t ch, double current, bool commit = true)
+    double set_lo1_charge_pump(channel_t ch, double current, bool commit = true) override
     {
         boost::lock_guard<boost::mutex> lock(_mutex);
         double coerced_current = 0.0;
@@ -607,7 +622,7 @@ public:
         return coerced_current;
     }
 
-    double set_lo2_charge_pump(channel_t ch, double current, bool commit = true)
+    double set_lo2_charge_pump(channel_t ch, double current, bool commit = true) override
     {
         boost::lock_guard<boost::mutex> lock(_mutex);
         double coerced_current = 0.0;
@@ -626,19 +641,19 @@ public:
         return coerced_current;
     }
 
-    uhd::meta_range_t get_lo1_charge_pump_range()
+    uhd::meta_range_t get_lo1_charge_pump_range() override
     {
         // assume that both channels have the same range
         return _lo1_iface[size_t(CH1)]->get_charge_pump_current_range();
     }
 
-    uhd::meta_range_t get_lo2_charge_pump_range()
+    uhd::meta_range_t get_lo2_charge_pump_range() override
     {
         // assume that both channels have the same range
         return _lo2_iface[size_t(CH1)]->get_charge_pump_current_range();
     }
 
-    bool read_lo1_locked(channel_t ch)
+    bool read_lo1_locked(channel_t ch) override
     {
         boost::lock_guard<boost::mutex> lock(_mutex);
 
@@ -654,7 +669,7 @@ public:
         return locked;
     }
 
-    bool read_lo2_locked(channel_t ch)
+    bool read_lo2_locked(channel_t ch) override
     {
         boost::lock_guard<boost::mutex> lock(_mutex);
 
@@ -841,6 +856,7 @@ private: // Members
     twinrx_gpio::sptr _gpio_iface;
     twinrx_cpld_regmap::sptr _cpld_regs;
     spi_config_t _spi_config;
+    double _lo1_pfd_freq;
     adf535x_iface::sptr _lo1_iface[NUM_CHANS];
     adf435x_iface::sptr _lo2_iface[NUM_CHANS];
     lo_source_t _lo1_src[NUM_CHANS];

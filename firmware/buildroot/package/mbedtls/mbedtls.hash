@@ -1,0 +1,4 @@
+# From https://github.com/ARMmbed/mbedtls/releases/tag/v2.28.1:
+sha256  6797a7b6483ef589deeab8d33d401ed235d7be25eeecda1be8ddfed406d40ff4  mbedtls-2.28.1.tar.gz
+# Locally calculated
+sha256  cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30  LICENSE

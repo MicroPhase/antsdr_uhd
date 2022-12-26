@@ -9,6 +9,8 @@
 # This file included, use CMake directory variables
 ########################################################################
 
+INCLUDE_SUBDIRECTORY(chdr)
+
 ########################################################################
 # Setup defines for process scheduling
 ########################################################################
@@ -55,6 +57,10 @@ else()
     set(THREAD_PRIO_DEFS HAVE_THREAD_PRIO_DUMMY)
 endif()
 
+########################################################################
+# Setup defines for thread naming
+########################################################################
+
 set(CMAKE_REQUIRED_LIBRARIES "pthread")
 
 CHECK_CXX_SOURCE_COMPILES("
@@ -82,72 +88,49 @@ else()
     list(APPEND THREAD_PRIO_DEFS HAVE_THREAD_SETNAME_DUMMY)
 endif()
 
+########################################################################
+# Setup defines for thread affinitizing
+########################################################################
+
+CHECK_CXX_SOURCE_COMPILES("
+    #include <pthread.h>
+    int main(){
+        pthread_t pt;
+        cpu_set_t cs;
+        pthread_setaffinity_np(pt, sizeof(cpu_set_t), &cs);
+        return 0;
+    }
+    " HAVE_PTHREAD_SETAFFINITY_NP
+)
+
+if(CYGWIN)
+    set(HAVE_PTHREAD_SETAFFINITY_NP False)
+endif(CYGWIN)
+
+CHECK_CXX_SOURCE_COMPILES("
+    #include <windows.h>
+    int main(){
+        SetThreadAffinityMask(GetCurrentThread(), 0);
+        return 0;
+    }
+    " HAVE_WIN_SETTHREADAFFINITYMASK
+)
+if(HAVE_PTHREAD_SETAFFINITY_NP)
+    message(STATUS "  Setting thread affinity is supported through pthread_setaffinity_np.")
+    list(APPEND THREAD_PRIO_DEFS HAVE_PTHREAD_SETAFFINITY_NP)
+    LIBUHD_APPEND_LIBS(pthread)
+elseif(HAVE_WIN_SETTHREADPRIORITY)
+    message(STATUS "  Setting thread affinity is supported through windows SetThreadAffinityMask.")
+    list(APPEND THREAD_PRIO_DEFS HAVE_WIN_SETTHREADAFFINITYMASK)
+else()
+    message(STATUS "  Setting thread affinity is not supported.")
+    list(APPEND THREAD_PRIO_DEFS HAVE_THREAD_SETAFFINITY_DUMMY)
+endif()
+
 
 set_source_files_properties(
     ${CMAKE_CURRENT_SOURCE_DIR}/thread.cpp
     PROPERTIES COMPILE_DEFINITIONS "${THREAD_PRIO_DEFS}"
-)
-
-########################################################################
-# Setup defines for high resolution timing
-########################################################################
-message(STATUS "")
-message(STATUS "Configuring high resolution timing...")
-include(CheckCXXSourceCompiles)
-
-set(CMAKE_REQUIRED_LIBRARIES -lrt)
-CHECK_CXX_SOURCE_COMPILES("
-    #include <ctime>
-    int main(){
-        timespec ts;
-        return clock_gettime(CLOCK_MONOTONIC, &ts);
-    }
-    " HAVE_CLOCK_GETTIME
-)
-set(CMAKE_REQUIRED_LIBRARIES)
-
-include(CheckCXXSourceCompiles)
-CHECK_CXX_SOURCE_COMPILES("
-    #include <mach/mach_time.h>
-    int main(){
-        mach_timebase_info_data_t info;
-        mach_timebase_info(&info);
-        mach_absolute_time();
-        return 0;
-    }
-    " HAVE_MACH_ABSOLUTE_TIME
-)
-
-CHECK_CXX_SOURCE_COMPILES("
-    #include <Windows.h>
-    int main(){
-        LARGE_INTEGER value;
-        QueryPerformanceCounter(&value);
-        QueryPerformanceFrequency(&value);
-        return 0;
-    }
-    " HAVE_QUERY_PERFORMANCE_COUNTER
-)
-
-
-if(HAVE_CLOCK_GETTIME)
-    message(STATUS "  High resolution timing supported through clock_gettime.")
-    set(SYSTEM_TIME_DEFS HAVE_CLOCK_GETTIME)
-    LIBUHD_APPEND_LIBS("-lrt")
-elseif(HAVE_MACH_ABSOLUTE_TIME)
-    message(STATUS "  High resolution timing supported through mach_absolute_time.")
-    set(SYSTEM_TIME_DEFS HAVE_MACH_ABSOLUTE_TIME)
-elseif(HAVE_QUERY_PERFORMANCE_COUNTER)
-    message(STATUS "  High resolution timing supported through QueryPerformanceCounter.")
-    set(SYSTEM_TIME_DEFS HAVE_QUERY_PERFORMANCE_COUNTER)
-else()
-    message(STATUS "  High resolution timing supported though microsec_clock.")
-    set(SYSTEM_TIME_DEFS HAVE_MICROSEC_CLOCK)
-endif()
-
-set_source_files_properties(
-    ${CMAKE_CURRENT_SOURCE_DIR}/system_time.cpp
-    PROPERTIES COMPILE_DEFINITIONS "${SYSTEM_TIME_DEFS}"
 )
 
 ########################################################################
@@ -219,11 +202,13 @@ set_source_files_properties(
 # Append sources
 ########################################################################
 LIBUHD_APPEND_SOURCES(
+    ${CMAKE_CURRENT_SOURCE_DIR}/cast.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/csv.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/config_parser.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/compat_check.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/eeprom_utils.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/gain_group.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/graph_utils.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/ihex.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/load_modules.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/log.cpp
@@ -231,6 +216,7 @@ LIBUHD_APPEND_SOURCES(
     ${CMAKE_CURRENT_SOURCE_DIR}/pathslib.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/platform.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/prefs.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/serial_number.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/static.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/system_time.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/tasks.cpp
