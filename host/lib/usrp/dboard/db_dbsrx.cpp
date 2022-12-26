@@ -20,11 +20,10 @@
 #include <uhd/utils/log.hpp>
 #include <uhd/utils/static.hpp>
 #include <boost/assign/list_of.hpp>
-#include <boost/bind.hpp>
 #include <boost/format.hpp>
-#include <boost/math/special_functions/round.hpp>
 #include <chrono>
 #include <cmath>
+#include <functional>
 #include <thread>
 #include <utility>
 
@@ -56,7 +55,7 @@ class dbsrx : public rx_dboard_base
 {
 public:
     dbsrx(ctor_args_t args);
-    virtual ~dbsrx(void);
+    ~dbsrx(void) override;
 
 private:
     double _lo_freq;
@@ -207,11 +206,11 @@ dbsrx::dbsrx(ctor_args_t args) : rx_dboard_base(args)
     this->get_rx_subtree()->create<std::string>("name").set("DBSRX");
     this->get_rx_subtree()
         ->create<sensor_value_t>("sensors/lo_locked")
-        .set_publisher(boost::bind(&dbsrx::get_locked, this));
+        .set_publisher(std::bind(&dbsrx::get_locked, this));
     for (const std::string& name : dbsrx_gain_ranges.keys()) {
         this->get_rx_subtree()
             ->create<double>("gains/" + name + "/value")
-            .set_coercer(boost::bind(&dbsrx::set_gain, this, _1, name))
+            .set_coercer(std::bind(&dbsrx::set_gain, this, std::placeholders::_1, name))
             .set(dbsrx_gain_ranges[name].start());
         this->get_rx_subtree()
             ->create<meta_range_t>("gains/" + name + "/range")
@@ -219,7 +218,7 @@ dbsrx::dbsrx(ctor_args_t args) : rx_dboard_base(args)
     }
     this->get_rx_subtree()
         ->create<double>("freq/value")
-        .set_coercer(boost::bind(&dbsrx::set_lo_freq, this, _1));
+        .set_coercer(std::bind(&dbsrx::set_lo_freq, this, std::placeholders::_1));
     this->get_rx_subtree()->create<meta_range_t>("freq/range").set(dbsrx_freq_range);
     this->get_rx_subtree()
         ->create<std::string>("antenna/value")
@@ -232,7 +231,7 @@ dbsrx::dbsrx(ctor_args_t args) : rx_dboard_base(args)
     this->get_rx_subtree()->create<bool>("use_lo_offset").set(false);
     this->get_rx_subtree()
         ->create<double>("bandwidth/value")
-        .set_coercer(boost::bind(&dbsrx::set_bandwidth, this, _1));
+        .set_coercer(std::bind(&dbsrx::set_bandwidth, this, std::placeholders::_1));
     this->get_rx_subtree()
         ->create<meta_range_t>("bandwidth/range")
         .set(dbsrx_bandwidth_range);
@@ -491,11 +490,11 @@ static int gain_to_gc2_vga_reg(double& gain)
 
     // Half dB steps from 0-5dB, 1dB steps from 5-24dB
     if (gain < 5) {
-        reg  = boost::math::iround(31.0 - gain / 0.5);
-        gain = double(boost::math::iround(gain) * 0.5);
+        reg  = static_cast<int>(std::lround(31.0 - gain / 0.5));
+        gain = std::round(gain) * 0.5;
     } else {
-        reg  = boost::math::iround(22.0 - (gain - 4.0));
-        gain = double(boost::math::iround(gain));
+        reg  = static_cast<int>(std::lround(22.0 - (gain - 4.0)));
+        gain = std::round(gain);
     }
 
     UHD_LOGGER_TRACE("DBSRX") << boost::format("DBSRX GC2 Gain: %f dB, reg: %d") % gain

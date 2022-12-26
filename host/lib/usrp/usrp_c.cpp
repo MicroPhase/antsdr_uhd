@@ -507,7 +507,7 @@ uhd_error uhd_usrp_get_mboard_eeprom(
     UHD_SAFE_C_SAVE_ERROR(
         h, uhd::fs_path eeprom_path = str(boost::format("/mboards/%d/eeprom") % mboard);
 
-        uhd::property_tree::sptr ptree = USRP(h)->get_device()->get_tree();
+        uhd::property_tree::sptr ptree = USRP(h)->get_tree();
         mb_eeprom->mboard_eeprom_cpp =
             ptree->access<uhd::usrp::mboard_eeprom_t>(eeprom_path).get();)
 }
@@ -518,7 +518,7 @@ uhd_error uhd_usrp_set_mboard_eeprom(
     UHD_SAFE_C_SAVE_ERROR(
         h, uhd::fs_path eeprom_path = str(boost::format("/mboards/%d/eeprom") % mboard);
 
-        uhd::property_tree::sptr ptree = USRP(h)->get_device()->get_tree();
+        uhd::property_tree::sptr ptree = USRP(h)->get_tree();
         ptree->access<uhd::usrp::mboard_eeprom_t>(eeprom_path)
             .set(mb_eeprom->mboard_eeprom_cpp);)
 }
@@ -534,7 +534,7 @@ uhd_error uhd_usrp_get_dboard_eeprom(uhd_usrp_handle h,
         uhd::fs_path eeprom_path =
             str(boost::format("/mboards/%d/dboards/%s/%s_eeprom") % mboard % slot % unit);
 
-        uhd::property_tree::sptr ptree = USRP(h)->get_device()->get_tree();
+        uhd::property_tree::sptr ptree = USRP(h)->get_tree();
         db_eeprom->dboard_eeprom_cpp =
             ptree->access<uhd::usrp::dboard_eeprom_t>(eeprom_path).get();)
 }
@@ -550,7 +550,7 @@ uhd_error uhd_usrp_set_dboard_eeprom(uhd_usrp_handle h,
         uhd::fs_path eeprom_path =
             str(boost::format("/mboards/%d/dboards/%s/%s_eeprom") % mboard % slot % unit);
 
-        uhd::property_tree::sptr ptree = USRP(h)->get_device()->get_tree();
+        uhd::property_tree::sptr ptree = USRP(h)->get_tree();
         ptree->access<uhd::usrp::dboard_eeprom_t>(eeprom_path)
             .set(db_eeprom->dboard_eeprom_cpp);)
 }
@@ -1079,39 +1079,4 @@ uhd_error uhd_usrp_get_gpio_attr(uhd_usrp_handle h,
     UHD_SAFE_C_SAVE_ERROR(
         h,
         *attr_out = USRP(h)->get_gpio_attr(std::string(bank), std::string(attr), mboard);)
-}
-
-uhd_error uhd_usrp_enumerate_registers(
-    uhd_usrp_handle h, size_t mboard, uhd_string_vector_handle* registers_out)
-{
-    UHD_SAFE_C_SAVE_ERROR(
-        h, (*registers_out)->string_vector_cpp = USRP(h)->enumerate_registers(mboard);)
-}
-
-uhd_error uhd_usrp_get_register_info(uhd_usrp_handle h,
-    const char* path,
-    size_t mboard,
-    uhd_usrp_register_info_t* register_info_out)
-{
-    UHD_SAFE_C_SAVE_ERROR(h,
-                          uhd::usrp::multi_usrp::register_info_t register_info_cpp =
-                              USRP(h)->get_register_info(path, mboard);
-                          register_info_out->bitwidth = register_info_cpp.bitwidth;
-                          register_info_out->readable = register_info_cpp.readable;
-                          register_info_out->writable = register_info_cpp.writable;)
-}
-
-uhd_error uhd_usrp_write_register(
-    uhd_usrp_handle h, const char* path, uint32_t field, uint64_t value, size_t mboard)
-{
-    UHD_SAFE_C_SAVE_ERROR(h, USRP(h)->write_register(path, field, value, mboard);)
-}
-
-uhd_error uhd_usrp_read_register(uhd_usrp_handle h,
-    const char* path,
-    uint32_t field,
-    size_t mboard,
-    uint64_t* value_out)
-{
-    UHD_SAFE_C_SAVE_ERROR(h, *value_out = USRP(h)->read_register(path, field, mboard);)
 }

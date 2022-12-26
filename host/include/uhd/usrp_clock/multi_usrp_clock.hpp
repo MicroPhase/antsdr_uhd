@@ -5,8 +5,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 //
 
-#ifndef INCLUDED_UHD_MULTI_USRP_CLOCK_HPP
-#define INCLUDED_UHD_MULTI_USRP_CLOCK_HPP
+#pragma once
 
 #include <uhd/config.hpp>
 #include <uhd/device.hpp>
@@ -45,7 +44,7 @@ namespace uhd { namespace usrp_clock {
 class UHD_API multi_usrp_clock : uhd::noncopyable
 {
 public:
-    typedef boost::shared_ptr<multi_usrp_clock> sptr;
+    typedef std::shared_ptr<multi_usrp_clock> sptr;
 
     virtual ~multi_usrp_clock(void) = 0;
 
@@ -92,5 +91,3 @@ public:
 };
 
 }} // namespace uhd::usrp_clock
-
-#endif /* INCLUDED_UHD_MULTI_USRP_CLOCK_HPP */

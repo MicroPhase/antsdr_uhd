@@ -22,8 +22,7 @@ struct eeprom_field_t
     size_t length;
 };
 
-// EEPROM map information is duplicated in
-// common_const.h for the
+// EEPROM map information is duplicated in common_const.h for the
 // firmware and bootloader code.
 // EEPROM map information is duplicated in b2xx_fx3_utils.cpp
 
@@ -98,23 +97,13 @@ mboard_eeprom_t b200_impl::get_mb_eeprom(uhd::i2c_iface::sptr iface)
 {
     auto rev   = _get_rev(iface);
     auto bytes = _get_eeprom(iface);
-//    std::cout<<"rev:"<<rev<<std::endl;
-//    std::cout<<"bytes.size:"<<bytes.size()<<std::endl;
     mboard_eeprom_t mb_eeprom;
     if (rev == UNKNOWN_REV or bytes.empty()) {
         return mb_eeprom;
     }
 
     auto eeprom_map = (rev == 0) ? B200_REV0_MAP : B200_REV1_MAP;
-//    int i = 0;
-//    for(auto it:bytes){
-//        std::cout<<boost::format("0x%-2x  ")%(int)it;
-//        i++;
-//        if(i % 8 == 0){
-//            std::cout<<std::endl;
-//        }
-//    }
-//    std::cout<<std::endl;
+
     for (const auto& element : eeprom_map) {
         // There is an assumption here that fields of length 2 are uint16's and
         // lengths other than 2 are strings. Update this code if that

@@ -1,19 +1,17 @@
 //
 // Copyright 2016 Ettus Research LLC
 // Copyright 2018 Ettus Research, a National Instruments Company
-// Copyright 2019 Ettus Research, a National Instruments Brand
 //
 // SPDX-License-Identifier: GPL-3.0-or-later
 //
 
-#ifndef INCLUDED_LIBUHD_TRANSPORT_MUXED_ZERO_COPY_IF_HPP
-#define INCLUDED_LIBUHD_TRANSPORT_MUXED_ZERO_COPY_IF_HPP
+#pragma once
 
 #include <uhd/config.hpp>
 #include <uhd/transport/zero_copy.hpp>
 #include <uhd/utils/noncopyable.hpp>
 #include <stdint.h>
-#include <boost/function.hpp>
+#include <functional>
 
 namespace uhd { namespace transport {
 
@@ -29,7 +27,7 @@ namespace uhd { namespace transport {
 class muxed_zero_copy_if : private uhd::noncopyable
 {
 public:
-    typedef boost::shared_ptr<muxed_zero_copy_if> sptr;
+    typedef std::shared_ptr<muxed_zero_copy_if> sptr;
 
     /*!
      * Function to classify the stream based on the payload.
@@ -41,7 +39,7 @@ public:
      * \param size number of bytes in the frame payload
      * \return stream number
      */
-    typedef boost::function<uint32_t(void* buff, size_t size)> stream_classifier_fn;
+    typedef std::function<uint32_t(void* buff, size_t size)> stream_classifier_fn;
 
     //! virtual dtor
     virtual ~muxed_zero_copy_if() {}
@@ -56,21 +54,9 @@ public:
     virtual size_t get_num_dropped_frames() const = 0;
 
     //! Make a new demuxer from a transport and parameters
-    //
-    // \param classify_fn See also stream_classifier_fn.
-    // \param max_streams Max number of streams that can be muxed/demuxed
-    // \param recv_timeout_s This is a timeout that is used in the receiver thread
-    //                       when fetching the next packet. Its specific effect
-    //                       depends on the type of the underlying transport.
-    //                       A longer timeout means the thread can block on
-    //                       outstanding I/O for longer. A lower value will
-    //                       increase CPU utilization.
     static sptr make(zero_copy_if::sptr base_xport,
         stream_classifier_fn classify_fn,
-        size_t max_streams,
-        const double recv_timeout_s = 0.0);
+        size_t max_streams);
 };
 
 }} // namespace uhd::transport
-
-#endif /* INCLUDED_LIBUHD_TRANSPORT_MUXED_ZERO_COPY_IF_HPP */

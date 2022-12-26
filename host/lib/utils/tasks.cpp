@@ -10,11 +10,11 @@
 #include <uhd/utils/msg_task.hpp>
 #include <uhd/utils/tasks.hpp>
 #include <uhd/utils/thread.hpp>
-#include <boost/bind.hpp>
 #include <boost/thread/barrier.hpp>
 #include <boost/thread/thread.hpp>
 #include <atomic>
 #include <exception>
+#include <functional>
 #include <iostream>
 #include <thread>
 #include <vector>
@@ -28,9 +28,7 @@ public:
     {
         _task = std::thread([this, task_fcn]() { this->task_loop(task_fcn); });
         if (not name.empty()) {
-#ifdef HAVE_PTHREAD_SETNAME
-            pthread_setname_np(_task->native_handle(), name.substr(0, 16).c_str());
-#endif /* HAVE_PTHREAD_SETNAME */
+            set_thread_name(&_task, name);
         }
     }
 
@@ -89,11 +87,11 @@ public:
     msg_task_impl(const task_fcn_type& task_fcn) : _spawn_barrier(2)
     {
         (void)_thread_group.create_thread(
-            boost::bind(&msg_task_impl::task_loop, this, task_fcn));
+            std::bind(&msg_task_impl::task_loop, this, task_fcn));
         _spawn_barrier.wait();
     }
 
-    ~msg_task_impl(void)
+    ~msg_task_impl(void) override
     {
         _running = false;
         _thread_group.interrupt_all();
@@ -106,7 +104,7 @@ public:
      * stranded messages here. This might happen during shutdown when dtors are called.
      * See also: comments in b200_io_impl->handle_async_task
      */
-    msg_payload_t get_msg_from_dump_queue(uint32_t sid)
+    msg_payload_t get_msg_from_dump_queue(uint32_t sid) override
     {
         boost::mutex::scoped_lock lock(_mutex);
         msg_payload_t b;

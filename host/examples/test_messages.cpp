@@ -1,6 +1,7 @@
 //
 // Copyright 2010-2013 Ettus Research LLC
 // Copyright 2018 Ettus Research, a National Instruments Company
+// Copyright 2019 Ettus Research, a National Instruments Brand
 //
 // SPDX-License-Identifier: GPL-3.0-or-later
 //
@@ -11,13 +12,12 @@
 #include <uhd/utils/safe_main.hpp>
 #include <uhd/utils/static.hpp>
 #include <uhd/utils/thread.hpp>
-#include <boost/assign/list_of.hpp>
-#include <boost/bind.hpp>
 #include <boost/format.hpp>
 #include <boost/program_options.hpp>
 #include <complex>
 #include <cstdlib>
 #include <ctime>
+#include <functional>
 #include <iostream>
 
 namespace po = boost::program_options;
@@ -48,14 +48,14 @@ bool test_late_command_message(uhd::usrp::multi_usrp::sptr usrp,
 
     switch (md.error_code) {
         case uhd::rx_metadata_t::ERROR_CODE_LATE_COMMAND:
-            std::cout << boost::format("success:\n"
-                                       "    Got error code late command message.\n")
+            std::cout << "success:\n"
+                      << "    Got error code late command message.\n"
                       << std::endl;
             return true;
 
         case uhd::rx_metadata_t::ERROR_CODE_TIMEOUT:
-            std::cout << boost::format("failed:\n"
-                                       "    Inline message recv timed out.\n")
+            std::cout << "failed:\n"
+                      << "    Inline message recv timed out.\n"
                       << std::endl;
             return false;
 
@@ -135,22 +135,21 @@ bool test_burst_ack_message(
     md.end_of_burst   = true;
     md.has_time_spec  = false;
 
-    // 3 times max-sps guarantees a SOB, no burst, and EOB packet
-    std::vector<std::complex<float>> buff(tx_stream->get_max_num_samps() * 3);
+    std::vector<std::complex<float>> buff(tx_stream->get_max_num_samps());
     tx_stream->send(&buff.front(), buff.size(), md);
 
     uhd::async_metadata_t async_md;
     if (not tx_stream->recv_async_msg(async_md)) {
-        std::cout << boost::format("failed:\n"
-                                   "    Async message recv timed out.\n")
+        std::cout << "failed:\n"
+                  << "    Async message recv timed out.\n"
                   << std::endl;
         return false;
     }
 
     switch (async_md.event_code) {
         case uhd::async_metadata_t::EVENT_CODE_BURST_ACK:
-            std::cout << boost::format("success:\n"
-                                       "    Got event code burst ack message.\n")
+            std::cout << "success:\n"
+                      << "    Got event code burst ack message.\n"
                       << std::endl;
             return true;
 
@@ -182,27 +181,35 @@ bool test_underflow_message(
     tx_stream->send(&buff.front(), buff.size(), md);
 
     uhd::async_metadata_t async_md;
+    bool result = false;
     if (not tx_stream->recv_async_msg(async_md, 1)) {
         std::cout << boost::format("failed:\n"
                                    "    Async message recv timed out.\n")
                   << std::endl;
-        return false;
+    } else {
+        switch (async_md.event_code) {
+            case uhd::async_metadata_t::EVENT_CODE_UNDERFLOW:
+                std::cout << boost::format("success:\n"
+                                           "    Got event code underflow message.\n")
+                          << std::endl;
+                result = true;
+                break;
+
+            default:
+                std::cout << boost::format("failed:\n"
+                                           "    Got unexpected event code 0x%x.\n")
+                                 % async_md.event_code
+                          << std::endl;
+                break;
+        }
     }
 
-    switch (async_md.event_code) {
-        case uhd::async_metadata_t::EVENT_CODE_UNDERFLOW:
-            std::cout << boost::format("success:\n"
-                                       "    Got event code underflow message.\n")
-                      << std::endl;
-            return true;
-
-        default:
-            std::cout << boost::format("failed:\n"
-                                       "    Got unexpected event code 0x%x.\n")
-                             % async_md.event_code
-                      << std::endl;
-            return false;
-    }
+    // Finish the burst to avoid affecting other tests. The DUC only considers
+    // time specs from the beginning of a burst, if other tests need a time
+    // spec they would be affected by an unfinished burst.
+    md.end_of_burst = true;
+    tx_stream->send(&buff.front(), buff.size(), md);
+    return result;
 }
 
 /*!
@@ -308,18 +315,29 @@ int UHD_SAFE_MAIN(int argc, char* argv[])
 
     // create RX and TX streamers
     uhd::stream_args_t stream_args("fc32"); // complex floats
-    uhd::rx_streamer::sptr rx_stream = usrp->get_rx_stream(stream_args);
-    uhd::tx_streamer::sptr tx_stream = usrp->get_tx_stream(stream_args);
+    uhd::rx_streamer::sptr rx_stream;
+    uhd::tx_streamer::sptr tx_stream;
+    if (usrp->get_rx_num_channels()) {
+        rx_stream = usrp->get_rx_stream(stream_args);
+    }
+    if (usrp->get_tx_num_channels()) {
+        tx_stream = usrp->get_tx_stream(stream_args);
+    }
 
     //------------------------------------------------------------------
     // begin messages test
     //------------------------------------------------------------------
-    static uhd::dict<std::string,
-        boost::function<bool(
-            uhd::usrp::multi_usrp::sptr, uhd::rx_streamer::sptr, uhd::tx_streamer::sptr)>>
-        tests = boost::assign::map_list_of("Test Burst ACK ", &test_burst_ack_message)(
-            "Test Underflow ", &test_underflow_message)("Test Time Error",
-            &test_time_error_message)("Test Late Command", &test_late_command_message);
+    using test_executor_fn = std::function<bool(
+        uhd::usrp::multi_usrp::sptr, uhd::rx_streamer::sptr, uhd::tx_streamer::sptr)>;
+    uhd::dict<std::string, test_executor_fn> tests;
+    if (tx_stream) {
+        tests["Test Burst ACK "] = &test_burst_ack_message;
+        tests["Test Underflow "] = &test_underflow_message;
+        tests["Test Time Error"] = &test_time_error_message;
+    }
+    if (rx_stream) {
+        tests["Test Late Command"] = &test_late_command_message;
+    }
 
     if (vm.count("test-chain")) {
         tests["Test Broken Chain"] = &test_broken_chain_message;
@@ -338,8 +356,12 @@ int UHD_SAFE_MAIN(int argc, char* argv[])
         std::string key = tests.keys()[std::rand() % tests.size()];
         bool pass       = tests[key](usrp, rx_stream, tx_stream);
 
-        flush_recv(rx_stream);
-        flush_async(tx_stream);
+        if (rx_stream) {
+            flush_recv(rx_stream);
+        }
+        if (tx_stream) {
+            flush_async(tx_stream);
+        }
 
         // store result
         if (pass)

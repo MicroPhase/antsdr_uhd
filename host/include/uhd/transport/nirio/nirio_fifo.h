@@ -1,21 +1,20 @@
 //
 // Copyright 2013-2015 Ettus Research LLC
 // Copyright 2018 Ettus Research, a National Instruments Company
+// Copyright 2019 Ettus Research, a National Instruments Brand
 //
 // SPDX-License-Identifier: GPL-3.0-or-later
 //
 
 
-#ifndef INCLUDED_UHD_TRANSPORT_NIRIO_NIRIO_FIFO_H
-#define INCLUDED_UHD_TRANSPORT_NIRIO_NIRIO_FIFO_H
+#pragma once
 
 #include <uhd/transport/nirio/nirio_driver_iface.h>
 #include <uhd/transport/nirio/niriok_proxy.h>
 #include <uhd/transport/nirio/status.h>
 #include <uhd/utils/noncopyable.hpp>
-#include <boost/smart_ptr.hpp>
 #include <boost/thread/recursive_mutex.hpp>
-#include <boost/atomic/atomic.hpp>
+#include <atomic>
 #include <string>
 #include <chrono>
 #include <thread>
@@ -33,7 +32,7 @@ template <typename data_t>
 class nirio_fifo : private uhd::noncopyable
 {
 public:
-    typedef boost::shared_ptr< nirio_fifo<data_t> > sptr;
+    typedef std::shared_ptr< nirio_fifo<data_t> > sptr;
 
     typedef enum {
         MINIMIZE_LATENCY,
@@ -222,7 +221,7 @@ private:    //Members
 
     data_t*                        _elements_buffer;
     size_t                         _actual_depth_in_elements;
-    boost::atomic<size_t>          _total_elements_acquired;
+    std::atomic<size_t>            _total_elements_acquired;
     size_t                         _frame_size_in_elements;
     fifo_optimization_option_t     _fifo_optimization_option;
 
@@ -232,5 +231,3 @@ private:    //Members
 #include <uhd/transport/nirio/nirio_fifo.ipp>
 
 }}
-
-#endif /* INCLUDED_UHD_TRANSPORT_NIRIO_NIRIO_FIFO_H */

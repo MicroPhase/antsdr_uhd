@@ -15,7 +15,6 @@
 #include <uhd/property_tree.hpp>
 #include <uhd/transport/bounded_buffer.hpp>
 #include <uhd/transport/usb_zero_copy.hpp>
-#include <uhd/types/clock_config.hpp>
 #include <uhd/types/dict.hpp>
 #include <uhd/types/sensors.hpp>
 #include <uhd/types/stream_cmd.hpp>
@@ -36,67 +35,11 @@
 #include <uhdlib/usrp/cores/tx_dsp_core_3000.hpp>
 #include <uhdlib/usrp/cores/tx_vita_core_3000.hpp>
 #include <uhdlib/usrp/cores/user_settings_core_3000.hpp>
+#include <uhdlib/usrp/common/pwr_cal_mgr.hpp>
 #include <boost/assign.hpp>
-#include <boost/weak_ptr.hpp>
+#include <memory>
 #include <mutex>
-
-/* microphase */
-#include <uhd/transport/udp_simple.hpp>
-#include <uhd/transport/udp_zero_copy.hpp>
-#include <uhd/transport/vrt_if_packet.hpp>
-
-/* microphase */
-/*
- * UDP ports for the E310 communication
- * ports 49200 - 49210
- * */
-#define MICROPHASE_E310_UDP_FIND_PORT 49100
-#define MICROPHASE_E310_UDP_CTRL_PORT 49200
-#define MICROPHASE_E310_UDP_DATA_TX_PORT 49202
-#define MICROPHASE_E310_UDP_DATA_RX_PORT 49204
-
-#define MICROPHASE_E310_FW_COMPAT_NUM 2
-
-#define BUFF_SIZE 1e5
-
-
-typedef enum{
-    MICROPHASE_CTRL_ID_WAZZUP_BR0 = 'm',
-    MICROPHASE_CTRL_ID_WAZZUP_DUDE = 'M',
-
-    MICROPHASE_DATA_RX_WAZZUP_BR0 = 'r',
-} microphase_e310_ctrl_id_e;
-
-typedef struct{
-    uint32_t proto_ver;
-    uint32_t id;
-    uint32_t seq;
-    union {
-        uint32_t ip_addr;
-        struct{
-            uint32_t dev;
-            uint32_t data;
-            uint8_t miso_dege;
-            uint8_t mosi_edge;
-            uint8_t num_bits;
-            uint8_t readback;
-        } spi_args;
-        struct {
-            uint8_t addr;
-            uint8_t bytes;
-            uint8_t data[20];
-        } i2c_args;
-        struct {
-            uint32_t addr;
-            uint32_t data;
-            uint8_t action;
-        } reg_args;
-        struct {
-            uint32_t len;
-        } echo_args;
-    } data;
-    uint32_t len;
-} microphase_e310_ctrl_data_t;
+#include <unordered_map>
 
 static const uint8_t B200_FW_COMPAT_NUM_MAJOR = 8;
 static const uint8_t B200_FW_COMPAT_NUM_MINOR = 0;
@@ -172,12 +115,12 @@ class b200_impl : public uhd::device
 public:
     // structors
     b200_impl(const uhd::device_addr_t&, uhd::transport::usb_device_handle::sptr& handle);
-    ~b200_impl(void);
+    ~b200_impl(void) override;
 
     // the io interface
-    uhd::rx_streamer::sptr get_rx_stream(const uhd::stream_args_t& args);
-    uhd::tx_streamer::sptr get_tx_stream(const uhd::stream_args_t& args);
-    bool recv_async_msg(uhd::async_metadata_t&, double);
+    uhd::rx_streamer::sptr get_rx_stream(const uhd::stream_args_t& args) override;
+    uhd::tx_streamer::sptr get_tx_stream(const uhd::stream_args_t& args) override;
+    bool recv_async_msg(uhd::async_metadata_t&, double) override;
 
     //! Check that the combination of stream args and tick rate are valid.
     //
@@ -191,8 +134,6 @@ public:
     static uhd::usrp::mboard_eeprom_t get_mb_eeprom(uhd::i2c_iface::sptr);
 
 private:
-    /* microphase product */
-    microphase_produce_t _product_mp;
     b200_product_t _product;
     size_t _revision;
     bool _gpsdo_capable;
@@ -206,21 +147,16 @@ private:
     uhd::usrp::ad9361_ctrl::sptr _codec_ctrl;
     uhd::usrp::ad936x_manager::sptr _codec_mgr;
     b200_local_spi_core::sptr _spi_iface;
-    boost::shared_ptr<uhd::usrp::adf4001_ctrl> _adf4001_iface;
+    std::shared_ptr<uhd::usrp::adf4001_ctrl> _adf4001_iface;
     uhd::gps_ctrl::sptr _gps;
-
-    /* microphase */
-    uhd::transport::zero_copy_if::sptr _data_tx_transport;
-    uhd::transport::zero_copy_if::sptr _data_rx_transport;
-    uhd::usrp::recv_packet_demuxer_3000::sptr _demux_tx;
 
     // transports
     uhd::transport::zero_copy_if::sptr _data_transport;
     uhd::transport::zero_copy_if::sptr _ctrl_transport;
     uhd::usrp::recv_packet_demuxer_3000::sptr _demux;
 
-    boost::weak_ptr<uhd::rx_streamer> _rx_streamer;
-    boost::weak_ptr<uhd::tx_streamer> _tx_streamer;
+    std::weak_ptr<uhd::rx_streamer> _rx_streamer;
+    std::weak_ptr<uhd::tx_streamer> _tx_streamer;
 
     std::mutex _transport_setup_mutex;
 
@@ -229,14 +165,14 @@ private:
     typedef uhd::transport::bounded_buffer<uhd::async_metadata_t> async_md_type;
     struct AsyncTaskData
     {
-        boost::shared_ptr<async_md_type> async_md;
-        boost::weak_ptr<radio_ctrl_core_3000> local_ctrl;
-        boost::weak_ptr<radio_ctrl_core_3000> radio_ctrl[2];
+        std::shared_ptr<async_md_type> async_md;
+        std::weak_ptr<radio_ctrl_core_3000> local_ctrl;
+        std::weak_ptr<radio_ctrl_core_3000> radio_ctrl[2];
         b200_uart::sptr gpsdo_uart;
     };
-    boost::shared_ptr<AsyncTaskData> _async_task_data;
+    std::shared_ptr<AsyncTaskData> _async_task_data;
     boost::optional<uhd::msg_task::msg_type_t> handle_async_task(
-        uhd::transport::zero_copy_if::sptr, boost::shared_ptr<AsyncTaskData>);
+        uhd::transport::zero_copy_if::sptr, std::shared_ptr<AsyncTaskData>);
 
     void register_loopback_self_test(uhd::wb_iface::sptr iface);
     void set_mb_eeprom(const uhd::usrp::mboard_eeprom_t&);
@@ -265,10 +201,11 @@ private:
         rx_dsp_core_3000::sptr ddc;
         tx_vita_core_3000::sptr deframer;
         tx_dsp_core_3000::sptr duc;
-        boost::weak_ptr<uhd::rx_streamer> rx_streamer;
-        boost::weak_ptr<uhd::tx_streamer> tx_streamer;
+        std::weak_ptr<uhd::rx_streamer> rx_streamer;
+        std::weak_ptr<uhd::tx_streamer> tx_streamer;
         user_settings_core_3000::sptr user_settings;
         bool ant_rx2;
+        std::unordered_map<std::string, uhd::usrp::pwr_cal_mgr::sptr> pwr_mgr;
     };
     std::vector<radio_perifs_t> _radio_perifs;
 
@@ -386,40 +323,6 @@ private:
     //! Coercer, attached to the "rate/value" property on the tx dsps.
     double coerce_tx_samp_rate(tx_dsp_core_3000::sptr, size_t, const double);
     void update_tx_samp_rate(const size_t, const double);
-
-    /* microphase for e310 */
-    struct tx_fc_cache_t
-    {
-        tx_fc_cache_t()
-                : stream_channel(0)
-                , device_channel(0)
-                , last_seq_out(0)
-                , last_seq_ack(0)
-                , seq_queue(1)
-        {
-        }
-        size_t stream_channel;
-        size_t device_channel;
-        size_t last_seq_out;
-        size_t last_seq_ack;
-        uhd::transport::bounded_buffer<size_t> seq_queue;
-        boost::shared_ptr<async_md_type> async_queue;
-        boost::shared_ptr<async_md_type> old_async_queue;
-    };
-
-
-
-    static size_t _get_tx_flow_control_window(size_t payload_size,size_t hw_buff_size);
-    typedef boost::function<double(void)> tick_rate_retriever_t;
-    static void _handle_tx_async_msgs(boost::shared_ptr<tx_fc_cache_t> fc_cache,
-                                                    uhd::transport::zero_copy_if::sptr xport,
-                                                    tick_rate_retriever_t get_tick_rate);
-    static uhd::transport::managed_send_buffer::sptr _get_tx_buff_with_flowctrl(
-            uhd::task::sptr /*holds ref*/,
-            boost::shared_ptr<tx_fc_cache_t> fc_cache,
-            uhd::transport::zero_copy_if::sptr xport,
-            size_t fc_pkt_window,
-            const double timeout);
 };
 
 #endif /* INCLUDED_B200_IMPL_HPP */

@@ -5,22 +5,21 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 //
 
-#ifndef INCLUDED_UHD_TRANSPORT_NIRIO_ZERO_COPY_HPP
-#define INCLUDED_UHD_TRANSPORT_NIRIO_ZERO_COPY_HPP
+#pragma once
 
 #include <uhd/config.hpp>
 #include <uhd/transport/nirio/niusrprio_session.h>
 #include <uhd/transport/zero_copy.hpp>
 #include <uhd/types/device_addr.hpp>
 #include <stdint.h>
-#include <boost/shared_ptr.hpp>
+#include <memory>
 
 namespace uhd { namespace transport {
 
 class UHD_API nirio_zero_copy : public virtual zero_copy_if
 {
 public:
-    typedef boost::shared_ptr<nirio_zero_copy> sptr;
+    typedef std::shared_ptr<nirio_zero_copy> sptr;
 
     static sptr make(uhd::niusrprio::niusrprio_session::sptr fpga_session,
         const uint32_t instance,
@@ -29,5 +28,3 @@ public:
 };
 
 }} // namespace uhd::transport
-
-#endif /* INCLUDED_UHD_TRANSPORT_NIRIO_ZERO_COPY_HPP */

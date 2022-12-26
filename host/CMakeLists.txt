@@ -10,7 +10,7 @@
 ########################################################################
 # NOTE! If you change the version in the following line, also change
 # CMAKE_MIN_VERSION below. (This won't take a variable).
-cmake_minimum_required(VERSION 3.5.1)
+cmake_minimum_required(VERSION 3.8)
 if(POLICY CMP0048)
   cmake_policy(SET CMP0048 NEW) # Suppress Version warnings
 endif(POLICY CMP0048)
@@ -18,25 +18,25 @@ project(UHD CXX C)
 enable_testing()
 
 #make sure our local CMake Modules path comes first
-list(INSERT CMAKE_MODULE_PATH 0 ${UHD_SOURCE_DIR}/cmake/Modules)
+list(INSERT CMAKE_MODULE_PATH 0 ${CMAKE_SOURCE_DIR}/cmake/Modules)
 
 ########################################################################
 # UHD Dependency Minimum Versions
 ########################################################################
-set(CMAKE_MIN_VERSION "3.5.1")
-set(GCC_MIN_VERSION "4.8.0")
-set(CLANG_MIN_VERSION "3.4.0")
-set(APPLECLANG_MIN_VERSION "503")
+set(CMAKE_MIN_VERSION "3.8")
+set(GCC_MIN_VERSION "6.3.0")
+set(CLANG_MIN_VERSION "6.0.0")
+set(APPLECLANG_MIN_VERSION "800")
 # Make sure to update the next two in unison:
-set(MSVC_MIN_VERSION "1900")
-set(MSVC_MIN_VERSION_READABLE "14.0")
+set(MSVC_MIN_VERSION "1910")
+set(MSVC_MIN_VERSION_READABLE "15.0")
 # This Python version gets used for Python API (if requested) as well as
 # all the build-time Python scripts
-set(PYTHON_MIN_VERSION "2.7")
-set(PYTHON3_MIN_VERSION "3.5")
+set(PYTHON_MIN_VERSION "3.6")
 # Other deps
-set(BOOST_MIN_VERSION "1.58")
-set(NUMPY_MIN_VERSION "1.7")
+set(BOOST_MIN_VERSION "1.65")
+set(NUMPY_MIN_VERSION "1.11")
+set(RUAMEL.YAML_MIN_VERSION "0.15")
 set(PY_MAKO_MIN_VERSION "0.4.2")
 set(PY_REQUESTS_MIN_VERSION "2.0")
 
@@ -130,9 +130,9 @@ set(PKG_MAN_DIR share/man/man1)
 # UHD config files
 ########################################################################
 set(UHD_USER_CONF_FILE
-    ".uhd/uhd.conf"
+    "uhd.conf"
     CACHE STRING
-    "Location of the user-specific UHD configuration file, relative to APPDATA (or HOME)"
+    "Location of the user-specific UHD configuration file, relative to APPDATA (or XDG_CONFIG_HOME)"
 )
 if(UNIX)
     set(UHD_SYS_CONF_FILE
@@ -171,8 +171,8 @@ endif(DEFINED UHD_IMAGES_DIR_WINREG_KEY)
 ########################################################################
 # Local Include Dir
 ########################################################################
-include_directories(${UHD_BINARY_DIR}/include)
-include_directories(${UHD_SOURCE_DIR}/include)
+include_directories(${CMAKE_BINARY_DIR}/include)
+include_directories(${CMAKE_SOURCE_DIR}/include)
 
 ########################################################################
 # Static Lib Configuration
@@ -250,7 +250,7 @@ if(${CMAKE_CXX_COMPILER_ID} STREQUAL "GNU" OR
 endif()
 
 if(MSVC)
-    include_directories(${UHD_SOURCE_DIR}/cmake/msvc)
+    include_directories(${CMAKE_SOURCE_DIR}/cmake/msvc)
     add_definitions( #stop all kinds of compatibility warnings
         -DWIN32_LEAN_AND_MEAN
         -DVC_EXTRALEAN
@@ -287,12 +287,12 @@ set(UHD_BOOST_REQUIRED_COMPONENTS
     date_time
     filesystem
     program_options
-    regex
     system
-    unit_test_framework
     serialization
     thread
+    unit_test_framework
 )
+
 include(UHDBoost)
 
 include_directories(${Boost_INCLUDE_DIRS})
@@ -301,8 +301,6 @@ link_directories(${Boost_LIBRARY_DIRS})
 ########################################################################
 # Additional settings for build environment
 ########################################################################
-# Note: RFNoC never gets fully disabled, but the public APIs do
-set(ENABLE_RFNOC ON CACHE BOOL "Export RFNoC includes and symbols")
 include(UHDGlobalDefs)
 include(UHDLog)
 
@@ -335,11 +333,70 @@ PYTHON_CHECK_MODULE(
     HAVE_PYTHON_MODULE_NUMPY
 )
 
+PYTHON_CHECK_MODULE(
+    "ruamel.yaml ${RUAMEL.YAML_MIN_VERSION} or greater"
+    "ruamel.yaml" "LooseVersion(ruamel.yaml.__version__) >= LooseVersion('${RUAMEL.YAML_MIN_VERSION}')"
+    HAVE_PYTHON_MODULE_YAML
+)
+
+########################################################################
+# Option to use QEMU for running unittests
+#
+# This is useful when cross-compiling UHD for other architectures like arm or
+# aarch64
+#
+# QEMU_EXECUTABLE must be set to the name of the QEMU executable. When using
+# openembedded build environment, this should be set to "qemu-${TUNE_ARCH}"
+# or "${WORKDIR}/recipe-sysroot-native/usr/bin/qemu-${TUNE_ARCH}"
+#
+# QEMU_SYSROOT must be set to the same sysroot of the target architecture that
+# was used when compiling UHD. When using openembedded build environment, this
+# should be set to "${WORKDIR}/recipe-sysroot".
+#
+# QEMU_PYTHON_EXECUTABLE must be set to the path of the python executable
+# compiled for the target architecture. If it is included in the target sysroot,
+# this is typically ${QEMU_SYSROOT}${PYTHON_RUNTIME_EXECUTABLE}. The variable
+# is automatically set to this path if the executable is available.
+########################################################################
+option(ENABLE_QEMU_UNITTESTS "Use QEMU for running unittests" OFF)
+mark_as_advanced(ENABLE_QEMU_UNITTESTS)
+if(ENABLE_QEMU_UNITTESTS)
+    message(STATUS "")
+    message(STATUS "Use QEMU for running unittests: ${ENABLE_QEMU_UNITTESTS}")
+    if("${QEMU_EXECUTABLE}" STREQUAL "")
+      if(NOT "$ENV{OECORE_NATIVE_SYSROOT}" STREQUAL "" AND
+         NOT "$ENV{OECORE_TARGET_ARCH}" STREQUAL "" AND
+         EXISTS "$ENV{OECORE_NATIVE_SYSROOT}/usr/bin/qemu-$ENV{OECORE_TARGET_ARCH}")
+         set(QEMU_EXECUTABLE "$ENV{OECORE_NATIVE_SYSROOT}/usr/bin/qemu-$ENV{OECORE_TARGET_ARCH}")
+      else()
+        message(FATAL_ERROR "The variable QEMU_EXECUTABLE is not set")
+      endif()
+    endif()
+    if("${QEMU_SYSROOT}" STREQUAL "")
+      if(NOT "$ENV{OECORE_TARGET_SYSROOT}" STREQUAL "" AND
+         EXISTS "$ENV{OECORE_TARGET_SYSROOT}")
+         set(QEMU_SYSROOT, "$ENV{OECORE_TARGET_SYSROOT}")
+      else()
+        message(FATAL_ERROR "The variable QEMU_SYSROOT is not set")
+      endif()
+    endif()
+    if("${QEMU_PYTHON_EXECUTABLE}" STREQUAL "")
+      if (EXISTS ${QEMU_SYSROOT}${RUNTIME_PYTHON_EXECUTABLE})
+        set(QEMU_PYTHON_EXECUTABLE ${QEMU_SYSROOT}${RUNTIME_PYTHON_EXECUTABLE})
+      else()
+        message(FATAL_ERROR "The variable QEMU_PYTHON_EXECUTABLE is not set")
+      endif()
+    endif()
+    message(STATUS "  QEMU executable: ${QEMU_EXECUTABLE}")
+    message(STATUS "  QEMU Python executable: ${QEMU_PYTHON_EXECUTABLE}")
+    message(STATUS "  QEMU sysroot: ${QEMU_SYSROOT}")
+endif(ENABLE_QEMU_UNITTESTS)
+
 ########################################################################
 # Create Uninstall Target
 ########################################################################
 configure_file(
-    ${UHD_SOURCE_DIR}/cmake/cmake_uninstall.cmake.in
+    ${CMAKE_SOURCE_DIR}/cmake/cmake_uninstall.cmake.in
     ${CMAKE_CURRENT_BINARY_DIR}/cmake_uninstall.cmake
 @ONLY)
 
@@ -360,7 +417,7 @@ UHD_INSTALL(FILES
 ########################################################################
 # Register top level components
 ########################################################################
-LIBUHD_REGISTER_COMPONENT("LibUHD" ENABLE_LIBUHD ON "Boost_FOUND;HAVE_PYTHON_PLAT_MIN_VERSION;HAVE_PYTHON_MODULE_MAKO" OFF ON)
+LIBUHD_REGISTER_COMPONENT("LibUHD" ENABLE_LIBUHD ON "Boost_FOUND;HAVE_PYTHON_MODULE_MAKO" OFF ON)
 LIBUHD_REGISTER_COMPONENT("LibUHD - C API" ENABLE_C_API ON "ENABLE_LIBUHD" OFF OFF)
 if(WIN32)
   LIBUHD_REGISTER_COMPONENT("LibUHD - Python API" ENABLE_PYTHON_API OFF "ENABLE_LIBUHD;HAVE_PYTHON_MODULE_NUMPY;HAVE_PYTHON_LIBS" OFF OFF)
@@ -370,21 +427,6 @@ endif(WIN32)
 LIBUHD_REGISTER_COMPONENT("Examples" ENABLE_EXAMPLES ON "ENABLE_LIBUHD" OFF OFF)
 LIBUHD_REGISTER_COMPONENT("Utils" ENABLE_UTILS ON "ENABLE_LIBUHD" OFF OFF)
 LIBUHD_REGISTER_COMPONENT("Tests" ENABLE_TESTS ON "ENABLE_LIBUHD" OFF OFF)
-
-########################################################################
-# Check for fpga-src submodule
-########################################################################
-set(HAS_FPGA_SUBMODULE FALSE)
-execute_process(
-    COMMAND ${PYTHON_EXECUTABLE} -c "import os; print(os.path.abspath(os.path.join('${UHD_SOURCE_DIR}', '..', 'fpga-src')))"
-    OUTPUT_VARIABLE FPGA_SUBMODULE_DIR
-    OUTPUT_STRIP_TRAILING_WHITESPACE
-)
-if(EXISTS "${FPGA_SUBMODULE_DIR}/docs/fpga.md")
-    set(HAS_FPGA_SUBMODULE TRUE)
-    message(STATUS "")
-    message(STATUS "Found FPGA submodule: ${FPGA_SUBMODULE_DIR}")
-endif(EXISTS "${FPGA_SUBMODULE_DIR}/docs/fpga.md")
 
 ########################################################################
 # Add the subdirectories
@@ -464,28 +506,23 @@ endforeach(Boost_Comp)
 if(ENABLE_USB)
     list(APPEND UHD_LINK_LIST_STATIC "usb-1.0")
 endif(ENABLE_USB)
-# UHDConfig.cmake also needs UHD_RFNOC_FOUND
-if(ENABLE_RFNOC)
-    set(UHD_RFNOC_FOUND "TRUE")
-else()
-    set(UHD_RFNOC_FOUND "FALSE")
-endif(ENABLE_RFNOC)
+set(UHD_RFNOC_FOUND "TRUE")
 
 configure_file(
-    ${UHD_SOURCE_DIR}/cmake/Modules/UHDConfigVersion.cmake.in
-    ${UHD_BINARY_DIR}/cmake/Modules/UHDConfigVersion.cmake
+    ${CMAKE_SOURCE_DIR}/cmake/Modules/UHDConfigVersion.cmake.in
+    ${CMAKE_BINARY_DIR}/cmake/Modules/UHDConfigVersion.cmake
     @ONLY
 )
 configure_file(
-    ${UHD_SOURCE_DIR}/cmake/Modules/UHDConfig.cmake.in
-    ${UHD_BINARY_DIR}/cmake/Modules/UHDConfig.cmake
+    ${CMAKE_SOURCE_DIR}/cmake/Modules/UHDConfig.cmake.in
+    ${CMAKE_BINARY_DIR}/cmake/Modules/UHDConfig.cmake
     @ONLY
 )
 
 set(uhd_cmake_scripts
-    ${UHD_BINARY_DIR}/cmake/Modules/UHDConfig.cmake
-    ${UHD_BINARY_DIR}/cmake/Modules/UHDConfigVersion.cmake
-    ${UHD_SOURCE_DIR}/cmake/Modules/UHDBoost.cmake
+    ${CMAKE_BINARY_DIR}/cmake/Modules/UHDConfig.cmake
+    ${CMAKE_BINARY_DIR}/cmake/Modules/UHDConfigVersion.cmake
+    ${CMAKE_SOURCE_DIR}/cmake/Modules/UHDBoost.cmake
 )
 
 UHD_INSTALL(

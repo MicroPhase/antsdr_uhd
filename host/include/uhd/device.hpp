@@ -5,17 +5,15 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 //
 
-#ifndef INCLUDED_UHD_DEVICE_HPP
-#define INCLUDED_UHD_DEVICE_HPP
+#pragma once
 
 #include <uhd/config.hpp>
-#include <uhd/deprecated.hpp>
 #include <uhd/property_tree.hpp>
 #include <uhd/stream.hpp>
 #include <uhd/types/device_addr.hpp>
 #include <uhd/utils/noncopyable.hpp>
-#include <boost/function.hpp>
-#include <boost/shared_ptr.hpp>
+#include <functional>
+#include <memory>
 
 namespace uhd {
 
@@ -28,9 +26,9 @@ class property_tree; // forward declaration
 class UHD_API device : uhd::noncopyable
 {
 public:
-    typedef boost::shared_ptr<device> sptr;
-    typedef boost::function<device_addrs_t(const device_addr_t&)> find_t;
-    typedef boost::function<sptr(const device_addr_t&)> make_t;
+    typedef std::shared_ptr<device> sptr;
+    typedef std::function<device_addrs_t(const device_addr_t&)> find_t;
+    typedef std::function<sptr(const device_addr_t&)> make_t;
 
     //! Device type, used as a filter in make
     enum device_filter_t { ANY, USRP, CLOCK };
@@ -89,8 +87,12 @@ public:
      */
     virtual tx_streamer::sptr get_tx_stream(const stream_args_t& args) = 0;
 
-    /*!
-     * Receive and asynchronous message from the device.
+    /*! DEPRECATED: Receive asynchronous message from the device
+     *
+     * Prefer calling recv_async_msg on the associated TX streamer. This method
+     * has the problem that it doesn't necessarily know which Tx streamer is
+     * being addressed, and thus might not be delivering the expected outcome.
+     *
      * \param async_metadata the metadata to be filled in
      * \param timeout the timeout in seconds to wait for a message
      * \return true when the async_metadata is valid, false for timeout
@@ -110,5 +112,3 @@ protected:
 };
 
 } // namespace uhd
-
-#endif /* INCLUDED_UHD_DEVICE_HPP */

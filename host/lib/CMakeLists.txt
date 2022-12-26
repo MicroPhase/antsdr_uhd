@@ -59,23 +59,23 @@ endmacro(INCLUDE_SUBDIRECTORY)
 ########################################################################
 message(STATUS "")
 # Dependencies
-find_package(USB1)
-find_package(LIBERIO)
-find_package(DPDK 17.11 EXACT)
-LIBUHD_REGISTER_COMPONENT("LIBERIO" ENABLE_LIBERIO ON "ENABLE_LIBUHD;LIBERIO_FOUND" OFF OFF)
+find_package(LIBUSB)
+find_package(DPDK 18.11 EXACT)
 LIBUHD_REGISTER_COMPONENT("USB" ENABLE_USB ON "ENABLE_LIBUHD;LIBUSB_FOUND" OFF OFF)
 # Devices
 LIBUHD_REGISTER_COMPONENT("B100" ENABLE_B100 ON "ENABLE_LIBUHD;ENABLE_USB" OFF OFF)
 LIBUHD_REGISTER_COMPONENT("B200" ENABLE_B200 ON "ENABLE_LIBUHD;ENABLE_USB" OFF OFF)
-LIBUHD_REGISTER_COMPONENT("E200" ENABLE_E200 ON "ENABLE_LIBUHD;ENABLE_USB" OFF OFF)
+LIBUHD_REGISTER_COMPONENT("ANT" ENABLE_ANT ON "ENABLE_LIBUHD;ENABLE_USB" OFF OFF)
 LIBUHD_REGISTER_COMPONENT("USRP1" ENABLE_USRP1 ON "ENABLE_LIBUHD;ENABLE_USB" OFF OFF)
 LIBUHD_REGISTER_COMPONENT("USRP2" ENABLE_USRP2 ON "ENABLE_LIBUHD" OFF OFF)
 LIBUHD_REGISTER_COMPONENT("X300" ENABLE_X300 ON "ENABLE_LIBUHD" OFF OFF)
 LIBUHD_REGISTER_COMPONENT("MPMD" ENABLE_MPMD ON "ENABLE_LIBUHD" OFF OFF)
+LIBUHD_REGISTER_COMPONENT("SIM" ENABLE_SIM ON "ENABLE_LIBUHD;ENABLE_MPMD;ENABLE_PYTHON_API" OFF OFF)
 LIBUHD_REGISTER_COMPONENT("N300" ENABLE_N300 ON "ENABLE_LIBUHD;ENABLE_MPMD" OFF OFF)
 LIBUHD_REGISTER_COMPONENT("N320" ENABLE_N320 ON "ENABLE_LIBUHD;ENABLE_MPMD" OFF OFF)
 LIBUHD_REGISTER_COMPONENT("E320" ENABLE_E320 ON "ENABLE_LIBUHD;ENABLE_MPMD" OFF OFF)
 LIBUHD_REGISTER_COMPONENT("E300" ENABLE_E300 ON "ENABLE_LIBUHD;ENABLE_MPMD" OFF OFF)
+LIBUHD_REGISTER_COMPONENT("X400" ENABLE_X400 ON "ENABLE_LIBUHD;ENABLE_MPMD" OFF OFF)
 LIBUHD_REGISTER_COMPONENT("OctoClock" ENABLE_OCTOCLOCK ON "ENABLE_LIBUHD" OFF OFF)
 LIBUHD_REGISTER_COMPONENT("DPDK" ENABLE_DPDK ON "ENABLE_MPMD;DPDK_FOUND" OFF OFF)
 
@@ -83,6 +83,8 @@ LIBUHD_REGISTER_COMPONENT("DPDK" ENABLE_DPDK ON "ENABLE_MPMD;DPDK_FOUND" OFF OFF
 # Include subdirectories (different than add)
 ########################################################################
 INCLUDE_SUBDIRECTORY(include)
+INCLUDE_SUBDIRECTORY(cal)
+INCLUDE_SUBDIRECTORY(features)
 INCLUDE_SUBDIRECTORY(ic_reg_maps)
 INCLUDE_SUBDIRECTORY(types)
 INCLUDE_SUBDIRECTORY(convert)
@@ -116,9 +118,7 @@ configure_file(
 ########################################################################
 LIBUHD_APPEND_SOURCES(
     ${CMAKE_CURRENT_BINARY_DIR}/build_info.cpp
-    ${CMAKE_CURRENT_SOURCE_DIR}/deprecated.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/device.cpp
-    ${CMAKE_CURRENT_SOURCE_DIR}/device3.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/image_loader.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/stream.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/exception.cpp
@@ -132,6 +132,11 @@ if(ENABLE_C_API)
         ${CMAKE_CURRENT_SOURCE_DIR}/version_c.cpp
     )
 endif(ENABLE_C_API)
+
+########################################################################
+# Add common resource compiler subdirectory
+########################################################################
+add_subdirectory(rc)
 
 ########################################################################
 # Add DLL resource file to Windows build
@@ -148,7 +153,7 @@ if(MSVC)
         if(IS_ABSOLUTE "${CUSTOM_RC_FILE}")
             set(UHD_RC_IN "${CUSTOM_RC_FILE}")
         else()
-            set(UHD_RC_IN "${UHD_BINARY_DIR}/${CUSTOM_RC_FILE}")
+            set(UHD_RC_IN "${CMAKE_BINARY_DIR}/${CUSTOM_RC_FILE}")
         endif(IS_ABSOLUTE "${CUSTOM_RC_FILE}")
         message(STATUS "")
         message(STATUS "Using custom RC template: ${UHD_RC_IN}")
@@ -175,7 +180,7 @@ if(ENABLE_MPMD)
     list(APPEND libuhd_sources $<TARGET_OBJECTS:uhd_rpclib>)
 endif()
 add_library(uhd SHARED ${libuhd_sources})
-target_link_libraries(uhd ${Boost_LIBRARIES} ${libuhd_libs})
+target_link_libraries(uhd ${Boost_LIBRARIES} ${libuhd_libs} uhd_rc)
 set_target_properties(uhd PROPERTIES DEFINE_SYMBOL "UHD_DLL_EXPORTS")
 if(NOT LIBUHDDEV_PKG)
     set_target_properties(uhd PROPERTIES SOVERSION "${UHD_ABI_VERSION}")
@@ -184,6 +189,26 @@ endif(NOT LIBUHDDEV_PKG)
 if(DEFINED LIBUHD_OUTPUT_NAME)
     set_target_properties(uhd PROPERTIES OUTPUT_NAME ${LIBUHD_OUTPUT_NAME})
 endif(DEFINED LIBUHD_OUTPUT_NAME)
+
+if(ENABLE_SIM)
+    # Get python include dirs
+    include_directories(${PYTHON_INCLUDE_DIRS})
+    set(PYBIND11_INCLUDE_DIR
+        "${CMAKE_SOURCE_DIR}/lib/deps/pybind11/include"
+        CACHE
+        STRING
+        "Location of PyBind11 includes"
+    )
+    include_directories(${PYBIND11_INCLUDE_DIR})
+
+    # For PYUHD we don't link against the python libraries, but when calling
+    # python instead of being called by it, we have to.
+    target_link_libraries(uhd ${PYTHON_LIBRARIES})
+
+    if(APPLE)
+        target_link_options(uhd PRIVATE "LINKER:-undefined,dynamic_lookup")
+    endif(APPLE)
+endif(ENABLE_SIM)
 
 if(NOT UHDHOST_PKG) #Syntax makes it unusable by UHD_INSTALL
     install(TARGETS uhd

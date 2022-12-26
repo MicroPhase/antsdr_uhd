@@ -5,17 +5,16 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 //
 
+#define _USE_MATH_DEFINES
 #include "ad9361_device.h"
 #include "ad9361_client.h"
 #include "ad9361_filter_taps.h"
 #include "ad9361_gain_tables.h"
 #include "ad9361_synth_lut.h"
-#define _USE_MATH_DEFINES
 #include <uhd/exception.hpp>
 #include <uhd/utils/log.hpp>
 #include <stdint.h>
 #include <boost/format.hpp>
-#include <boost/math/special_functions.hpp>
 #include <boost/scoped_array.hpp>
 #include <chrono>
 #include <cmath>
@@ -1237,7 +1236,7 @@ double ad9361_device_t::_tune_bbvco(const double rate)
     int nint = static_cast<int>(vcorate / fref);
     UHD_LOG_TRACE("AD936X", "[ad9361_device_t::_tune_bbvco] (nint)=" << (vcorate / fref));
     int nfrac = static_cast<int>(
-        boost::math::round(((vcorate / fref) - (double)nint) * (double)modulus));
+        std::lround(((vcorate / fref) - (double)nint) * (double)modulus));
     UHD_LOG_TRACE("AD936X",
         "[ad9361_device_t::_tune_bbvco] (nfrac)=" << ((vcorate / fref) - (double)nint)
                                                          * (double)modulus);
@@ -2783,10 +2782,10 @@ filter_info_base::sptr ad9361_device_t::_get_filter_hb_2(direction_t direction)
         taps_array, taps_array + sizeof(taps_array) / sizeof(int16_t));
 
     digital_filter_base<int16_t>::sptr hb_3 =
-        boost::dynamic_pointer_cast<digital_filter_base<int16_t>>(
+        std::dynamic_pointer_cast<digital_filter_base<int16_t>>(
             _get_filter_hb_3(direction));
     digital_filter_base<int16_t>::sptr dec_int_3 =
-        boost::dynamic_pointer_cast<digital_filter_base<int16_t>>(
+        std::dynamic_pointer_cast<digital_filter_base<int16_t>>(
             _get_filter_dec_int_3(direction));
 
     if (direction == RX) {
@@ -2849,7 +2848,7 @@ filter_info_base::sptr ad9361_device_t::_get_filter_hb_1(direction_t direction)
         -53, 0, 313, 0, -1155, 0, 4989, 8192, 4989, 0, -1155, 0, 313, 0, -53};
 
     digital_filter_base<int16_t>::sptr hb_2 =
-        boost::dynamic_pointer_cast<digital_filter_base<int16_t>>(
+        std::dynamic_pointer_cast<digital_filter_base<int16_t>>(
             _get_filter_hb_2(direction));
 
     if (direction == RX) {
@@ -2895,7 +2894,7 @@ filter_info_base::sptr ad9361_device_t::_get_filter_fir(
     uint8_t enable      = 1;
 
     digital_filter_base<int16_t>::sptr hb_1 =
-        boost::dynamic_pointer_cast<digital_filter_base<int16_t>>(
+        std::dynamic_pointer_cast<digital_filter_base<int16_t>>(
             _get_filter_hb_1(direction));
 
     if (direction == RX) {
@@ -2938,7 +2937,7 @@ void ad9361_device_t::_set_filter_fir(
     direction_t direction, chain_t channel, filter_info_base::sptr filter)
 {
     digital_filter_fir<int16_t>::sptr fir =
-        boost::dynamic_pointer_cast<digital_filter_fir<int16_t>>(filter);
+        std::dynamic_pointer_cast<digital_filter_fir<int16_t>>(filter);
     // only write taps. Ignore everything else for now
     _set_fir_taps(direction, channel, fir->get_taps());
 }
@@ -2951,7 +2950,7 @@ void ad9361_device_t::_set_filter_fir(
 void ad9361_device_t::_set_filter_lp_bb(
     direction_t direction, filter_info_base::sptr filter)
 {
-    analog_filter_lp::sptr lpf = boost::dynamic_pointer_cast<analog_filter_lp>(filter);
+    analog_filter_lp::sptr lpf = std::dynamic_pointer_cast<analog_filter_lp>(filter);
     double bw                  = lpf->get_cutoff();
     if (direction == RX) {
         // remember: this function takes rf bw as its input and calibrated to 1.4 x the
@@ -2969,7 +2968,7 @@ void ad9361_device_t::_set_filter_lp_bb(
 void ad9361_device_t::_set_filter_lp_tia_sec(
     direction_t direction, filter_info_base::sptr filter)
 {
-    analog_filter_lp::sptr lpf = boost::dynamic_pointer_cast<analog_filter_lp>(filter);
+    analog_filter_lp::sptr lpf = std::dynamic_pointer_cast<analog_filter_lp>(filter);
     double bw                  = lpf->get_cutoff();
     if (direction == RX) {
         // remember: this function takes rf bw as its input and calibrated to 2.5 x the

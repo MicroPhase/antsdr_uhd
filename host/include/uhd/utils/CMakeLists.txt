@@ -5,6 +5,8 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 #
 
+add_subdirectory(chdr)
+
 UHD_INSTALL(FILES
     algorithm.hpp
     assert_has.hpp
@@ -13,9 +15,12 @@ UHD_INSTALL(FILES
     byteswap.ipp
     cast.hpp
     csv.hpp
+    dirty_tracked.hpp
     fp_compare_delta.ipp
     fp_compare_epsilon.ipp
     gain_group.hpp
+    graph_utils.hpp
+    interpolation.hpp
     log.hpp
     log_add.hpp
     math.hpp
@@ -24,6 +29,7 @@ UHD_INSTALL(FILES
     paths.hpp
     pimpl.hpp
     platform.hpp
+    pybind_adaptors.hpp
     safe_call.hpp
     safe_main.hpp
     scope_exit.hpp
