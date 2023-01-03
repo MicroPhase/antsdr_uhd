@@ -5,18 +5,16 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 //
 
-#ifndef INCLUDED_UHD_TRANSPORT_NIRIO_NIFPGA_LVBITX_H
-#define INCLUDED_UHD_TRANSPORT_NIRIO_NIFPGA_LVBITX_H
+#pragma once
 
 #include <uhd/transport/nirio/nirio_resource_manager.h>
 #include <uhd/transport/nirio/niriok_proxy.h>
-#include <boost/smart_ptr.hpp>
 
 namespace uhd { namespace niusrprio {
 
 class UHD_API nifpga_lvbitx {
 public:
-    typedef boost::shared_ptr<nifpga_lvbitx> sptr;
+    typedef std::shared_ptr<nifpga_lvbitx> sptr;
 
     virtual ~nifpga_lvbitx() {};
 
@@ -44,6 +42,4 @@ protected:
 };
 
 }}
-
-#endif /* INCLUDED_UHD_TRANSPORT_NIRIO_NIFPGA_LVBITX_H */
 

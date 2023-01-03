@@ -8,9 +8,9 @@
 #include <uhd/config.hpp>
 #include <uhd/exception.hpp>
 #include <uhd/utils/paths.hpp>
+#include <uhd/utils/log.hpp>
 #include <uhdlib/utils/paths.hpp>
 #include <boost/algorithm/string.hpp>
-#include <boost/bind.hpp>
 #include <boost/version.hpp>
 #include <functional>
 #if BOOST_VERSION >= 106100
@@ -18,12 +18,12 @@
 #endif
 #include <boost/filesystem.hpp>
 #include <boost/format.hpp>
-#include <boost/regex.hpp>
 #include <boost/tokenizer.hpp>
 #include <cstdio>
 #include <cstdlib>
 #include <fstream>
 #include <iostream>
+#include <regex>
 #include <streambuf>
 #include <string>
 #include <vector>
@@ -34,6 +34,8 @@
 #endif
 
 namespace fs = boost::filesystem;
+
+static constexpr char UHD_CAL_DATA_PATH_VAR[] = "UHD_CAL_DATA_PATH";
 
 /*! Get the value of an environment variable.
  *
@@ -128,6 +130,89 @@ static std::string expand_home_directory(std::string path)
 }
 #endif
 
+fs::path uhd::get_xdg_data_home()
+{
+    std::string xdg_data_home_str = get_env_var("XDG_DATA_HOME", "");
+    fs::path xdg_data_home(xdg_data_home_str);
+    if (!xdg_data_home_str.empty()) {
+        return fs::path(xdg_data_home_str);
+    }
+#ifdef UHD_PLATFORM_WIN32
+    const std::string localappdata = get_env_var("LOCALAPPDATA", "");
+    if (!localappdata.empty()) {
+        return fs::path(localappdata);
+    }
+    const std::string appdata = get_env_var("APPDATA", "");
+    if (!appdata.empty()) {
+        return fs::path(appdata);
+    }
+#endif
+    const std::string home = get_env_var("HOME", "");
+    if (home.empty()) {
+#ifdef UHD_PLATFORM_WIN32
+        const std::string err_msg =
+            "get_xdg_data_home(): Unable to find \%HOME\%, \%XDG_DATA_HOME\%, "
+            "\%LOCALAPPDATA\% or \%APPDATA\%.";
+#else
+        const std::string err_msg =
+            "get_xdg_data_home(): Unable to find $HOME or $XDG_DATA_HOME.";
+#endif
+        throw uhd::runtime_error(err_msg);
+    }
+    return fs::path(home) / ".local" / "share";
+}
+
+fs::path uhd::get_xdg_config_home()
+{
+    std::string xdg_config_home_str = get_env_var("XDG_CONFIG_HOME", "");
+    fs::path xdg_config_home(xdg_config_home_str);
+    if (!xdg_config_home_str.empty()) {
+        return fs::path(xdg_config_home_str);
+    }
+#ifdef UHD_PLATFORM_WIN32
+    const std::string localappdata = get_env_var("LOCALAPPDATA", "");
+    if (!localappdata.empty()) {
+        return fs::path(localappdata);
+    }
+    const std::string appdata = get_env_var("APPDATA", "");
+    if (!appdata.empty()) {
+        return fs::path(appdata);
+    }
+#endif
+    const std::string home = get_env_var("HOME", "");
+    if (home.empty()) {
+#ifdef UHD_PLATFORM_WIN32
+        const std::string err_msg =
+            "get_xdg_config_home(): Unable to find \%HOME\%, \%XDG_CONFIG_HOME\%, "
+            "\%LOCALAPPDATA\% or \%APPDATA\%.";
+#else
+        const std::string err_msg =
+            "get_xdg_config_home(): Unable to find $HOME or $XDG_CONFIG_HOME.";
+#endif
+        throw uhd::runtime_error(err_msg);
+    }
+    return fs::path(home) / ".config";
+}
+
+fs::path uhd::get_legacy_config_home()
+{
+#ifdef UHD_PLATFORM_WIN32
+    const std::string localappdata = get_env_var("LOCALAPPDATA", "");
+    if (!localappdata.empty()) {
+        return fs::path(localappdata) / ".uhd";
+    }
+    const std::string appdata = get_env_var("APPDATA", "");
+    if (!appdata.empty()) {
+        return fs::path(appdata) / ".uhd";
+    }
+#endif
+    const std::string home = get_env_var("HOME", "");
+    if (home.empty()) {
+        throw uhd::runtime_error("Unable to find $HOME.");
+    }
+    return fs::path(home) / ".uhd";
+}
+
 /***********************************************************************
  * Implement the functions in paths.hpp
  **********************************************************************/
@@ -173,11 +258,18 @@ std::string uhd::get_tmp_path(void)
 #endif
 }
 
-std::string uhd::get_app_path(void)
+// Only used for deprecated CSV file loader. Delete this once CSV support is
+// removed.
+std::string uhd::get_appdata_path(void)
 {
     const std::string uhdcalib_path = get_env_var("UHD_CONFIG_DIR");
-    if (not uhdcalib_path.empty())
+    if (not uhdcalib_path.empty()) {
+        UHD_LOG_WARNING("UHD",
+            "The environment variable UHD_CONFIG_DIR is deprecated. Refer to "
+            "https://files.ettus.com/manual/page_calibration.html for how to store "
+            "calibration data.");
         return uhdcalib_path;
+    }
 
     const std::string appdata_path = get_env_var("APPDATA");
     if (not appdata_path.empty())
@@ -189,6 +281,7 @@ std::string uhd::get_app_path(void)
 
     return uhd::get_tmp_path();
 }
+
 
 #if BOOST_VERSION >= 106100
 std::string uhd::get_pkg_path(void)
@@ -217,6 +310,18 @@ std::string uhd::get_lib_path(void)
 }
 #endif
 
+std::string uhd::get_cal_data_path(void)
+{
+    // The easy case: User has set the environment variable
+    const std::string uhdcalib_path = get_env_var(UHD_CAL_DATA_PATH_VAR);
+    if (not uhdcalib_path.empty()) {
+        return uhdcalib_path;
+    }
+
+    // If not, we use the default location
+    const fs::path cal_data_path = get_xdg_data_home() / "uhd" / "cal";
+    return cal_data_path.string();
+}
 
 std::vector<fs::path> uhd::get_module_paths(void)
 {
@@ -227,7 +332,7 @@ std::vector<fs::path> uhd::get_module_paths(void)
         paths.push_back(str_path);
     }
 
-    paths.push_back(fs::path(uhd::get_pkg_path()) / UHD_LIB_DIR / "uhd" / "modules");
+    paths.push_back(fs::path(uhd::get_lib_path()) / "uhd" / "modules");
     paths.push_back(fs::path(uhd::get_pkg_path()) / "share" / "uhd" / "modules");
 
     return paths;
@@ -243,12 +348,12 @@ std::vector<fs::path> uhd::get_module_paths(void)
  */
 std::string _get_images_path_from_registry(const std::string& registry_key_path)
 {
-    boost::smatch reg_key_match;
+    std::smatch reg_key_match;
     // If a substring in the search path is enclosed in [] (square brackets) then it is
     // interpreted as a registry path
-    if (not boost::regex_search(registry_key_path,
+    if (not std::regex_search(registry_key_path,
             reg_key_match,
-            boost::regex("\\[(.+)\\](.*)", boost::regex::icase)))
+            std::regex("\\[(.+)\\](.*)", std::regex::icase)))
         return std::string();
     std::string reg_key_path =
         std::string(reg_key_match[1].first, reg_key_match[1].second);
@@ -256,10 +361,10 @@ std::string _get_images_path_from_registry(const std::string& registry_key_path)
         std::string(reg_key_match[2].first, reg_key_match[2].second);
 
     // Split the registry path into parent, key-path and value.
-    boost::smatch reg_parent_match;
-    if (not boost::regex_search(reg_key_path,
+    std::smatch reg_parent_match;
+    if (not std::regex_search(reg_key_path,
             reg_parent_match,
-            boost::regex("^(.+?)\\\\(.+)\\\\(.+)$", boost::regex::icase)))
+            std::regex("^(.+?)\\\\(.+)\\\\(.+)$", std::regex::icase)))
         return std::string();
     std::string reg_parent =
         std::string(reg_parent_match[1].first, reg_parent_match[1].second);

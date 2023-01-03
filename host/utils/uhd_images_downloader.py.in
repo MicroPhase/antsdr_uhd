@@ -1,13 +1,38 @@
 #!@RUNTIME_PYTHON_EXECUTABLE@
 #
 # Copyright 2018 Ettus Research, a National Instruments Company
+# Copyright 2020 Ettus Research, a National Instruments Brand
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 #
 """
-Download image files required for USRPs
+Download image files required for USRPs.
+
+Usage: The `uhd_images_downloader` should work, "out of the box", with no command line arguments.
+Assuming your computer has an internet connection to [files.ettus.com], simply run the utility
+every time you update UHD, and the installed images for your devices should always be up to date.
+
+
+Images will be downloaded on a per-target basis. That is, there are image packages for a desired
+device and configuration. Users can specify which image packages they would plan to use. To see a
+list of available targets, run `uhd_images_downloader --list-targets`. The left column of the
+printout will be a list of available image archives. From there, you can construct a regular
+expression which matches to the targets you wish to download. For example, in order to download all
+image packages related to the X300 product line, users may run
+`uhd_images_downloader --types x3.*`.
+
+
+The `uhd_images_downloader` uses a manifest to look-up the URLs of image packages to download.
+Downloaded images are recorded in an inventory file that lives in the images install location.
+This allows the downloader to skip images that were previously downloaded, and haven't changed
+since.
+
+Manifests are built into the downloader, but can also be accessed at uhd/images/manifest.txt.
+
+Inventory files are JSON files called `inventory.json`, by default. It is possible to specify the
+inventory file in command line arguments, but we don't recommend using this functionality unless
+you're really sure you need it.
 """
-from __future__ import print_function
 import argparse
 import hashlib
 import json
@@ -19,26 +44,10 @@ import sys
 import tempfile
 import zipfile
 import platform
+from urllib.parse import urljoin  # Python 3
+
 # For all the non-core-library imports, we will be extra paranoid and be very
 # nice with error messages so that everyone understands what's up.
-try:
-    from urllib.parse import urljoin  # Python 3
-except ImportError:
-    from urlparse import urljoin      # Python 2
-try:
-    from builtins import input
-except ImportError:
-    input = raw_input
-try:
-    from six import iteritems
-except ImportError:
-    sys.stdout.write(
-        "[ERROR] Missing module 'six'! Please install it, e.g., by "
-        "running 'pip install six' or any other tool that can install "
-        "Python modules.\n")
-    if platform.system() == 'Windows':
-        input('Hit Enter to continue.')
-    exit(0)
 try:
     import requests
 except ImportError:
@@ -51,6 +60,8 @@ except ImportError:
     exit(0)
 
 # pylint: disable=bad-whitespace
+_USERNAME_VARIABLE        = "UHD_IMAGES_USER"
+_PASSWORD_VARIABLE        = "UHD_IMAGES_PASSWORD"
 _DEFAULT_TARGET_REGEX     = "(fpga|fw|windrv)_default"
 _BASE_DIR_STRUCTURE_PARTS = ["share", "uhd", "images"]
 _DEFAULT_INSTALL_PATH     = os.path.join("@CMAKE_INSTALL_PREFIX@", *_BASE_DIR_STRUCTURE_PARTS)
@@ -88,15 +99,15 @@ def parse_args():
     Setup argument parser and parse. Also does some sanity checks and sets some
     global variables we want to use.
     """
-    parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter)
+    parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter,
+                                     description=__doc__)
     parser.add_argument('-t', '--types', action='append',
                         help="RegEx to select image sets from the manifest file.")
-    parser.add_argument('-i', '--install-location',
-                        default=None,
+    parser.add_argument('-i', '--install-location', type=str, default=None,
                         help="Set custom install location for images")
-    parser.add_argument('-m', '--manifest-location', type=str, default="",
+    parser.add_argument('-m', '--manifest-location', type=str, default=None,
                         help="Set custom location for the manifest file")
-    parser.add_argument('-I', '--inventory-location', type=str, default="",
+    parser.add_argument('-I', '--inventory-location', type=str, default=None,
                         help="Set custom location for the inventory file")
     parser.add_argument('-l', '--list-targets', action="store_true", default=False,
                         help="Print targets in the manifest file to stdout, and exit.\n"
@@ -110,10 +121,10 @@ def parse_args():
                              "larger than this will require approval, either "
                              "interactively, or by providing --yes.")
     parser.add_argument("--http-proxy", type=str,
-                        help="Specify HTTP proxy in the format "
-                        "http://user:pass@1.2.3.4:port\n"
+                        help="Specify HTTP(S) proxy in the format "
+                        "http[s]://user:pass@1.2.3.4:port\n"
                         "If this this option is not given, the environment "
-                        "variable HTTP_PROXY can also be used to specify a proxy.")
+                        "variables HTTP_PROXY/HTTPS_PROXY can also be used to specify a proxy.")
     parser.add_argument("-b", "--base-url", type=str,
                         help="Set base URL for images download location. "
                         "Defaults to ${} if set, or {} otherwise.".format(
@@ -153,6 +164,7 @@ def parse_args():
     if args.http_proxy:
         global _PROXIES
         _PROXIES['http'] = args.http_proxy
+        _PROXIES['https'] = args.http_proxy
     return args
 
 
@@ -170,7 +182,7 @@ def get_images_dir(args):
     return _DEFAULT_INSTALL_PATH
 
 
-def ask_permission(question, default_no=True):
+def ask_permission(question):
     """
     Ask the question, and have the user type y or n on the keyboard. If the
     global variable _YES is true, this always returns True without asking the
@@ -181,8 +193,7 @@ def ask_permission(question, default_no=True):
         log("DEBUG", "Assuming the answer is 'yes' for this question: " +
             question)
         return True
-    postfix = "[y/N]" if default_no else "[Y/n]"
-    answer = input(question + " " + postfix)
+    answer = input(question + " [y/N]")
     if answer and answer[0].lower() == 'y':
         return True
     return False
@@ -214,11 +225,16 @@ def get_manifest_raw(args):
     needs to be parsed to be of any practical use.
     """
     # If we're given a path to a manifest file, use it
-    if os.path.exists(args.manifest_location):
+    if args.manifest_location:
         manifest_fn = args.manifest_location
-        log("INFO", "Using manifest file at location: {}".format(manifest_fn))
-        with open(manifest_fn, 'r') as manifest_file:
-            manifest_raw = manifest_file.read()
+        if os.path.exists(manifest_fn):
+            log("INFO", "Using manifest file at location: {}".format(manifest_fn))
+            with open(manifest_fn, 'r') as manifest_file:
+                manifest_raw = manifest_file.read()
+        else:
+            log("WARN", "Invalid manifest file specified: {}, using default"
+                .format(manifest_fn))
+            manifest_raw = _MANIFEST_CONTENTS       
     # Otherwise, use the CMake Magic manifest
     else:
         manifest_raw = _MANIFEST_CONTENTS
@@ -326,8 +342,33 @@ def print_target_list(manifest, args):
                 base=args.base_url,
                 relpath=value["url"]))
     else:
-        for manifest_item in iteritems(manifest):
+        for manifest_item in manifest.items():
             print(args.base_url+manifest_item[1]["url"])
+
+
+def parse_auth(env):
+    """
+    Parse a (potentially None) environment variable string as a username:password
+    for consumption by requests.
+    """
+    username = env.get(_USERNAME_VARIABLE, None)
+    password = env.get(_PASSWORD_VARIABLE, None)
+    if not username and not password:
+        return None
+
+    if not username:
+        raise RuntimeError(
+            "Password variable {} was specified, so username variable {} must be set as well"
+            .format(_PASSWORD_VARIABLE, _USERNAME_VARIABLE)
+        )
+
+    if not password:
+        raise RuntimeError(
+            "Username variable {} was specified, so password variable {} must as well"
+            .format(_USERNAME_VARIABLE, _PASSWORD_VARIABLE)
+        )
+
+    return (username, password)
 
 
 def download(
@@ -340,15 +381,17 @@ def download(
     """ Run the download, show progress """
     download_limit = download_limit or _DEFAULT_DOWNLOAD_LIMIT
     log("TRACE", "Downloading {} to {}".format(images_url, filename))
+    auth = parse_auth(os.environ)
     try:
         resp = requests.get(images_url, stream=True, proxies=_PROXIES,
-                            headers={'User-Agent': 'UHD Images Downloader'})
+                            headers={'User-Agent': 'UHD Images Downloader'},
+                            auth=auth)
     except TypeError:
         # requests library versions pre-4c3b9df6091b65d8c72763222bd5fdefb7231149
         # (Dec.'12) workaround
         resp = requests.get(images_url, prefetch=False, proxies=_PROXIES,
                             headers={'User-Agent': 'UHD Images Downloader'},
-                            allow_redirects=True)
+                            allow_redirects=True, auth=auth)
     if resp.status_code != 200:
         raise RuntimeError("URL does not exist: {}".format(images_url))
     filesize = float(resp.headers.get('content-length', -1))
@@ -542,10 +585,16 @@ def main():
             return False
 
         # Read the inventory into a dictionary we can perform lookups on
-        if os.path.isfile(args.inventory_location):
-            inventory_fn = args.inventory_location
+        default_inventory_fn = os.path.join(images_dir, _INVENTORY_FILENAME)
+        if args.inventory_location:
+            if os.path.isfile(args.inventory_location):
+                inventory_fn = args.inventory_location
+            else:
+                log("WARN", "Invalid inentory file specified: {}, using default: {}"
+                    .format(args.inventory_location, default_inventory_fn))
+                inventory_fn = default_inventory_fn
         else:
-            inventory_fn = os.path.join(images_dir, _INVENTORY_FILENAME)
+            inventory_fn = default_inventory_fn
         inventory = parse_inventory(inventory_fn=inventory_fn)
         log("TRACE", "Inventory: {}\n{}".format(
             os.path.abspath(inventory_fn),

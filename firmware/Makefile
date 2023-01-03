@@ -37,11 +37,13 @@ endif
 
 TARGET ?= e200
 
-all : build	build/uboot-env.txt	build/uImage build/device_tree.dtb build/system_top.bit build/BOOT.bin
+all : build	build/uboot-env.txt	build/uImage build/device_tree.dtb build/system_top.bit build/BOOT.bin \
+	  build/rootfs.cpio.gz
 
 #all the build file temp
 build:
 	mkdir -p $@
+	rm -rf build/BOOT.bin
 
 %: build/%
 	cp $< $@
@@ -80,6 +82,16 @@ linux/arch/arm/boot/dts/zynq-$(TARGET).dtb:
 build/device_tree.dtb: linux/arch/arm/boot/dts/zynq-$(TARGET).dtb | build
 	cp $< $@
 
+## rootfs
+buildroot/output/images/rootfs.cpio.gz:
+	make -C buildroot ARCH=arm zynq_$(TARGET)_defconfig
+	make -C buildroot TOOLCHAIN_EXTERNAL_INSTALL_DIR=$(TOOLCHAIN_PATH) ARCH=arm CROSS_COMPILE=$(CROSS_COMPILE) all
+
+.PHONY: buildroot/output/images/rootfs.cpio.gz
+
+build/rootfs.cpio.gz : buildroot/output/images/rootfs.cpio.gz | build
+	cp $< $@
+
 ## hdf
 build/system_top.hdf: | build
 	bash -c "source $(VIVADO_SETTINGS) && make -C fpga/antsdr_$(TARGET) -j $(NCORES) && cp fpga/antsdr_$(TARGET)/antsdr_$(TARGET)/antsdr_$(TARGET).sdk/system_top.hdf $@"
@@ -112,6 +124,9 @@ sdimg: build/
 	cp build/uImage $(SDIMGDIR)/
 	cp build/uboot-env.txt $(SDIMGDIR)/uEnv.txt
 	cp build/device_tree.dtb $(SDIMGDIR)/devicetree.dtb
+	cp build/rootfs.cpio.gz $(SDIMGDIR)/ramdisk.image.gz
+	mkimage -A arm -T ramdisk -C gzip -d $(SDIMGDIR)/ramdisk.image.gz $(SDIMGDIR)/uramdisk.image.gz
+	rm $(SDIMGDIR)/ramdisk.image.gz
 
 clean-build:
 	rm -rf build

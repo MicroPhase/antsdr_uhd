@@ -14,7 +14,6 @@
 #include <uhd/device.hpp>
 #include <uhd/property_tree.hpp>
 #include <uhd/transport/usb_zero_copy.hpp>
-#include <uhd/types/clock_config.hpp>
 #include <uhd/types/dict.hpp>
 #include <uhd/types/sensors.hpp>
 #include <uhd/types/stream_cmd.hpp>
@@ -31,7 +30,7 @@
 #include <uhdlib/usrp/cores/tx_dsp_core_200.hpp>
 #include <uhdlib/usrp/cores/tx_frontend_core_200.hpp>
 #include <uhdlib/usrp/cores/user_settings_core_200.hpp>
-#include <boost/weak_ptr.hpp>
+#include <memory>
 
 static const double B100_LINK_RATE_BPS     = 256e6 / 5; // pratical link rate (< 480 Mbps)
 static const std::string B100_FW_FILE_NAME = "usrp_b100_fw.ihx";
@@ -85,12 +84,12 @@ class b100_impl : public uhd::device
 public:
     // structors
     b100_impl(const uhd::device_addr_t&);
-    ~b100_impl(void);
+    ~b100_impl(void) override;
 
     // the io interface
-    uhd::rx_streamer::sptr get_rx_stream(const uhd::stream_args_t& args);
-    uhd::tx_streamer::sptr get_tx_stream(const uhd::stream_args_t& args);
-    bool recv_async_msg(uhd::async_metadata_t&, double);
+    uhd::rx_streamer::sptr get_rx_stream(const uhd::stream_args_t& args) override;
+    uhd::tx_streamer::sptr get_tx_stream(const uhd::stream_args_t& args) override;
+    bool recv_async_msg(uhd::async_metadata_t&, double) override;
 
     static uhd::usrp::mboard_eeprom_t get_mb_eeprom(uhd::i2c_iface::sptr);
 
@@ -111,14 +110,14 @@ private:
     // transports
     uhd::transport::zero_copy_if::sptr _ctrl_transport;
     uhd::transport::zero_copy_if::sptr _data_transport;
-    boost::shared_ptr<uhd::usrp::recv_packet_demuxer_3000> _recv_demuxer;
+    std::shared_ptr<uhd::usrp::recv_packet_demuxer_3000> _recv_demuxer;
 
     // dboard stuff
     uhd::usrp::dboard_manager::sptr _dboard_manager;
     bool _ignore_cal_file;
 
-    std::vector<boost::weak_ptr<uhd::rx_streamer>> _rx_streamers;
-    std::vector<boost::weak_ptr<uhd::tx_streamer>> _tx_streamers;
+    std::vector<std::weak_ptr<uhd::rx_streamer>> _rx_streamers;
+    std::vector<std::weak_ptr<uhd::tx_streamer>> _tx_streamers;
 
     void check_fw_compat(void);
     void check_fpga_compat(void);

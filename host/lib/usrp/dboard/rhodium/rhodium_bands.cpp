@@ -5,7 +5,7 @@
 //
 
 #include "rhodium_constants.hpp"
-#include "rhodium_radio_ctrl_impl.hpp"
+#include "rhodium_radio_control.hpp"
 #include <uhd/utils/math.hpp>
 
 using namespace uhd;
@@ -14,7 +14,6 @@ using namespace uhd::rfnoc;
 using namespace uhd::math::fp_compare;
 
 namespace {
-constexpr double FREQ_COMPARE_EPSILON = 1e-5;
 
 /* Note on the RX filter bank:
  *
@@ -30,7 +29,7 @@ constexpr double FREQ_COMPARE_EPSILON = 1e-5;
  * chosen to allow as much of the full bandwidth through unattenuated.
  *
  * Switch selection logic for these bands can be found in
- * rhodium_radio_ctrl_impl::_update_rx_freq_switches()
+ * rhodium_radio_control_impl::_update_rx_freq_switches()
  */
 constexpr double RHODIUM_RX_BAND0_MIN_FREQ = RHODIUM_MIN_FREQ;
 constexpr double RHODIUM_RX_BAND1_MIN_FREQ = 450e6;
@@ -55,7 +54,7 @@ constexpr double RHODIUM_RX_BAND7_MIN_FREQ = 4500e6;
  * bandwidth through unattenuated.
  *
  * Switch selection logic for these bands can be found in
- * rhodium_radio_ctrl_impl::_update_tx_freq_switches()
+ * rhodium_radio_control_impl::_update_tx_freq_switches()
  */
 constexpr double RHODIUM_TX_BAND0_MIN_FREQ = RHODIUM_MIN_FREQ;
 constexpr double RHODIUM_TX_BAND1_MIN_FREQ = 450e6;
@@ -67,7 +66,7 @@ constexpr double RHODIUM_TX_BAND6_MIN_FREQ = 3000e6;
 constexpr double RHODIUM_TX_BAND7_MIN_FREQ = 4100e6;
 } // namespace
 
-rhodium_radio_ctrl_impl::rx_band rhodium_radio_ctrl_impl::_map_freq_to_rx_band(
+rhodium_radio_control_impl::rx_band rhodium_radio_control_impl::_map_freq_to_rx_band(
     const double freq)
 {
     auto freq_compare = fp_compare_epsilon<double>(freq, RHODIUM_FREQ_COMPARE_EPSILON);
@@ -95,7 +94,7 @@ rhodium_radio_ctrl_impl::rx_band rhodium_radio_ctrl_impl::_map_freq_to_rx_band(
     }
 }
 
-rhodium_radio_ctrl_impl::tx_band rhodium_radio_ctrl_impl::_map_freq_to_tx_band(
+rhodium_radio_control_impl::tx_band rhodium_radio_control_impl::_map_freq_to_tx_band(
     const double freq)
 {
     auto freq_compare = fp_compare_epsilon<double>(freq, RHODIUM_FREQ_COMPARE_EPSILON);
@@ -123,12 +122,12 @@ rhodium_radio_ctrl_impl::tx_band rhodium_radio_ctrl_impl::_map_freq_to_tx_band(
     }
 }
 
-bool rhodium_radio_ctrl_impl::_is_rx_lowband(const double freq)
+bool rhodium_radio_control_impl::_is_rx_lowband(const double freq)
 {
     return _map_freq_to_rx_band(freq) == rx_band::RX_BAND_0;
 }
 
-bool rhodium_radio_ctrl_impl::_is_tx_lowband(const double freq)
+bool rhodium_radio_control_impl::_is_tx_lowband(const double freq)
 {
     return _map_freq_to_tx_band(freq) == tx_band::TX_BAND_0;
 }

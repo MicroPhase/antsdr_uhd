@@ -6,12 +6,10 @@
 //
 
 #include <uhd/utils/gain_group.hpp>
-#include <boost/bind.hpp>
-#include <boost/math/special_functions/round.hpp>
 #include <boost/test/unit_test.hpp>
+#include <cmath>
+#include <functional>
 #include <iostream>
-
-#define rint(x) boost::math::iround(x)
 
 using namespace uhd;
 
@@ -34,7 +32,7 @@ public:
     void set_value(double gain)
     {
         double step = get_range().step();
-        _gain       = step * rint(gain / step);
+        _gain       = step * std::round(gain / step);
     }
 
 private:
@@ -57,7 +55,7 @@ public:
     void set_value(double gain)
     {
         double step = get_range().step();
-        _gain       = step * rint(gain / step);
+        _gain       = step * std::round(gain / step);
     }
 
 private:
@@ -75,14 +73,16 @@ static gain_group::sptr get_gain_group(size_t pri1 = 0, size_t pri2 = 0)
     gain_group::sptr gg(gain_group::make());
 
     // load gain group with function sets
-    gain_fcns.get_range = boost::bind(&gain_element1::get_range, &g1);
-    gain_fcns.get_value = boost::bind(&gain_element1::get_value, &g1);
-    gain_fcns.set_value = boost::bind(&gain_element1::set_value, &g1, _1);
+    gain_fcns.get_range = std::bind(&gain_element1::get_range, &g1);
+    gain_fcns.get_value = std::bind(&gain_element1::get_value, &g1);
+    gain_fcns.set_value =
+        std::bind(&gain_element1::set_value, &g1, std::placeholders::_1);
     gg->register_fcns("g1", gain_fcns, pri1);
 
-    gain_fcns.get_range = boost::bind(&gain_element2::get_range, &g2);
-    gain_fcns.get_value = boost::bind(&gain_element2::get_value, &g2);
-    gain_fcns.set_value = boost::bind(&gain_element2::set_value, &g2, _1);
+    gain_fcns.get_range = std::bind(&gain_element2::get_range, &g2);
+    gain_fcns.get_value = std::bind(&gain_element2::get_value, &g2);
+    gain_fcns.set_value =
+        std::bind(&gain_element2::set_value, &g2, std::placeholders::_1);
     gg->register_fcns("g2", gain_fcns, pri2);
 
     return gg;

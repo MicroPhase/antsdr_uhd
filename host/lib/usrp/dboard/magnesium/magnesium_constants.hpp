@@ -69,14 +69,47 @@ static constexpr char MAGNESIUM_GAIN2[] = "dsa";
 //! Amplifier gain
 static constexpr char MAGNESIUM_AMP[] = "amp";
 
+static constexpr char MAGNESIUM_FE_NAME[] = "Magnesium";
+
+static constexpr char MAGNESIUM_DEFAULT_RX_ANTENNA[] = "RX2";
+static constexpr char MAGNESIUM_DEFAULT_TX_ANTENNA[] = "TX/RX";
+
+static constexpr char MAGNESIUM_FPGPIO_BANK[] = "FP0";
+
 // Note: MAGNESIUM_NUM_CHANS is independent of the number of chans per
 // RFNoC block. TODO: When we go to one radio per dboard, this comment can
 // be deleted.
 static constexpr size_t MAGNESIUM_NUM_CHANS  = 2;
-static constexpr double MAGNESIUM_RX_IF_FREQ = 2.44e9;
+static constexpr double MAGNESIUM_RX_IF_FREQ = 2.4418e9;
 static constexpr double MAGNESIUM_TX_IF_FREQ = 1.95e9;
 
 //! Max time we allow for a call to set_freq() to take
 static constexpr size_t MAGNESIUM_TUNE_TIMEOUT = 15000; // milliseconds
+
+//! Magnesium gain profile options
+static const std::vector<std::string> MAGNESIUM_GP_OPTIONS = {"manual",
+    "default",
+    "default_rf_filter_bypass_always_on",
+    "default_rf_filter_bypass_always_off"};
+
+namespace n310_regs {
+
+static constexpr uint32_t PERIPH_BASE = 0x80000;
+// Space between registers
+static constexpr uint32_t PERIPH_REG_OFFSET = 8;
+// Space between channels on the same dboard
+static constexpr uint32_t CHAN_REG_OFFSET = 0x100 * PERIPH_REG_OFFSET;
+
+// db_control registers
+static constexpr uint32_t SR_MISC_OUTS = PERIPH_BASE + 160 * PERIPH_REG_OFFSET;
+static constexpr uint32_t SR_SPI       = PERIPH_BASE + 168 * PERIPH_REG_OFFSET;
+static constexpr uint32_t SR_FP_GPIO   = PERIPH_BASE + 184 * PERIPH_REG_OFFSET;
+static constexpr uint32_t SR_DB_GPIO   = PERIPH_BASE + 192 * PERIPH_REG_OFFSET;
+
+static constexpr uint32_t RB_MISC_IO = PERIPH_BASE + 16 * PERIPH_REG_OFFSET;
+static constexpr uint32_t RB_SPI     = PERIPH_BASE + 17 * PERIPH_REG_OFFSET;
+static constexpr uint32_t RB_DB_GPIO = PERIPH_BASE + 19 * PERIPH_REG_OFFSET;
+static constexpr uint32_t RB_FP_GPIO = PERIPH_BASE + 20 * PERIPH_REG_OFFSET;
+} // namespace n310_regs
 
 #endif /* INCLUDED_LIBUHD_MAGNESIUM_CONSTANTS_HPP */

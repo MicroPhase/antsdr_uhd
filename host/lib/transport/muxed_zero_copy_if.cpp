@@ -1,7 +1,6 @@
 //
 // Copyright 2016 Ettus Research LLC
 // Copyright 2018 Ettus Research, a National Instruments Company
-// Copyright 2019 Ettus Research, a National Instruments Brand
 //
 // SPDX-License-Identifier: GPL-3.0-or-later
 //
@@ -10,40 +9,37 @@
 #include <uhd/transport/bounded_buffer.hpp>
 #include <uhd/transport/muxed_zero_copy_if.hpp>
 #include <uhd/utils/safe_call.hpp>
-#include <uhd/utils/thread.hpp>
-#include <boost/enable_shared_from_this.hpp>
-#include <boost/make_shared.hpp>
 #include <boost/thread.hpp>
 #include <boost/thread/locks.hpp>
+#include <functional>
 #include <map>
+#include <memory>
 
 using namespace uhd;
 using namespace uhd::transport;
 
 class muxed_zero_copy_if_impl
     : public muxed_zero_copy_if,
-      public boost::enable_shared_from_this<muxed_zero_copy_if_impl>
+      public std::enable_shared_from_this<muxed_zero_copy_if_impl>
 {
 public:
-    typedef boost::shared_ptr<muxed_zero_copy_if_impl> sptr;
+    typedef std::shared_ptr<muxed_zero_copy_if_impl> sptr;
 
     muxed_zero_copy_if_impl(zero_copy_if::sptr base_xport,
         stream_classifier_fn classify_fn,
-        size_t max_streams,
-        const double recv_timeout_s)
+        size_t max_streams)
         : _base_xport(base_xport)
         , _classify(classify_fn)
         , _max_num_streams(max_streams)
         , _num_dropped_frames(0)
-        , _recv_timeout(recv_timeout_s)
     {
         // Create the receive thread to poll the underlying transport
         // and classify packets into queues
-        _recv_thread = boost::thread([this]() { this->_update_queues(); });
-        set_thread_name(&_recv_thread, "muxed_0copy_if");
+        _recv_thread =
+            boost::thread(std::bind(&muxed_zero_copy_if_impl::_update_queues, this));
     }
 
-    virtual ~muxed_zero_copy_if_impl()
+    ~muxed_zero_copy_if_impl() override
     {
         UHD_SAFE_CALL(
             // Interrupt buffer updater loop
@@ -62,7 +58,7 @@ public:
             _streams.clear(););
     }
 
-    virtual zero_copy_if::sptr make_stream(const uint32_t stream_num)
+    zero_copy_if::sptr make_stream(const uint32_t stream_num) override
     {
         boost::lock_guard<boost::mutex> lock(_mutex);
         if (_streams.size() >= _max_num_streams) {
@@ -71,21 +67,20 @@ public:
         }
         // Only allocate a portion of the base transport's frames to each stream
         // to prevent all streams from attempting to use all the frames.
-        stream_impl::sptr stream =
-            boost::make_shared<stream_impl>(this->shared_from_this(),
-                stream_num,
-                _base_xport->get_num_send_frames(),
-                _base_xport->get_num_recv_frames());
-        _streams[stream_num] = stream;
+        stream_impl::sptr stream = std::make_shared<stream_impl>(this->shared_from_this(),
+            stream_num,
+            _base_xport->get_num_send_frames(),
+            _base_xport->get_num_recv_frames());
+        _streams[stream_num]     = stream;
         return stream;
     }
 
-    virtual size_t get_num_dropped_frames() const
+    size_t get_num_dropped_frames() const override
     {
         return _num_dropped_frames;
     }
 
-    void remove_stream(const uint32_t stream_num)
+    void remove_stream(const uint32_t stream_num) override
     {
         boost::lock_guard<boost::mutex> lock(_mutex);
         _streams.erase(stream_num);
@@ -101,12 +96,12 @@ private:
     public:
         stream_mrb(size_t size) : _buff(new char[size]) {}
 
-        ~stream_mrb()
+        ~stream_mrb() override
         {
             delete[] _buff;
         }
 
-        void release() {}
+        void release() override {}
 
         UHD_INLINE sptr get_new(char* buff, size_t len)
         {
@@ -121,8 +116,8 @@ private:
     class stream_impl : public zero_copy_if
     {
     public:
-        typedef boost::shared_ptr<stream_impl> sptr;
-        typedef boost::weak_ptr<stream_impl> wptr;
+        typedef std::shared_ptr<stream_impl> sptr;
+        typedef std::weak_ptr<stream_impl> wptr;
 
         stream_impl(muxed_zero_copy_if_impl::sptr muxed_xport,
             const uint32_t stream_num,
@@ -139,11 +134,11 @@ private:
             , _buffer_index(0)
         {
             for (size_t i = 0; i < num_recv_frames; i++) {
-                _buffers[i] = boost::make_shared<stream_mrb>(_recv_frame_size);
+                _buffers[i] = std::make_shared<stream_mrb>(_recv_frame_size);
             }
         }
 
-        ~stream_impl(void)
+        ~stream_impl(void) override
         {
             // First remove the stream from muxed transport
             // so no more frames are pushed in
@@ -155,17 +150,17 @@ private:
             }
         }
 
-        size_t get_num_recv_frames(void) const
+        size_t get_num_recv_frames(void) const override
         {
             return _num_recv_frames;
         }
 
-        size_t get_recv_frame_size(void) const
+        size_t get_recv_frame_size(void) const override
         {
             return _recv_frame_size;
         }
 
-        managed_recv_buffer::sptr get_recv_buff(double timeout)
+        managed_recv_buffer::sptr get_recv_buff(double timeout) override
         {
             managed_recv_buffer::sptr buff;
             if (_buff_queue.pop_with_timed_wait(buff, timeout)) {
@@ -182,17 +177,17 @@ private:
             _buffer_index %= _buffers.size();
         }
 
-        size_t get_num_send_frames(void) const
+        size_t get_num_send_frames(void) const override
         {
             return _num_send_frames;
         }
 
-        size_t get_send_frame_size(void) const
+        size_t get_send_frame_size(void) const override
         {
             return _send_frame_size;
         }
 
-        managed_send_buffer::sptr get_send_buff(double timeout)
+        managed_send_buffer::sptr get_send_buff(double timeout) override
         {
             return _muxed_xport->base_xport()->get_send_buff(timeout);
         }
@@ -205,7 +200,7 @@ private:
         const size_t _num_recv_frames;
         const size_t _recv_frame_size;
         bounded_buffer<managed_recv_buffer::sptr> _buff_queue;
-        std::vector<boost::shared_ptr<stream_mrb>> _buffers;
+        std::vector<std::shared_ptr<stream_mrb>> _buffers;
         size_t _buffer_index;
     };
 
@@ -252,7 +247,7 @@ private:
 
     bool _process_next_buffer()
     {
-        managed_recv_buffer::sptr buff = _base_xport->get_recv_buff(_recv_timeout);
+        managed_recv_buffer::sptr buff = _base_xport->get_recv_buff(0.0);
         if (buff) {
             stream_impl::sptr stream;
             try {
@@ -295,17 +290,14 @@ private:
     stream_map_t _streams;
     const size_t _max_num_streams;
     size_t _num_dropped_frames;
-    //! The timeout value for the receiver thread in seconds
-    const double _recv_timeout;
     boost::thread _recv_thread;
     boost::mutex _mutex;
 };
 
 muxed_zero_copy_if::sptr muxed_zero_copy_if::make(zero_copy_if::sptr base_xport,
     muxed_zero_copy_if::stream_classifier_fn classify_fn,
-    size_t max_streams,
-    const double recv_timeout_s)
+    size_t max_streams)
 {
-    return boost::make_shared<muxed_zero_copy_if_impl>(
-        base_xport, classify_fn, max_streams, recv_timeout_s);
+    return std::make_shared<muxed_zero_copy_if_impl>(
+        base_xport, classify_fn, max_streams);
 }

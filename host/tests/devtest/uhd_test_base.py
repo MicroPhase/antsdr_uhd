@@ -1,7 +1,8 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 #
 # Copyright 2015-2016 Ettus Research LLC
 # Copyright 2018 Ettus Research, a National Instruments Company
+# Copyright 2019 Ettus Research, a National Instruments Brand
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 #
@@ -9,16 +10,20 @@
 Devtest: Base module. Provides classes for running devtest tests.
 """
 
-from __future__ import print_function
 import os
 import sys
 import unittest
 import re
 import time
 import logging
+import importlib
 from subprocess import Popen, PIPE
-import yaml
-from six import iteritems
+# For what we're doing here, ruamel.yaml and yaml are compatible, and we'll use
+# whatever we can find
+try:
+    from ruamel import yaml
+except:
+    import yaml
 from usrp_probe import get_usrp_list
 
 #--------------------------------------------------------------------------
@@ -51,7 +56,7 @@ def filter_stderr(stderr, run_results=None):
 #--------------------------------------------------------------------------
 # Application
 #--------------------------------------------------------------------------
-class shell_application(object):
+class shell_application:
     """
     Wrapper for applications that are in $PATH.
     Note: The CMake infrastructure makes sure all examples and utils are in $PATH.
@@ -101,7 +106,6 @@ class uhd_test_case(unittest.TestCase):
         """
         Override this to add own setup code per test.
         """
-        pass
 
     def setUp(self):
         self.name = self.__class__.__name__
@@ -109,7 +113,8 @@ class uhd_test_case(unittest.TestCase):
         self.results = {}
         self.results_file = os.getenv('_UHD_TEST_RESULTSFILE', "")
         if self.results_file and os.path.isfile(self.results_file):
-            self.results = yaml.safe_load(open(self.results_file).read()) or {}
+            with open(self.results_file) as res_file:
+                self.results = yaml.safe_load(res_file.read()) or {}
         self.args_str = os.getenv('_UHD_TEST_ARGS_STR', "")
         self.usrp_info = get_usrp_list(self.args_str)[0]
         if self.usrp_info['serial'] not in self.results:
@@ -141,13 +146,12 @@ class uhd_test_case(unittest.TestCase):
 
     def tear_down(self):
         """Nothing to do."""
-        pass
 
     def tearDown(self):
         self.tear_down()
         if self.results_file:
-            open(self.results_file, 'w').write(
-                yaml.dump(self.results, default_flow_style=False))
+            with open(self.results_file, 'w') as res_file:
+                res_file.write(yaml.dump(self.results, default_flow_style=False))
         time.sleep(15)
 
     def report_result(self, testname, key, value):
@@ -160,7 +164,7 @@ class uhd_test_case(unittest.TestCase):
 
     def create_addr_args_str(self, argname="args"):
         """ Returns an args string, usually '--args "type=XXX,serial=YYY" """
-        if len(self.args_str) == 0:
+        if not self.args_str:
             return ''
         return '--{}={}'.format(argname, self.args_str)
 
@@ -173,7 +177,6 @@ class uhd_example_test_case(uhd_test_case):
         """
         Override this to add specific setup code.
         """
-        pass
 
     def set_up(self):
         """Called by the unit testing framework on tests. """
@@ -209,6 +212,9 @@ class uhd_example_test_case(uhd_test_case):
 
 
     def report_example_results(self, test_name, run_results):
+        """
+        Helper function for report_result() when running examples.
+        """
         for key in sorted(run_results):
             self.log.info('%s = %s', str(key), str(run_results[key]))
             self.report_result(
@@ -233,18 +239,20 @@ class uhd_example_test_case(uhd_test_case):
         Hook for test runner. Needs to be a class method that starts with 'test'.
         Calls run_test().
         """
-        for test_name, test_args in iteritems(self.test_params):
+        test_params = getattr(self, 'test_params', {})
+        for test_name, test_args in test_params.items():
             time.sleep(15) # Wait for X300 devices to reclaim them
             if not 'products' in test_args \
                     or (self.usrp_info['product'] in test_args.get('products', [])):
                 run_results = self.run_test(test_name, test_args)
                 passed = bool(run_results)
+                errors = ''
                 if isinstance(run_results, dict):
                     passed = run_results['passed']
-                errors = run_results.pop("errors", None)
-                if not passed:
-                    print("Error log:", file=sys.stderr)
-                    print(errors)
+                    errors = run_results.pop("errors", None)
+                    if not passed:
+                        print("Error log:", file=sys.stderr)
+                        print(errors)
                 self.assertTrue(
                     passed,
                     msg="Errors occurred during test `{t}'. "
@@ -255,3 +263,57 @@ class uhd_example_test_case(uhd_test_case):
                         )
                 )
 
+class UHDPythonTestCase(uhd_test_case):
+    """
+    Helper class for Python test cases. These require the uhd module, but that's
+    not always available. We thus test for its existence.
+    """
+
+    def run_test(self, test_name, test_args):
+        """
+        Override this to run the actual example.
+
+        Needs to return either a boolean or a dict with key 'passed' to determine
+        pass/fail.
+        """
+        raise NotImplementedError
+
+    def test_all(self):
+        """
+        Hook for test runner. Needs to be a class method that starts with 'test'.
+        Calls run_test().
+        """
+        try:
+            self.uhd = importlib.import_module('uhd')
+        except ImportError:
+            print("UHD module not found -- checking for Python API")
+            config_info_app = shell_application('uhd_config_info')
+            config_info_app.run(['--enabled-components'])
+            if "Python API" in config_info_app.stdout:
+                raise RuntimeError("Python API enabled, but cannot load uhd module!")
+            self.log.info("Skipping test, Python API not installed.")
+            self.report_result("python_api_tester", 'status', 'Skipped')
+            return
+        # Now: The actual test
+        test_params = getattr(self, 'test_params', {'default': {},})
+        for test_name, test_args in test_params.items():
+            time.sleep(15) # Wait for X300 devices to reclaim them
+            if 'products' not in test_args \
+                    or (self.usrp_info['product'] in test_args.get('products', [])):
+                run_results = self.run_test(test_name, test_args)
+                passed = bool(run_results)
+                if isinstance(run_results, dict):
+                    passed = run_results['passed']
+                    errors = run_results.pop("errors", None)
+                    if not passed:
+                        print("Error log:", file=sys.stderr)
+                        print(errors)
+                self.assertTrue(
+                    passed,
+                    msg="Errors occurred during test `{t}'. "
+                        "Check log file for details.\n"
+                        "Run results:\n{r}".format(
+                            t=test_name,
+                            r=yaml.dump(run_results, default_flow_style=False)
+                        )
+                )

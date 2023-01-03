@@ -5,8 +5,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 //
 
-#ifndef INCLUDED_UHD_STREAM_HPP
-#define INCLUDED_UHD_STREAM_HPP
+#pragma once
 
 #include <uhd/config.hpp>
 #include <uhd/types/device_addr.hpp>
@@ -14,8 +13,8 @@
 #include <uhd/types/ref_vector.hpp>
 #include <uhd/types/stream_cmd.hpp>
 #include <uhd/utils/noncopyable.hpp>
-#include <boost/shared_ptr.hpp>
 #include <boost/utility.hpp>
+#include <memory>
 #include <string>
 #include <vector>
 
@@ -170,7 +169,7 @@ struct UHD_API stream_args_t
 class UHD_API rx_streamer : uhd::noncopyable
 {
 public:
-    typedef boost::shared_ptr<rx_streamer> sptr;
+    typedef std::shared_ptr<rx_streamer> sptr;
 
     virtual ~rx_streamer(void);
 
@@ -248,7 +247,7 @@ public:
 class UHD_API tx_streamer : uhd::noncopyable
 {
 public:
-    typedef boost::shared_ptr<tx_streamer> sptr;
+    typedef std::shared_ptr<tx_streamer> sptr;
 
     virtual ~tx_streamer(void);
 
@@ -305,5 +304,3 @@ public:
 };
 
 } // namespace uhd
-
-#endif /* INCLUDED_UHD_STREAM_HPP */

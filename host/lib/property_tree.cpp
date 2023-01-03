@@ -8,9 +8,9 @@
 
 #include <uhd/property_tree.hpp>
 #include <uhd/types/dict.hpp>
-#include <boost/make_shared.hpp>
 #include <boost/thread/mutex.hpp>
 #include <iostream>
+#include <memory>
 
 using namespace uhd;
 
@@ -73,10 +73,10 @@ class property_tree_impl : public uhd::property_tree
 public:
     property_tree_impl(const fs_path& root = fs_path()) : _root(root)
     {
-        _guts = boost::make_shared<tree_guts_type>();
+        _guts = std::make_shared<tree_guts_type>();
     }
 
-    sptr subtree(const fs_path& path_) const
+    sptr subtree(const fs_path& path_) const override
     {
         const fs_path path = _root / path_;
         boost::mutex::scoped_lock lock(_guts->mutex);
@@ -86,7 +86,7 @@ public:
         return sptr(subtree);
     }
 
-    void remove(const fs_path& path_)
+    void remove(const fs_path& path_) override
     {
         const fs_path path = _root / path_;
         boost::mutex::scoped_lock lock(_guts->mutex);
@@ -104,7 +104,7 @@ public:
         parent->pop(fs_path(path.leaf()));
     }
 
-    bool exists(const fs_path& path_) const
+    bool exists(const fs_path& path_) const override
     {
         const fs_path path = _root / path_;
         boost::mutex::scoped_lock lock(_guts->mutex);
@@ -118,7 +118,7 @@ public:
         return true;
     }
 
-    std::vector<std::string> list(const fs_path& path_) const
+    std::vector<std::string> list(const fs_path& path_) const override
     {
         const fs_path path = _root / path_;
         boost::mutex::scoped_lock lock(_guts->mutex);
@@ -133,7 +133,7 @@ public:
         return node->keys();
     }
 
-    boost::shared_ptr<void> _pop(const fs_path& path_)
+    std::shared_ptr<void> _pop(const fs_path& path_) override
     {
         const fs_path path = _root / path_;
         boost::mutex::scoped_lock lock(_guts->mutex);
@@ -156,7 +156,7 @@ public:
         return prop;
     }
 
-    void _create(const fs_path& path_, const boost::shared_ptr<void>& prop)
+    void _create(const fs_path& path_, const std::shared_ptr<void>& prop) override
     {
         const fs_path path = _root / path_;
         boost::mutex::scoped_lock lock(_guts->mutex);
@@ -170,10 +170,10 @@ public:
         if (node->prop.get() != NULL)
             throw uhd::runtime_error(
                 "Cannot create! Property already exists at: " + path);
-        node->prop = prop;
+        node->prop           = prop;
     }
 
-    boost::shared_ptr<void>& _access(const fs_path& path_) const
+    std::shared_ptr<void>& _access(const fs_path& path_) const override
     {
         const fs_path path = _root / path_;
         boost::mutex::scoped_lock lock(_guts->mutex);
@@ -198,7 +198,7 @@ private:
     // basic structural node element
     struct node_type : uhd::dict<std::string, node_type>
     {
-        boost::shared_ptr<void> prop;
+        std::shared_ptr<void> prop;
     };
 
     // tree guts which may be referenced in a subtree
@@ -209,7 +209,7 @@ private:
     };
 
     // members, the tree and root prefix
-    boost::shared_ptr<tree_guts_type> _guts;
+    std::shared_ptr<tree_guts_type> _guts;
     const fs_path _root;
 };
 

@@ -5,9 +5,9 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 //
 
-#ifndef INCLUDED_UHD_UTILS_ALGORITHM_HPP
-#define INCLUDED_UHD_UTILS_ALGORITHM_HPP
+#pragma once
 
+#include <uhd/config.hpp>
 #include <stdint.h>
 #include <boost/range/begin.hpp>
 #include <boost/range/end.hpp>
@@ -90,5 +90,3 @@ UHD_INLINE T clip(const T& val, const T& bound1, const T& bound2)
 }
 
 } // namespace uhd
-
-#endif /* INCLUDED_UHD_UTILS_ALGORITHM_HPP */

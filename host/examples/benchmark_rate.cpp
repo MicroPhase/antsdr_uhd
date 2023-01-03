@@ -10,7 +10,6 @@
 #include <uhd/utils/safe_main.hpp>
 #include <uhd/utils/thread.hpp>
 #include <boost/algorithm/string.hpp>
-#include <boost/date_time/posix_time/posix_time.hpp>
 #include <boost/format.hpp>
 #include <boost/program_options.hpp>
 #include <boost/thread/thread.hpp>
@@ -22,10 +21,13 @@
 #include <thread>
 
 namespace po = boost::program_options;
+using namespace std::chrono_literals;
 
 namespace {
-constexpr int64_t CLOCK_TIMEOUT = 1000; // 1000mS timeout for external clock locking
+constexpr auto CLOCK_TIMEOUT = 1000ms; // 1000mS timeout for external clock locking
 } // namespace
+
+using start_time_type = std::chrono::time_point<std::chrono::steady_clock>;
 
 /***********************************************************************
  * Test result variables
@@ -41,15 +43,23 @@ unsigned long long num_late_commands = 0;
 unsigned long long num_timeouts_rx   = 0;
 unsigned long long num_timeouts_tx   = 0;
 
-inline boost::posix_time::time_duration time_delta(
-    const boost::posix_time::ptime& ref_time)
+inline auto time_delta(const start_time_type& ref_time)
 {
-    return boost::posix_time::microsec_clock::local_time() - ref_time;
+    return std::chrono::steady_clock::now() - ref_time;
 }
 
-inline std::string time_delta_str(const boost::posix_time::ptime& ref_time)
+inline std::string time_delta_str(const start_time_type& ref_time)
 {
-    return boost::posix_time::to_simple_string(time_delta(ref_time));
+    const auto delta   = time_delta(ref_time);
+    const auto hours   = std::chrono::duration_cast<std::chrono::hours>(delta);
+    const auto minutes = std::chrono::duration_cast<std::chrono::minutes>(delta - hours);
+    const auto seconds =
+        std::chrono::duration_cast<std::chrono::seconds>(delta - hours - minutes);
+    const auto nanoseconds = std::chrono::duration_cast<std::chrono::nanoseconds>(
+        delta - hours - minutes - seconds);
+
+    return str(boost::format("%02d:%02d:%02d.%06d") % hours.count() % minutes.count()
+               % seconds.count() % nanoseconds.count());
 }
 
 #define NOW() (time_delta_str(start_time))
@@ -61,7 +71,7 @@ void benchmark_rx_rate(uhd::usrp::multi_usrp::sptr usrp,
     const std::string& rx_cpu,
     uhd::rx_streamer::sptr rx_stream,
     bool random_nsamps,
-    const boost::posix_time::ptime& start_time,
+    const start_time_type& start_time,
     std::atomic<bool>& burst_timer_elapsed,
     bool elevate_priority,
     double rx_delay)
@@ -90,8 +100,13 @@ void benchmark_rx_rate(uhd::usrp::multi_usrp::sptr usrp,
     const double rate = usrp->get_rx_rate();
 
     uhd::stream_cmd_t cmd(uhd::stream_cmd_t::STREAM_MODE_START_CONTINUOUS);
+    cmd.num_samps = max_samps_per_packet;
+    if (random_nsamps) {
+        cmd.stream_mode = uhd::stream_cmd_t::STREAM_MODE_NUM_SAMPS_AND_DONE;
+        cmd.num_samps = (rand() % max_samps_per_packet) + 1;
+    }
     cmd.time_spec  = usrp->get_time_now() + uhd::time_spec_t(rx_delay);
-    cmd.stream_now = false;
+    cmd.stream_now = (buffs.size() == 1);
     rx_stream->issue_stream_cmd(cmd);
 
     const float burst_pkt_time =
@@ -105,11 +120,12 @@ void benchmark_rx_rate(uhd::usrp::multi_usrp::sptr usrp,
             stop_called = true;
         }
         if (random_nsamps) {
-            cmd.num_samps = rand() % max_samps_per_packet;
+            cmd.time_spec  = usrp->get_time_now() + uhd::time_spec_t(rx_delay);
+            cmd.num_samps = (rand() % max_samps_per_packet) + 1;
             rx_stream->issue_stream_cmd(cmd);
         }
         try {
-            num_rx_samps += rx_stream->recv(buffs, max_samps_per_packet, md, recv_timeout)
+            num_rx_samps += rx_stream->recv(buffs, cmd.num_samps, md, recv_timeout)
                             * rx_stream->get_num_channels();
             recv_timeout = burst_pkt_time;
         } catch (uhd::io_error& e) {
@@ -192,7 +208,8 @@ void benchmark_tx_rate(uhd::usrp::multi_usrp::sptr usrp,
     const std::string& tx_cpu,
     uhd::tx_streamer::sptr tx_stream,
     std::atomic<bool>& burst_timer_elapsed,
-    const boost::posix_time::ptime& start_time,
+    const start_time_type& start_time,
+    const size_t spp,
     bool elevate_priority,
     double tx_delay,
     bool random_nsamps = false)
@@ -217,30 +234,30 @@ void benchmark_tx_rate(uhd::usrp::multi_usrp::sptr usrp,
         buffs.push_back(&buff.front()); // same buffer for each channel
     // Create the metadata, and populate the time spec at the latest possible moment
     uhd::tx_metadata_t md;
-    md.has_time_spec = true;
+    md.has_time_spec = (buffs.size() != 1);
     md.time_spec     = usrp->get_time_now() + uhd::time_spec_t(tx_delay);
+
+    const float timeout = 1.0;
 
     if (random_nsamps) {
         std::srand((unsigned int)time(NULL));
         while (not burst_timer_elapsed) {
-            size_t total_num_samps = rand() % max_samps_per_packet;
+            size_t total_num_samps = (rand() % max_samps_per_packet) + 1;
             size_t num_acc_samps   = 0;
-            const float timeout    = 1;
 
-            usrp->set_time_now(uhd::time_spec_t(0.0));
             while (num_acc_samps < total_num_samps) {
                 // send a single packet
-                num_tx_samps += tx_stream->send(buffs, max_samps_per_packet, md, timeout)
+                num_tx_samps += tx_stream->send(buffs, spp, md, timeout)
                                 * tx_stream->get_num_channels();
                 num_acc_samps += std::min(
-                    total_num_samps - num_acc_samps, tx_stream->get_max_num_samps());
+                    total_num_samps - num_acc_samps, max_samps_per_packet);
             }
+            md.has_time_spec = false;
         }
     } else {
         while (not burst_timer_elapsed) {
             const size_t num_tx_samps_sent_now =
-                tx_stream->send(buffs, max_samps_per_packet, md)
-                * tx_stream->get_num_channels();
+                tx_stream->send(buffs, spp, md, timeout) * tx_stream->get_num_channels();
             num_tx_samps += num_tx_samps_sent_now;
             if (num_tx_samps_sent_now == 0) {
                 num_timeouts_tx++;
@@ -259,7 +276,7 @@ void benchmark_tx_rate(uhd::usrp::multi_usrp::sptr usrp,
 }
 
 void benchmark_tx_rate_async_helper(uhd::tx_streamer::sptr tx_stream,
-    const boost::posix_time::ptime& start_time,
+    const start_time_type& start_time,
     std::atomic<bool>& burst_timer_elapsed)
 {
     // setup variables and allocate buffer
@@ -309,15 +326,17 @@ int UHD_SAFE_MAIN(int argc, char* argv[])
     // variables to be set by po
     std::string args;
     std::string rx_subdev, tx_subdev;
+    std::string rx_stream_args, tx_stream_args;
     double duration;
     double rx_rate, tx_rate;
     std::string rx_otw, tx_otw;
     std::string rx_cpu, tx_cpu;
-    std::string mode, ref, pps;
+    std::string ref, pps;
     std::string channel_list, rx_channel_list, tx_channel_list;
     bool random_nsamps = false;
     std::atomic<bool> burst_timer_elapsed(false);
     size_t overrun_threshold, underrun_threshold, drop_threshold, seq_threshold;
+    size_t rx_spp, tx_spp;
     double tx_delay, rx_delay;
     std::string priority;
     bool elevate_priority = false;
@@ -331,15 +350,18 @@ int UHD_SAFE_MAIN(int argc, char* argv[])
         ("duration", po::value<double>(&duration)->default_value(10.0), "duration for the test in seconds")
         ("rx_subdev", po::value<std::string>(&rx_subdev), "specify the device subdev for RX")
         ("tx_subdev", po::value<std::string>(&tx_subdev), "specify the device subdev for TX")
+        ("rx_stream_args", po::value<std::string>(&rx_stream_args)->default_value(""), "stream args for RX streamer")
+        ("tx_stream_args", po::value<std::string>(&tx_stream_args)->default_value(""), "stream args for TX streamer")
         ("rx_rate", po::value<double>(&rx_rate), "specify to perform a RX rate test (sps)")
         ("tx_rate", po::value<double>(&tx_rate), "specify to perform a TX rate test (sps)")
+        ("rx_spp", po::value<size_t>(&rx_spp), "samples/packet value for RX")
+        ("tx_spp", po::value<size_t>(&tx_spp), "samples/packet value for TX")
         ("rx_otw", po::value<std::string>(&rx_otw)->default_value("sc16"), "specify the over-the-wire sample mode for RX")
         ("tx_otw", po::value<std::string>(&tx_otw)->default_value("sc16"), "specify the over-the-wire sample mode for TX")
         ("rx_cpu", po::value<std::string>(&rx_cpu)->default_value("fc32"), "specify the host/cpu sample mode for RX")
         ("tx_cpu", po::value<std::string>(&tx_cpu)->default_value("fc32"), "specify the host/cpu sample mode for TX")
         ("ref", po::value<std::string>(&ref), "clock reference (internal, external, mimo, gpsdo)")
         ("pps", po::value<std::string>(&pps), "PPS source (internal, external, mimo, gpsdo)")
-        ("mode", po::value<std::string>(&mode), "DEPRECATED - use \"ref\" and \"pps\" instead (none, mimo)")
         ("random", "Run with random values of samples in send() and recv() to stress-test the I/O.")
         ("channels", po::value<std::string>(&channel_list)->default_value("0"), "which channel(s) to use (specify \"0\", \"1\", \"0,1\", etc)")
         ("rx_channels", po::value<std::string>(&rx_channel_list), "which RX channel(s) to use (specify \"0\", \"1\", \"0,1\", etc)")
@@ -355,7 +377,7 @@ int UHD_SAFE_MAIN(int argc, char* argv[])
         // NOTE: TX delay defaults to 0.25 seconds to allow the buffer on the device to fill completely
         ("tx_delay", po::value<double>(&tx_delay)->default_value(0.25), "delay before starting TX in seconds")
         ("rx_delay", po::value<double>(&rx_delay)->default_value(0.05), "delay before starting RX in seconds")
-        ("priority", po::value<std::string>(&priority)->default_value("high"), "thread priority (high, normal)")
+        ("priority", po::value<std::string>(&priority)->default_value("normal"), "thread priority (normal, high)")
     ;
     // clang-format on
     po::variables_map vm;
@@ -384,20 +406,6 @@ int UHD_SAFE_MAIN(int argc, char* argv[])
         random_nsamps = true;
     }
 
-    if (vm.count("mode")) {
-        if (vm.count("pps") or vm.count("ref")) {
-            std::cout << "ERROR: The \"mode\" parameter cannot be used with the \"ref\" "
-                         "and \"pps\" parameters.\n"
-                      << std::endl;
-            return -1;
-        } else if (mode == "mimo") {
-            ref = pps = "mimo";
-            std::cout << "The use of the \"mode\" parameter is deprecated.  Please use "
-                         "\"ref\" and \"pps\" parameters instead\n"
-                      << std::endl;
-        }
-    }
-
     // create a usrp device
     std::cout << std::endl;
     uhd::device_addrs_t device_addrs = uhd::device::find(args, uhd::device::USRP);
@@ -407,7 +415,7 @@ int UHD_SAFE_MAIN(int argc, char* argv[])
                      "features.\n"
                   << std::endl;
     }
-    boost::posix_time::ptime start_time(boost::posix_time::microsec_clock::local_time());
+    start_time_type start_time(std::chrono::steady_clock::now());
     std::cout << boost::format("[%s] Creating the usrp device with: %s...") % NOW() % args
               << std::endl;
     uhd::usrp::multi_usrp::sptr usrp = uhd::usrp::multi_usrp::make(args);
@@ -441,15 +449,14 @@ int UHD_SAFE_MAIN(int argc, char* argv[])
         if (ref != "internal") {
             std::cout << "Now confirming lock on clock signals..." << std::endl;
             bool is_locked = false;
-            auto end_time =
-                boost::get_system_time() + boost::posix_time::milliseconds(CLOCK_TIMEOUT);
+            auto end_time  = std::chrono::steady_clock::now() + CLOCK_TIMEOUT;
             for (int i = 0; i < num_mboards; i++) {
                 if (ref == "mimo" and i == 0)
                     continue;
                 while ((is_locked = usrp->get_mboard_sensor("ref_locked", i).to_bool())
                            == false
-                       and boost::get_system_time() < end_time) {
-                    std::this_thread::sleep_for(std::chrono::milliseconds(1));
+                       and std::chrono::steady_clock::now() < end_time) {
+                    std::this_thread::sleep_for(1ms);
                 }
                 if (is_locked == false) {
                     std::cerr << "ERROR: Unable to confirm clock signal locked on board:"
@@ -529,9 +536,14 @@ int UHD_SAFE_MAIN(int argc, char* argv[])
     // spawn the receive test thread
     if (vm.count("rx_rate")) {
         usrp->set_rx_rate(rx_rate);
+        if (vm.count("rx_spp")) {
+            std::cout << boost::format("Setting RX spp to %u\n") % rx_spp;
+            usrp->set_rx_spp(rx_spp);
+        }
         // create a receive streamer
         uhd::stream_args_t stream_args(rx_cpu, rx_otw);
         stream_args.channels             = rx_channel_nums;
+        stream_args.args                 = uhd::device_addr_t(rx_stream_args);
         uhd::rx_streamer::sptr rx_stream = usrp->get_rx_stream(stream_args);
         auto rx_thread = thread_group.create_thread([=, &burst_timer_elapsed]() {
             benchmark_rx_rate(usrp,
@@ -552,13 +564,21 @@ int UHD_SAFE_MAIN(int argc, char* argv[])
         // create a transmit streamer
         uhd::stream_args_t stream_args(tx_cpu, tx_otw);
         stream_args.channels             = tx_channel_nums;
+        stream_args.args                 = uhd::device_addr_t(tx_stream_args);
         uhd::tx_streamer::sptr tx_stream = usrp->get_tx_stream(stream_args);
+        const size_t max_spp             = tx_stream->get_max_num_samps();
+        size_t spp                       = max_spp;
+        if (vm.count("tx_spp")) {
+            spp = std::min(spp, tx_spp);
+        }
+        std::cout << boost::format("Setting TX spp to %u\n") % spp;
         auto tx_thread = thread_group.create_thread([=, &burst_timer_elapsed]() {
             benchmark_tx_rate(usrp,
                 tx_cpu,
                 tx_stream,
                 burst_timer_elapsed,
                 start_time,
+                spp,
                 elevate_priority,
                 tx_delay,
                 random_nsamps);
