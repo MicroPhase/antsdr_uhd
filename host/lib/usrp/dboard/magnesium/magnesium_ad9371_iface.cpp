@@ -29,13 +29,12 @@ std::string _get_which(const direction_t dir, const size_t chan)
 magnesium_ad9371_iface::magnesium_ad9371_iface(
     uhd::rpc_client::sptr rpcc, const size_t slot_idx)
     : _rpcc(rpcc)
-    , _slot_idx(slot_idx)
     , _rpc_prefix((slot_idx == 0) ? "db_0_" : "db_1_")
     , _log_prefix((slot_idx == 0) ? "AD9371-0" : "AD9371-1")
 {
     UHD_LOG_TRACE(_log_prefix,
         "Initialized controls with RPC prefix " << _rpc_prefix << " for slot "
-                                                << _slot_idx);
+                                                << slot_idx);
 }
 
 double magnesium_ad9371_iface::set_frequency(
@@ -58,15 +57,6 @@ double magnesium_ad9371_iface::set_gain(
 
     return retval;
     // return 0.0;
-}
-
-
-double magnesium_ad9371_iface::set_master_clock_rate(const double freq)
-{
-    const auto actual_freq = request<double>("set_master_clock_rate", freq);
-    UHD_LOG_TRACE(
-        _log_prefix, _rpc_prefix << "set_master_clock_rate returned successfully");
-    return actual_freq;
 }
 
 double magnesium_ad9371_iface::set_bandwidth(

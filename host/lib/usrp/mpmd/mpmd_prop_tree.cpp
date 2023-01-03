@@ -13,6 +13,8 @@
 #include <uhd/types/eeprom.hpp>
 #include <uhd/types/sensors.hpp>
 #include <uhd/usrp/mboard_eeprom.hpp>
+#include <uhd/utils/cast.hpp>
+#include <boost/algorithm/string/case_conv.hpp>
 
 using namespace uhd;
 using namespace uhd::mpmd;
@@ -34,6 +36,7 @@ uhd::usrp::component_files_t _update_component(
     // Also construct a copy of just the metadata to store in the property tree
     uhd::usrp::component_files_t all_comps_copy;
 
+    bool just_reload = false;
     for (const auto& comp : comps) {
         // Make a map for update components args
         std::map<std::string, std::string> metadata;
@@ -43,12 +46,27 @@ uhd::usrp::component_files_t _update_component(
         for (const auto& key : comp.metadata.keys()) {
             metadata[key]           = comp.metadata[key];
             comp_copy.metadata[key] = comp.metadata[key];
+            if (key == "just_reload") {
+                just_reload =
+                    just_reload
+                    | uhd::cast::from_str<bool>(metadata.at("just_reload"));
+                    //| (boost::to_lower_copy(metadata.at("just_reload")) == "true");
+            }
         }
         // Copy to the update component args
         all_data.push_back(comp.data);
         all_metadata.push_back(metadata);
         // Copy to the property tree
         all_comps_copy.push_back(comp_copy);
+    }
+
+    // If reset is specified we presume that the fpga/dts
+    // components were updated in the last uhd::image_loader::load()
+    // call and just reload the fpga/dts by resetting the peripheral
+    // manager.
+    if (just_reload) {
+        mb->rpc->notify_with_token(MPMD_DEFAULT_INIT_TIMEOUT, "reset_timer_and_mgr");
+        return all_comps_copy;
     }
 
     // Now call update component
@@ -94,12 +112,15 @@ void mpmd_impl::init_property_tree(
         .set(mb->device_info.get("serial", "n/a"));
     tree->create<std::string>(mb_path / "connection")
         .set(mb->device_info.get("connection", "UNKNOWN"));
+    tree->create<size_t>(mb_path / "link_max_rate").set(125000000);
     tree->create<std::string>(mb_path / "mpm_version")
         .set(mb->device_info.get("mpm_version", "UNKNOWN"));
     tree->create<std::string>(mb_path / "fpga_version")
         .set(mb->device_info.get("fpga_version", "UNKNOWN"));
     tree->create<std::string>(mb_path / "fpga_version_hash")
         .set(mb->device_info.get("fpga_version_hash", "UNKNOWN"));
+    tree->create<std::string>(mb_path / "token").set(mb->get_token());
+    tree->create<uhd::device_addr_t>(mb_path / "args").set(mb->mb_args);
 
     /*** Clocking *******************************************************/
     tree->create<std::string>(mb_path / "clock_source/value")
@@ -193,16 +214,4 @@ void mpmd_impl::init_property_tree(
                 return _get_component_info(comp_name, mb);
             }); // Done adding component to property tree
     }
-
-    /*** MTUs ***********************************************************/
-    tree->create<size_t>(mb_path / "mtu/recv")
-        .add_coerced_subscriber([](const size_t) {
-            throw uhd::runtime_error("Attempting to write read-only value (MTU)!");
-        })
-        .set_publisher([mb]() { return mb->get_mtu(uhd::RX_DIRECTION); });
-    tree->create<size_t>(mb_path / "mtu/send")
-        .add_coerced_subscriber([](const size_t) {
-            throw uhd::runtime_error("Attempting to write read-only value (MTU)!");
-        })
-        .set_publisher([mb]() { return mb->get_mtu(uhd::TX_DIRECTION); });
 }

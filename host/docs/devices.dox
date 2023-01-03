@@ -14,6 +14,7 @@
 \li \subpage page_dpdk
 \li \subpage page_configfiles
 \li \subpage page_compat
+\li \subpage page_power
 
 ## USRP N-Series Devices
 
@@ -31,6 +32,7 @@
 ## USRP X-Series Devices
 
 \li \subpage page_usrp_x3x0
+\li \subpage page_usrp_x4xx
 
 ## USRP Legacy Series
 
@@ -47,7 +49,8 @@ unless stated otherwise, they will still work with this version of UHD.
 ## Daughterboards
 
 \li \subpage page_dboards
-\li \subpage page_twinrx
+\li \ref page_twinrx
+\li \ref page_zbx
 
 ## OctoClock
 

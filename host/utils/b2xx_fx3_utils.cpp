@@ -51,7 +51,6 @@ const std::vector<vid_pid_t> known_vid_pid_vector(known_vid_pids,
 const uhd::byte_vector_t OLD_EEPROM_SIGNATURE = {0x43, 0x59, 0x14, 0xB2};
 const uhd::byte_vector_t NEW_EEPROM_SIGNATURE = {0x43, 0x59, 0x1A, 0xB0};
 
-const size_t EEPROM_INIT_VALUE_VECTOR_SIZE = 8;
 uhd::byte_vector_t construct_eeprom_init_value_vector(uint16_t vid, uint16_t pid)
 {
     uhd::byte_vector_t init_values(OLD_EEPROM_SIGNATURE);
@@ -173,7 +172,7 @@ uhd::transport::usb_device_handle::sptr open_device(
         std::vector<uhd::transport::usb_device_handle::vid_pid_pair_t> vid_pid_pair_list(
             1, uhd::transport::usb_device_handle::vid_pid_pair_t(vid, pid));
         handles = uhd::transport::usb_device_handle::get_device_list(vid_pid_pair_list);
-        if (handles.size() == 0) {
+        if (handles.empty()) {
             if (user_supplied) {
                 std::cerr << (boost::format("Failed to open device with VID 0x%04x and "
                                             "PID 0x%04x - trying other known VID/PIDs")
@@ -183,15 +182,14 @@ uhd::transport::usb_device_handle::sptr open_device(
             }
 
             // try known VID/PIDs next
-            for (size_t i = 0; handles.size() == 0 && i < known_vid_pid_vector.size();
-                 i++) {
+            for (size_t i = 0; handles.empty() && i < known_vid_pid_vector.size(); i++) {
                 vp = known_vid_pid_vector[i];
                 handles =
                     uhd::transport::usb_device_handle::get_device_list(vp.vid, vp.pid);
             }
         }
 
-        if (handles.size() > 0) {
+        if (!handles.empty()) {
             handle = handles[0];
             std::cout << (boost::format("Device opened (VID=0x%04x,PID=0x%04x)") % vp.vid
                              % vp.pid)
@@ -336,7 +334,8 @@ int32_t main(int32_t argc, char* argv[])
             "Load a FPGA (bin) file into the FPGA.")(
         "load-bootloader,B", po::value<std::string>(&bl_file),
             "Load a bootloader (img) file into the EEPROM")(
-        "query-bootloader,Q", "Check if bootloader is loaded.");
+        "query-bootloader,Q", "Check if bootloader is loaded.")(
+        "unload-bootloader,u", "Remove bootloader.");
 
     // Hidden options provided for testing - use at your own risk!
     po::options_description hidden("Hidden options");
@@ -419,7 +418,7 @@ int32_t main(int32_t argc, char* argv[])
         try {
             b200->reset_fx3();
         } catch (std::exception& e) {
-            std::cerr << "Exception while resetting FX3: " << e.what() << std::endl;
+            std::cerr << "Exception while reseting FX3: " << e.what() << std::endl;
         }
 
         // re-open device
@@ -675,6 +674,36 @@ int32_t main(int32_t argc, char* argv[])
             return EXIT_FAILURE;
         }
         std::cout << "Bootloader is present" << std::endl;
+    } else if (vm.count("unload-bootloader")) {
+        auto signature = b200->read_eeprom(0x0, 0x0, 4);
+        if (signature != NEW_EEPROM_SIGNATURE) {
+            std::cout << "No bootloader found on device" << std::endl;
+            return EXIT_FAILURE;
+        }
+        auto vidpid = b200->read_eeprom(
+                EEPROM_DATA_ADDR_HIGH_BYTE, EEPROM_DATA_VID_PID_ADDR, 4);
+        auto eeprom_data = b200->read_eeprom(
+                EEPROM_DATA_ADDR_HIGH_BYTE, EEPROM_DATA_OLD_DATA_ADDR, 36);
+
+        uhd::byte_vector_t first_bl_record(OLD_EEPROM_SIGNATURE);
+        first_bl_record.push_back(vidpid[2]);
+        first_bl_record.push_back(vidpid[3]);
+        first_bl_record.push_back(vidpid[0]);
+        first_bl_record.push_back(vidpid[1]);
+        if (write_and_verify_eeprom(b200, first_bl_record)) {
+            return EXIT_FAILURE;
+        }
+        b200->write_eeprom(0x04, 0xDC, eeprom_data);
+
+        std::cout << "Bootloader unload complete, resetting device..." << std::endl;
+
+        // reset the device
+        try {
+            b200->reset_fx3();
+        } catch (uhd::exception& e) {
+            std::cerr << "Exception while resetting FX3: " << e.what() << std::endl;
+            return EXIT_FAILURE;
+        }
     }
 
     std::cout << "Operation complete!  I did it!  I did it!" << std::endl;

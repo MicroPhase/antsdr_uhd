@@ -5,8 +5,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 //
 
-#ifndef INCLUDED_UHD_TYPES_TIME_SPEC_HPP
-#define INCLUDED_UHD_TYPES_TIME_SPEC_HPP
+#pragma once
 
 #include <uhd/config.hpp>
 #include <stdint.h>
@@ -31,6 +30,9 @@ class UHD_API time_spec_t : boost::additive<time_spec_t>,
                             boost::totally_ordered<time_spec_t>
 {
 public:
+    // A special value that signifies immediate execution
+    static constexpr double ASAP = 0.0;
+
     /*!
      * Create a time_spec_t from a real-valued seconds count.
      * \param secs the real-valued seconds count (default = 0)
@@ -127,5 +129,3 @@ UHD_INLINE double time_spec_t::get_frac_secs(void) const
 }
 
 } // namespace uhd
-
-#endif /* INCLUDED_UHD_TYPES_TIME_SPEC_HPP */

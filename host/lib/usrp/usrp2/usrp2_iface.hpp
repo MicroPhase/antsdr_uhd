@@ -13,9 +13,9 @@
 #include <uhd/types/serial.hpp>
 #include <uhd/types/wb_iface.hpp>
 #include <uhd/usrp/mboard_eeprom.hpp>
-#include <boost/function.hpp>
-#include <boost/shared_ptr.hpp>
 #include <boost/utility.hpp>
+#include <functional>
+#include <memory>
 #include <string>
 
 /*!
@@ -28,7 +28,7 @@ class usrp2_iface : public uhd::timed_wb_iface,
                     public uhd::i2c_iface
 {
 public:
-    typedef boost::shared_ptr<usrp2_iface> sptr;
+    typedef std::shared_ptr<usrp2_iface> sptr;
     /*!
      * Make a new usrp2 interface with the control transport.
      * \param ctrl_transport the udp transport object

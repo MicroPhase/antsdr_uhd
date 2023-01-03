@@ -11,11 +11,11 @@
 #include <uhd/types/serial.hpp>
 #include <uhd/utils/log.hpp>
 #include <uhd/utils/tasks.hpp>
-#include <boost/bind.hpp>
 #include <boost/thread/mutex.hpp>
-#include <boost/weak_ptr.hpp>
 #include <cstdlib>
+#include <functional>
 #include <iostream>
+#include <memory>
 #include <mutex>
 
 using namespace uhd;
@@ -43,12 +43,12 @@ public:
         libusb_set_debug(_context, debug_level);
 #endif
         task_handler = task::make(
-            boost::bind(&libusb_session_impl::libusb_event_handler_task, this, _context));
+            std::bind(&libusb_session_impl::libusb_event_handler_task, this, _context));
     }
 
-    virtual ~libusb_session_impl(void);
+    ~libusb_session_impl(void) override;
 
-    libusb_context* get_context(void) const
+    libusb_context* get_context(void) const override
     {
         return _context;
     }
@@ -92,7 +92,7 @@ libusb_session_impl::~libusb_session_impl(void)
 
 libusb::session::sptr libusb::session::get_global_session(void)
 {
-    static boost::weak_ptr<session> global_session;
+    static std::weak_ptr<session> global_session;
     // this mutex is to ensure a global session is not currently being created
     // before checking for the existence of one
     static std::mutex global_session_mutex;
@@ -141,9 +141,9 @@ public:
         _dev     = dev;
     }
 
-    virtual ~libusb_device_impl(void);
+    ~libusb_device_impl(void) override;
 
-    libusb_device* get(void) const
+    libusb_device* get(void) const override
     {
         return _dev;
     }
@@ -187,14 +187,14 @@ public:
         libusb_free_device_list(dev_list, false /*dont unref*/);
     }
 
-    virtual ~libusb_device_list_impl(void);
+    ~libusb_device_list_impl(void) override;
 
-    size_t size(void) const
+    size_t size(void) const override
     {
         return _devs.size();
     }
 
-    libusb::device::sptr at(size_t i) const
+    libusb::device::sptr at(size_t i) const override
     {
         return _devs.at(i);
     }
@@ -230,14 +230,14 @@ public:
         UHD_ASSERT_THROW(libusb_get_device_descriptor(_dev->get(), &_desc) == 0);
     }
 
-    virtual ~libusb_device_descriptor_impl(void);
+    ~libusb_device_descriptor_impl(void) override;
 
-    const libusb_device_descriptor& get(void) const
+    const libusb_device_descriptor& get(void) const override
     {
         return _desc;
     }
 
-    std::string get_ascii_property(const std::string& what) const
+    std::string get_ascii_property(const std::string& what) const override
     {
         uint8_t off = 0;
         if (what == "serial")
@@ -301,20 +301,21 @@ public:
         UHD_ASSERT_THROW(libusb_open(_dev->get(), &_handle) == 0);
     }
 
-    virtual ~libusb_device_handle_impl(void);
+    ~libusb_device_handle_impl(void) override;
 
-    libusb_device_handle* get(void) const
+    libusb_device_handle* get(void) const override
     {
         return _handle;
     }
 
-    void claim_interface(int interface)
+    void claim_interface(int interface) override
     {
         UHD_ASSERT_THROW(libusb_claim_interface(this->get(), interface) == 0);
         _claimed.push_back(interface);
     }
 
-    void clear_endpoints(unsigned char recv_endpoint, unsigned char send_endpoint)
+    void clear_endpoints(
+        unsigned char recv_endpoint, unsigned char send_endpoint) override
     {
         int ret;
         ret = libusb_clear_halt(this->get(), recv_endpoint | 0x80);
@@ -325,7 +326,7 @@ public:
             << "usb device handle: send endpoint clear: " << libusb_error_name(ret);
     }
 
-    void reset_device(void)
+    void reset_device(void) override
     {
         int ret = libusb_reset_device(this->get());
         UHD_LOGGER_TRACE("USB")
@@ -349,7 +350,7 @@ libusb_device_handle_impl::~libusb_device_handle_impl(void)
 
 libusb::device_handle::sptr libusb::device_handle::get_cached_handle(device::sptr dev)
 {
-    static uhd::dict<libusb_device*, boost::weak_ptr<device_handle>> handles;
+    static uhd::dict<libusb_device*, std::weak_ptr<device_handle>> handles;
 
     // lock for atomic access to static table above
     static boost::mutex mutex;
@@ -392,42 +393,42 @@ public:
         _dev = dev;
     }
 
-    virtual ~libusb_special_handle_impl(void);
+    ~libusb_special_handle_impl(void) override;
 
-    libusb::device::sptr get_device(void) const
+    libusb::device::sptr get_device(void) const override
     {
         return _dev;
     }
 
-    std::string get_serial(void) const
+    std::string get_serial(void) const override
     {
         return libusb::device_descriptor::make(this->get_device())
             ->get_ascii_property("serial");
     }
 
-    std::string get_manufacturer() const
+    std::string get_manufacturer() const override
     {
         return libusb::device_descriptor::make(this->get_device())
             ->get_ascii_property("manufacturer");
     }
 
-    std::string get_product() const
+    std::string get_product() const override
     {
         return libusb::device_descriptor::make(this->get_device())
             ->get_ascii_property("product");
     }
 
-    uint16_t get_vendor_id(void) const
+    uint16_t get_vendor_id(void) const override
     {
         return libusb::device_descriptor::make(this->get_device())->get().idVendor;
     }
 
-    uint16_t get_product_id(void) const
+    uint16_t get_product_id(void) const override
     {
         return libusb::device_descriptor::make(this->get_device())->get().idProduct;
     }
 
-    bool firmware_loaded()
+    bool firmware_loaded() override
     {
         return (get_manufacturer() == "Ettus Research LLC")
                or (get_manufacturer() == "National Instruments Corp.")

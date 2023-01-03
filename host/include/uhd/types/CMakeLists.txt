@@ -1,28 +1,26 @@
 #
 # Copyright 2010-2011,2015-2016 Ettus Research LLC
 # Copyright 2018 Ettus Research, a National Instruments Company
+# Copyright 2019 Ettus Research, a National Instruments Brand
 #
 # SPDX-License-Identifier: GPL-3.0-or-later
 #
 
-
 UHD_INSTALL(FILES
     byte_vector.hpp
-    clock_config.hpp
     device_addr.hpp
     dict.ipp
     dict.hpp
     direction.hpp
+    eeprom.hpp
     endianness.hpp
-    io_type.hpp
     mac_addr.hpp
+    memmap_iface.hpp
     metadata.hpp
-    otw_type.hpp
     ranges.hpp
     ref_vector.hpp
     sensors.hpp
     serial.hpp
-    sid.hpp
     stream_cmd.hpp
     time_spec.hpp
     tune_request.hpp

@@ -5,20 +5,19 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 //
 
-#ifndef INCLUDED_LIBUHD_USRP_TX_DSP_CORE_200_HPP
-#define INCLUDED_LIBUHD_USRP_TX_DSP_CORE_200_HPP
+#pragma once
 
 #include <uhd/config.hpp>
 #include <uhd/stream.hpp>
 #include <uhd/types/ranges.hpp>
 #include <uhd/types/wb_iface.hpp>
 #include <uhd/utils/noncopyable.hpp>
-#include <boost/shared_ptr.hpp>
+#include <memory>
 
 class tx_dsp_core_200 : uhd::noncopyable
 {
 public:
-    typedef boost::shared_ptr<tx_dsp_core_200> sptr;
+    typedef std::shared_ptr<tx_dsp_core_200> sptr;
 
     virtual ~tx_dsp_core_200(void) = 0;
 
@@ -47,5 +46,3 @@ public:
 
     virtual void setup(const uhd::stream_args_t& stream_args) = 0;
 };
-
-#endif /* INCLUDED_LIBUHD_USRP_TX_DSP_CORE_200_HPP */

@@ -11,11 +11,11 @@
 #include <uhd/utils/log.hpp>
 #include <uhd/utils/tasks.hpp>
 #include <uhdlib/utils/atomic.hpp>
-#include <boost/bind.hpp>
-#include <boost/make_shared.hpp>
 #include <boost/thread/condition_variable.hpp>
 #include <boost/thread/mutex.hpp>
+#include <functional>
 #include <iostream>
+#include <memory>
 #include <vector>
 
 using namespace uhd;
@@ -34,7 +34,7 @@ public:
     { /*NOP*/
     }
 
-    void release(void)
+    void release(void) override
     {
         _mrb.reset(); // decrement ref count, other MRB's may hold a ref
         _claimer.release();
@@ -87,17 +87,16 @@ public:
         : _internal(internal), _fragmentation_size(fragmentation_size)
     {
         _ok_to_auto_flush = false;
-        _task =
-            uhd::task::make(boost::bind(&usb_zero_copy_wrapper_msb::auto_flush, this));
+        _task = uhd::task::make(std::bind(&usb_zero_copy_wrapper_msb::auto_flush, this));
     }
 
-    ~usb_zero_copy_wrapper_msb(void)
+    ~usb_zero_copy_wrapper_msb(void) override
     {
         // ensure the task has exited before anything auto deconstructs
         _task.reset();
     }
 
-    void release(void)
+    void release(void) override
     {
         boost::mutex::scoped_lock lock(_mutex);
         _ok_to_auto_flush = true;
@@ -180,13 +179,13 @@ public:
         , _next_recv_buff_index(0)
     {
         for (size_t i = 0; i < this->get_num_recv_frames(); i++) {
-            _mrb_pool.push_back(boost::make_shared<usb_zero_copy_wrapper_mrb>());
+            _mrb_pool.push_back(std::make_shared<usb_zero_copy_wrapper_mrb>());
         }
         _the_only_msb =
-            boost::make_shared<usb_zero_copy_wrapper_msb>(usb_zc, frame_boundary);
+            std::make_shared<usb_zero_copy_wrapper_msb>(usb_zc, frame_boundary);
     }
 
-    managed_recv_buffer::sptr get_recv_buff(double timeout)
+    managed_recv_buffer::sptr get_recv_buff(double timeout) override
     {
         // lazy flush mechanism - negative timeout
         if (timeout < 0.0) {
@@ -209,28 +208,28 @@ public:
             _last_recv_buff, _last_recv_offset, timeout, _next_recv_buff_index);
     }
 
-    size_t get_num_recv_frames(void) const
+    size_t get_num_recv_frames(void) const override
     {
         return (_internal_zc->get_num_recv_frames() * _internal_zc->get_recv_frame_size())
                / this->get_recv_frame_size();
     }
 
-    size_t get_recv_frame_size(void) const
+    size_t get_recv_frame_size(void) const override
     {
         return std::min(_frame_boundary, _internal_zc->get_recv_frame_size());
     }
 
-    managed_send_buffer::sptr get_send_buff(double timeout)
+    managed_send_buffer::sptr get_send_buff(double timeout) override
     {
         return _the_only_msb->get_new(timeout);
     }
 
-    size_t get_num_send_frames(void) const
+    size_t get_num_send_frames(void) const override
     {
         return _internal_zc->get_num_send_frames();
     }
 
-    size_t get_send_frame_size(void) const
+    size_t get_send_frame_size(void) const override
     {
         return std::min(_frame_boundary, _internal_zc->get_send_frame_size());
     }
@@ -238,8 +237,8 @@ public:
 private:
     zero_copy_if::sptr _internal_zc;
     size_t _frame_boundary;
-    std::vector<boost::shared_ptr<usb_zero_copy_wrapper_mrb>> _mrb_pool;
-    boost::shared_ptr<usb_zero_copy_wrapper_msb> _the_only_msb;
+    std::vector<std::shared_ptr<usb_zero_copy_wrapper_mrb>> _mrb_pool;
+    std::shared_ptr<usb_zero_copy_wrapper_msb> _the_only_msb;
 
     // state for last recv buffer to create multiple managed buffers
     managed_recv_buffer::sptr _last_recv_buff;

@@ -11,12 +11,9 @@
 #include <uhd/utils/math.hpp>
 #include <uhdlib/usrp/cores/dsp_core_utils.hpp>
 #include <uhdlib/usrp/cores/tx_dsp_core_3000.hpp>
-#include <boost/assign/list_of.hpp>
-#include <boost/bind.hpp>
-#include <boost/math/special_functions/round.hpp>
-#include <boost/thread/thread.hpp> //sleep
 #include <algorithm>
 #include <cmath>
+#include <functional>
 
 #define REG_DSP_TX_FREQ _dsp_base + 0
 #define REG_DSP_TX_SCALE_IQ _dsp_base + 4
@@ -47,19 +44,19 @@ public:
         this->set_tick_rate(1.0);
     }
 
-    void set_tick_rate(const double rate)
+    void set_tick_rate(const double rate) override
     {
         _tick_rate = rate;
         set_freq(_current_freq);
     }
 
-    void set_link_rate(const double rate)
+    void set_link_rate(const double rate) override
     {
         //_link_rate = rate/sizeof(uint32_t); //in samps/s
         _link_rate = rate / sizeof(uint16_t); // in samps/s (allows for 8sc)
     }
 
-    uhd::meta_range_t get_host_rates(void)
+    uhd::meta_range_t get_host_rates(void) override
     {
         meta_range_t range;
         for (int rate = 512; rate > 256; rate -= 4) {
@@ -74,10 +71,10 @@ public:
         return range;
     }
 
-    double set_host_rate(const double rate)
+    double set_host_rate(const double rate) override
     {
         const size_t interp_rate =
-            boost::math::iround(_tick_rate / this->get_host_rates().clip(rate, true));
+            std::lround(_tick_rate / this->get_host_rates().clip(rate, true));
         size_t interp = interp_rate;
 
         // determine which half-band filters are activated
@@ -124,17 +121,17 @@ public:
     void update_scalar(void)
     {
         const double target_scalar = (1 << 16) * _scaling_adjustment / _dsp_extra_scaling;
-        const int32_t actual_scalar = boost::math::iround(target_scalar);
+        const int32_t actual_scalar = static_cast<int32_t>(std::lround(target_scalar));
         _fxpt_scalar_correction     = target_scalar / actual_scalar; // should be small
         _iface->poke32(REG_DSP_TX_SCALE_IQ, actual_scalar);
     }
 
-    double get_scaling_adjustment(void)
+    double get_scaling_adjustment(void) override
     {
         return _fxpt_scalar_correction * _host_extra_scaling * 32767.;
     }
 
-    double set_freq(const double requested_freq)
+    double set_freq(const double requested_freq) override
     {
         double actual_freq;
         int32_t freq_word;
@@ -144,18 +141,18 @@ public:
         return actual_freq;
     }
 
-    double get_freq(void)
+    double get_freq(void) override
     {
         return _current_freq;
     }
 
-    uhd::meta_range_t get_freq_range(void)
+    uhd::meta_range_t get_freq_range(void) override
     {
         return uhd::meta_range_t(
             -_tick_rate / 2, +_tick_rate / 2, _tick_rate / std::pow(2.0, 32));
     }
 
-    void setup(const uhd::stream_args_t& stream_args)
+    void setup(const uhd::stream_args_t& stream_args) override
     {
         if (stream_args.otw_format == "sc16") {
             _dsp_extra_scaling  = 1.0;
@@ -182,19 +179,21 @@ public:
         this->update_scalar();
     }
 
-    void populate_subtree(property_tree::sptr subtree)
+    void populate_subtree(property_tree::sptr subtree) override
     {
         subtree->create<meta_range_t>("rate/range")
-            .set_publisher(boost::bind(&tx_dsp_core_3000::get_host_rates, this));
+            .set_publisher(std::bind(&tx_dsp_core_3000::get_host_rates, this));
         subtree->create<double>("rate/value")
             .set(DEFAULT_RATE)
-            .set_coercer(boost::bind(&tx_dsp_core_3000::set_host_rate, this, _1));
+            .set_coercer(
+                std::bind(&tx_dsp_core_3000::set_host_rate, this, std::placeholders::_1));
         subtree->create<double>("freq/value")
             .set(DEFAULT_CORDIC_FREQ)
-            .set_coercer(boost::bind(&tx_dsp_core_3000::set_freq, this, _1))
+            .set_coercer(
+                std::bind(&tx_dsp_core_3000::set_freq, this, std::placeholders::_1))
             .set_publisher([this]() { return this->get_freq(); });
         subtree->create<meta_range_t>("freq/range")
-            .set_publisher(boost::bind(&tx_dsp_core_3000::get_freq_range, this));
+            .set_publisher(std::bind(&tx_dsp_core_3000::get_freq_range, this));
     }
 
 private:

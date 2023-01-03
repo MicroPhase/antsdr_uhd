@@ -6,13 +6,11 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 //
 
-#ifndef INCLUDED_UHD_PROPERTY_TREE_IPP
-#define INCLUDED_UHD_PROPERTY_TREE_IPP
+#pragma once
 
 #include <uhd/exception.hpp>
-#include <boost/foreach.hpp>
-#include <boost/scoped_ptr.hpp>
 #include <vector>
+#include <memory>
 
 /***********************************************************************
  * Implement templated property impl
@@ -30,15 +28,16 @@ public:
         }
     }
 
-    ~property_impl(void)
+    ~property_impl<T>(void)
     {
         /* NOP */
     }
 
     property<T>& set_coercer(const typename property<T>::coercer_type& coercer)
     {
-        if (not _coercer.empty())
+        if (_coercer) {
             uhd::assertion_error("cannot register more than one coercer for a property");
+        }
         if (_coerce_mode == property_tree::MANUAL_COERCE)
             uhd::assertion_error(
                 "cannot register coercer for a manually coerced property");
@@ -49,9 +48,10 @@ public:
 
     property<T>& set_publisher(const typename property<T>::publisher_type& publisher)
     {
-        if (not _publisher.empty())
+        if (_publisher) {
             uhd::assertion_error(
                 "cannot register more than one publisher for a property");
+        }
 
         _publisher = publisher;
         return *this;
@@ -80,8 +80,7 @@ public:
     void _set_coerced(const T& value)
     {
         init_or_set_value(_coerced_value, value);
-        BOOST_FOREACH (
-            typename property<T>::subscriber_type& csub, _coerced_subscribers) {
+        for (typename property<T>::subscriber_type& csub : _coerced_subscribers) {
             csub(get_value_ref(_coerced_value)); // let errors propagate
         }
     }
@@ -89,11 +88,10 @@ public:
     property<T>& set(const T& value)
     {
         init_or_set_value(_value, value);
-        BOOST_FOREACH (
-            typename property<T>::subscriber_type& dsub, _desired_subscribers) {
+        for (typename property<T>::subscriber_type& dsub : _desired_subscribers) {
             dsub(get_value_ref(_value)); // let errors propagate
         }
-        if (not _coercer.empty()) {
+        if (_coercer) {
             _set_coerced(_coercer(get_value_ref(_value)));
         } else {
             if (_coerce_mode == property_tree::AUTO_COERCE)
@@ -115,7 +113,7 @@ public:
         if (empty()) {
             throw uhd::runtime_error("Cannot get() on an uninitialized (empty) property");
         }
-        if (not _publisher.empty()) {
+        if (_publisher) {
             return _publisher();
         } else {
             if (_coerced_value.get() == NULL
@@ -137,7 +135,7 @@ public:
 
     bool empty(void) const
     {
-        return _publisher.empty() and _value.get() == NULL;
+        return !bool(_publisher) and _value.get() == NULL;
     }
 
 private:
@@ -146,7 +144,7 @@ private:
         return value;
     }
 
-    static void init_or_set_value(boost::scoped_ptr<T>& scoped_value, const T& init_val)
+    static void init_or_set_value(std::unique_ptr<T>& scoped_value, const T& init_val)
     {
         if (scoped_value.get() == NULL) {
             scoped_value.reset(new T(init_val));
@@ -155,7 +153,7 @@ private:
         }
     }
 
-    static const T& get_value_ref(const boost::scoped_ptr<T>& scoped_value)
+    static const T& get_value_ref(const std::unique_ptr<T>& scoped_value)
     {
         if (scoped_value.get() == NULL)
             throw uhd::assertion_error("Cannot use uninitialized property data");
@@ -167,8 +165,8 @@ private:
     std::vector<typename property<T>::subscriber_type> _coerced_subscribers;
     typename property<T>::publisher_type _publisher;
     typename property<T>::coercer_type _coercer;
-    boost::scoped_ptr<T> _value;
-    boost::scoped_ptr<T> _coerced_value;
+    std::unique_ptr<T> _value;
+    std::unique_ptr<T> _coerced_value;
 };
 
 }} // namespace uhd::
@@ -182,22 +180,21 @@ template <typename T>
 property<T>& property_tree::create(const fs_path& path, coerce_mode_t coerce_mode)
 {
     this->_create(path,
-        typename boost::shared_ptr<property<T> >(new property_impl<T>(coerce_mode)));
+        typename std::shared_ptr<property<T> >(new property_impl<T>(coerce_mode)));
     return this->access<T>(path);
 }
 
 template <typename T>
 property<T>& property_tree::access(const fs_path& path)
 {
-    return *boost::static_pointer_cast<property<T> >(this->_access(path));
+    return *std::static_pointer_cast<property<T> >(
+        this->_access(path));
 }
 
 template <typename T>
-typename boost::shared_ptr<property<T> > property_tree::pop(const fs_path& path)
+typename std::shared_ptr<property<T> > property_tree::pop(const fs_path& path)
 {
-    return boost::static_pointer_cast<property<T> >(this->_pop(path));
+    return std::static_pointer_cast<property<T> >(this->_pop(path));
 }
 
 } // namespace uhd
-
-#endif /* INCLUDED_UHD_PROPERTY_TREE_IPP */

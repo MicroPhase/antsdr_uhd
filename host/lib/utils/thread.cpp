@@ -1,6 +1,6 @@
 //
 // Copyright 2010-2011,2015 Ettus Research LLC
-// Copyright 2018 Ettus Research, a National Instruments Company
+// Copyright 2018-2020 Ettus Research, a National Instruments Company
 //
 // SPDX-License-Identifier: GPL-3.0-or-later
 //
@@ -8,8 +8,7 @@
 #include <uhd/exception.hpp>
 #include <uhd/utils/log.hpp>
 #include <uhd/utils/thread.hpp>
-#include <boost/format.hpp>
-#include <iostream>
+#include <vector>
 
 bool uhd::set_thread_priority_safe(float priority, bool realtime)
 {
@@ -18,20 +17,20 @@ bool uhd::set_thread_priority_safe(float priority, bool realtime)
         return true;
     } catch (const std::exception& e) {
         UHD_LOGGER_WARNING("UHD")
-            << boost::format("Unable to set the thread priority. Performance may be "
-                             "negatively affected.\n"
-                             "Please see the general application notes in the manual for "
-                             "instructions.\n"
-                             "%s")
-                   % e.what();
+            << "Unable to set the thread priority. Performance may be "
+               "negatively affected.\n"
+               "Please see the general application notes in the manual for "
+               "instructions.\n"
+            << e.what();
         return false;
     }
 }
 
 static void check_priority_range(float priority)
 {
-    if (priority > +1.0 or priority < -1.0)
+    if (priority > +1.0 or priority < -1.0) {
         throw uhd::value_error("priority out of range [-1.0, +1.0]");
+    }
 }
 
 /***********************************************************************
@@ -65,6 +64,34 @@ void uhd::set_thread_priority(float priority, bool realtime)
         throw uhd::os_error("error in pthread_setschedparam");
 }
 #endif /* HAVE_PTHREAD_SETSCHEDPARAM */
+
+/***********************************************************************
+ * Pthread API to set affinity
+ **********************************************************************/
+#ifdef HAVE_PTHREAD_SETAFFINITY_NP
+#    include <pthread.h>
+void uhd::set_thread_affinity(const std::vector<size_t>& cpu_affinity_list)
+{
+    if (cpu_affinity_list.empty()) {
+        return;
+    }
+
+    cpu_set_t cpu_set;
+    CPU_ZERO(&cpu_set);
+    for (auto cpu_num : cpu_affinity_list) {
+        if (cpu_num > CPU_SETSIZE) {
+            UHD_LOG_WARNING(
+                "UHD", "CPU index " << cpu_num << " in affinity list out of range");
+        }
+        CPU_SET(cpu_num, &cpu_set);
+    }
+
+    int status = pthread_setaffinity_np(pthread_self(), sizeof(cpu_set_t), &cpu_set);
+    if (status != 0) {
+        UHD_LOG_WARNING("UHD", "Failed to set desired affinity for thread");
+    }
+}
+#endif /* HAVE_PTHREAD_SETAFFINITYNP */
 
 /***********************************************************************
  * Windows API to set priority
@@ -102,15 +129,52 @@ void uhd::set_thread_priority(float priority, UHD_UNUSED(bool realtime))
 #endif /* HAVE_WIN_SETTHREADPRIORITY */
 
 /***********************************************************************
+ * Windows API to set affinity
+ **********************************************************************/
+#ifdef HAVE_WIN_SETTHREADAFFINITYMASK
+#    include <windows.h>
+void uhd::set_thread_affinity(const std::vector<size_t>& cpu_affinity_list)
+{
+    if (cpu_affinity_list.empty()) {
+        return;
+    }
+
+    DWORD_PTR cpu_set{0};
+    for (auto cpu_num : cpu_affinity_list) {
+        if (cpu_num > 8 * sizeof(DWORD_PTR)) {
+            UHD_LOG_WARNING(
+                "UHD", "CPU index " << cpu_num << " in affinity list out of range");
+        }
+        cpu_set |= ((DWORD_PTR)1 << cpu_num);
+    }
+
+    DWORD_PTR status = SetThreadAffinityMask(GetCurrentThread(), cpu_set);
+    if (status == 0) {
+        UHD_LOG_WARNING("UHD", "Failed to set desired affinity for thread");
+    }
+}
+#endif /* HAVE_WIN_SETTHREADAFFINITYMASK */
+
+/***********************************************************************
  * Unimplemented API to set priority
  **********************************************************************/
 #ifdef HAVE_THREAD_PRIO_DUMMY
 void uhd::set_thread_priority(float, bool)
 {
-    throw uhd::not_implemented_error("set thread priority not implemented");
+    UHD_LOG_DEBUG("UHD", "Setting thread priority is not implemented");
 }
 
 #endif /* HAVE_THREAD_PRIO_DUMMY */
+
+/***********************************************************************
+ * Unimplemented API to set affinity
+ **********************************************************************/
+#ifdef HAVE_THREAD_SETAFFINITY_DUMMY
+void uhd::set_thread_affinity(const std::vector<size_t>& cpu_affinity_list)
+{
+    UHD_LOG_DEBUG("UHD", "Setting thread affinity is not implemented");
+}
+#endif /* HAVE_THREAD_SETAFFINITY_DUMMY */
 
 void uhd::set_thread_name(boost::thread* thrd, const std::string& name)
 {
@@ -118,9 +182,22 @@ void uhd::set_thread_name(boost::thread* thrd, const std::string& name)
     pthread_setname_np(thrd->native_handle(), name.substr(0, 16).c_str());
 #endif /* HAVE_PTHREAD_SETNAME */
 #ifdef HAVE_THREAD_SETNAME_DUMMY
-        // Then we can't set the thread name. This function may get called
-        // before the logger starts, and thus can't log any error messages.
-        // Note that CMake will also tell the user about not being able to set
-        // thread names.
+    // Then we can't set the thread name. This function may get called
+    // before the logger starts, and thus can't log any error messages.
+    // Note that CMake will also tell the user about not being able to set
+    // thread names.
+#endif /* HAVE_THREAD_SETNAME_DUMMY */
+}
+
+void uhd::set_thread_name(std::thread* thrd, const std::string& name)
+{
+#ifdef HAVE_PTHREAD_SETNAME
+    pthread_setname_np(thrd->native_handle(), name.substr(0, 16).c_str());
+#endif /* HAVE_PTHREAD_SETNAME */
+#ifdef HAVE_THREAD_SETNAME_DUMMY
+    // Then we can't set the thread name. This function may get called
+    // before the logger starts, and thus can't log any error messages.
+    // Note that CMake will also tell the user about not being able to set
+    // thread names.
 #endif /* HAVE_THREAD_SETNAME_DUMMY */
 }

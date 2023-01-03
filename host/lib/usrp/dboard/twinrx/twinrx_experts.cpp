@@ -13,7 +13,7 @@
 #include <uhd/utils/log.hpp>
 #include <uhd/utils/math.hpp>
 #include <boost/assign/list_of.hpp>
-#include <boost/math/special_functions/round.hpp>
+#include <cmath>
 
 using namespace uhd::experts;
 using namespace uhd::math;
@@ -260,7 +260,7 @@ void twinrx_chan_gain_expert::resolve()
 {
     if (_gain_profile != "default") {
         // TODO: Implement me!
-        throw uhd::not_implemented_error("custom gain strategies not implemented yet");
+        throw uhd::not_implemented_error("custom gain strategies not implemeted yet");
     }
 
     // Lookup table using settings
@@ -271,7 +271,7 @@ void twinrx_chan_gain_expert::resolve()
     // Compute minimum gain. The user-specified gain value will be interpreted as
     // the gain applied on top of the minimum gain state.
     // If antennas are shared or swapped, the switch has 6dB of loss
-    size_t gain_index = std::min(static_cast<size_t>(boost::math::round(_gain.get())),
+    size_t gain_index = std::min(static_cast<size_t>(std::lround(_gain.get())),
         table.get_num_entries() - 1);
 
     // Translate gain to an index in the gain table
@@ -459,6 +459,15 @@ void twinrx_antenna_expert::resolve()
         throw uhd::value_error(
             "Cannot calibrate channel 1 and export the LO for channel 0.");
     }
+
+    // Set ID for power cal
+    if (_enabled_ch0 and _enabled_ch1) {
+        _id_ch0 = "twinrx2";
+        _id_ch1 = "twinrx2";
+    } else {
+        _id_ch0 = "twinrx";
+        _id_ch1 = "twinrx";
+    }
 }
 
 /*!---------------------------------------------------------
@@ -608,7 +617,10 @@ void twinrx_settings_expert::_resolve_lox_freq(lo_stage_t lo_stage,
     bool hopping_enabled)
 {
     if (ch0_lo_source == twinrx_ctrl::LO_EXTERNAL) {
-        // If the LO is external then we don't need to program any synthesizers
+        if (synth0_mapping != MAPPING_CH1) {
+            // Tune the internal LO away to avoid interference
+            _set_lox_synth_freq(lo_stage, twinrx_ctrl::CH1, ch0_freq_d + 100e6);
+        }
         ch0_freq_c = ch0_freq_d;
     } else {
         // When in hopping mode, only attempt to write the LO frequency if it is actually
@@ -622,15 +634,24 @@ void twinrx_settings_expert::_resolve_lox_freq(lo_stage_t lo_stage,
             ch0_freq_c = _set_lox_synth_freq(lo_stage, twinrx_ctrl::CH2, ch0_freq_d);
         } else if (synth0_mapping == MAPPING_SHARED or synth1_mapping == MAPPING_SHARED) {
             // If any synthesizer is being shared then we are not in hopping mode
+            // Tune the LO being shared
             twinrx_ctrl::channel_t ch =
                 (synth0_mapping == MAPPING_SHARED) ? twinrx_ctrl::CH1 : twinrx_ctrl::CH2;
             ch0_freq_c = _set_lox_synth_freq(lo_stage, ch, ch0_freq_d);
             ch1_freq_c = ch0_freq_c;
+
+            // Tune the synthesizer of the other channel away to avoid interference
+            twinrx_ctrl::channel_t other_ch =
+                (synth0_mapping == MAPPING_SHARED) ? twinrx_ctrl::CH2 : twinrx_ctrl::CH1;
+            _set_lox_synth_freq(lo_stage, other_ch, ch0_freq_d + 100e6);
         }
     }
 
     if (ch1_lo_source == twinrx_ctrl::LO_EXTERNAL) {
-        // If the LO is external then we don't need to program any synthesizers
+        if (synth1_mapping != MAPPING_CH0) {
+            // Tune the internal LO away to avoid interference
+            _set_lox_synth_freq(lo_stage, twinrx_ctrl::CH2, ch1_freq_d + 100e6);
+        }
         ch1_freq_c = ch1_freq_d;
     } else {
         // When in hopping mode, only attempt to write the LO frequency if it is actually
@@ -646,10 +667,19 @@ void twinrx_settings_expert::_resolve_lox_freq(lo_stage_t lo_stage,
             ch1_freq_c = _set_lox_synth_freq(lo_stage, twinrx_ctrl::CH2, ch1_freq_d);
         } else if (synth0_mapping == MAPPING_SHARED or synth1_mapping == MAPPING_SHARED) {
             // If any synthesizer is being shared then we are not in hopping mode
-            twinrx_ctrl::channel_t ch =
-                (synth0_mapping == MAPPING_SHARED) ? twinrx_ctrl::CH1 : twinrx_ctrl::CH2;
-            ch0_freq_c = _set_lox_synth_freq(lo_stage, ch, ch0_freq_d);
-            ch1_freq_c = ch0_freq_c;
+            // Tuning has already been done above if CH0 LO source is not external
+            if (ch0_lo_source == twinrx_ctrl::LO_EXTERNAL) {
+                // Tune the LO being shared
+                twinrx_ctrl::channel_t ch =
+                    (synth0_mapping == MAPPING_SHARED) ? twinrx_ctrl::CH1 : twinrx_ctrl::CH2;
+                ch0_freq_c = _set_lox_synth_freq(lo_stage, ch, ch0_freq_d);
+                ch1_freq_c = ch0_freq_c;
+
+                // Tune the synthesizer of the other channel away to avoid interference
+                twinrx_ctrl::channel_t other_ch =
+                    (synth0_mapping == MAPPING_SHARED) ? twinrx_ctrl::CH2 : twinrx_ctrl::CH1;
+                _set_lox_synth_freq(lo_stage, other_ch, ch0_freq_d + 100e6);
+            }
         }
     }
 }

@@ -17,7 +17,6 @@
 #include <uhd/transport/udp_simple.hpp>
 #include <uhd/transport/udp_zero_copy.hpp>
 #include <uhd/transport/vrt_if_packet.hpp>
-#include <uhd/types/clock_config.hpp>
 #include <uhd/types/device_addr.hpp>
 #include <uhd/types/dict.hpp>
 #include <uhd/types/stream_cmd.hpp>
@@ -33,10 +32,9 @@
 #include <uhdlib/usrp/cores/tx_dsp_core_200.hpp>
 #include <uhdlib/usrp/cores/tx_frontend_core_200.hpp>
 #include <uhdlib/usrp/cores/user_settings_core_200.hpp>
-#include <boost/function.hpp>
-#include <boost/shared_ptr.hpp>
-#include <boost/weak_ptr.hpp>
 #include <atomic>
+#include <functional>
+#include <memory>
 
 static const double USRP2_LINK_RATE_BPS          = 1000e6 / 8;
 static const double mimo_clock_delay_usrp2_rev4  = 4.18e-9;
@@ -63,12 +61,12 @@ class usrp2_impl : public uhd::device
 {
 public:
     usrp2_impl(const uhd::device_addr_t&);
-    ~usrp2_impl(void);
+    ~usrp2_impl(void) override;
 
     // the io interface
-    uhd::rx_streamer::sptr get_rx_stream(const uhd::stream_args_t& args);
-    uhd::tx_streamer::sptr get_tx_stream(const uhd::stream_args_t& args);
-    bool recv_async_msg(uhd::async_metadata_t&, double);
+    uhd::rx_streamer::sptr get_rx_stream(const uhd::stream_args_t& args) override;
+    uhd::tx_streamer::sptr get_tx_stream(const uhd::stream_args_t& args) override;
+    bool recv_async_msg(uhd::async_metadata_t&, double) override;
 
     static uhd::usrp::mboard_eeprom_t get_mb_eeprom(usrp2_iface&);
 
@@ -85,8 +83,8 @@ private:
         rx_frontend_core_200::sptr rx_fe;
         tx_frontend_core_200::sptr tx_fe;
         std::vector<rx_dsp_core_200::sptr> rx_dsps;
-        std::vector<boost::weak_ptr<uhd::rx_streamer>> rx_streamers;
-        std::vector<boost::weak_ptr<uhd::tx_streamer>> tx_streamers;
+        std::vector<std::weak_ptr<uhd::rx_streamer>> rx_streamers;
+        std::vector<std::weak_ptr<uhd::tx_streamer>> tx_streamers;
         tx_dsp_core_200::sptr tx_dsp;
         time64_core_200::sptr time64;
         user_settings_core_200::sptr user;

@@ -9,9 +9,9 @@
 #include <uhdlib/experts/expert_container.hpp>
 #include <uhdlib/experts/expert_factory.hpp>
 #include <boost/format.hpp>
-#include <boost/make_shared.hpp>
 #include <boost/test/unit_test.hpp>
 #include <fstream>
+#include <memory>
 
 using namespace uhd::experts;
 
@@ -27,7 +27,7 @@ public:
     }
 
 private:
-    void resolve()
+    void resolve() override
     {
         _c = _a + _b;
     }
@@ -51,7 +51,7 @@ public:
     }
 
 private:
-    void resolve()
+    void resolve() override
     {
         _e.set(_c.get() * _d.get());
     }
@@ -74,7 +74,7 @@ public:
     }
 
 private:
-    void resolve()
+    void resolve() override
     {
         _f.set(-_b.get());
     }
@@ -97,7 +97,7 @@ public:
     }
 
 private:
-    void resolve()
+    void resolve() override
     {
         _g.set(_e.get() - _f.get());
     }
@@ -112,7 +112,7 @@ private:
 class worker5_t : public worker_node_t
 {
 public:
-    worker5_t(const node_retriever_t& db, boost::shared_ptr<int> output)
+    worker5_t(const node_retriever_t& db, std::shared_ptr<int> output)
         : worker_node_t("Consume_G"), _g(db, "G"), _c(db, "C"), _output(output)
     {
         bind_accessor(_g);
@@ -120,7 +120,7 @@ public:
     }
 
 private:
-    void resolve()
+    void resolve() override
     {
         *_output = _g;
     }
@@ -128,7 +128,7 @@ private:
     data_reader_t<int> _g;
     data_writer_t<int> _c;
 
-    boost::shared_ptr<int> _output;
+    std::shared_ptr<int> _output;
 };
 
 class worker6_t : public worker_node_t
@@ -137,7 +137,7 @@ public:
     worker6_t() : worker_node_t("null_worker") {}
 
 private:
-    void resolve() {}
+    void resolve() override {}
 };
 
 //=============================================================================
@@ -174,7 +174,7 @@ BOOST_AUTO_TEST_CASE(test_experts)
     uhd::property_tree::sptr tree    = uhd::property_tree::make();
 
     // Output of expert tree
-    boost::shared_ptr<int> final_output = boost::make_shared<int>();
+    std::shared_ptr<int> final_output = std::make_shared<int>();
 
     // Add data nodes to container
     expert_factory::add_dual_prop_node<int>(
@@ -186,6 +186,9 @@ BOOST_AUTO_TEST_CASE(test_experts)
         container, tree, "E", 0, uhd::experts::AUTO_RESOLVE_ON_READ);
     expert_factory::add_data_node<int>(container, "F", 0);
     expert_factory::add_data_node<int>(container, "G", 0);
+
+    // B also gets a coercer. It coerces 4 to 3.
+    tree->access<int>("B").set_coercer([](const int b) { return b == 4 ? 3 : b; });
 
     // Add worker nodes to container
     expert_factory::add_worker_node<worker1_t>(container, container->node_retriever());
@@ -225,11 +228,11 @@ BOOST_AUTO_TEST_CASE(test_experts)
     BOOST_CHECK(nodeF.is_dirty());
     BOOST_CHECK(nodeG.is_dirty());
     container->resolve_all();
-    VALIDATE_ALL_DEPENDENCIES // Ensure a default resolve
+    VALIDATE_ALL_DEPENDENCIES; // Ensure a default resolve
 
-        // Ensure basic node value propagation
-        tree->access<int>("B")
-            .set(3);
+    // Ensure basic node value propagation
+    tree->access<int>("B").set(4); // Set it 4, but that will get coerced to 3
+
     BOOST_CHECK(nodeB.get() == 3); // Ensure value propagated
     BOOST_CHECK(nodeB.is_dirty()); // Ensure that nothing got resolved...
     container->resolve_all();

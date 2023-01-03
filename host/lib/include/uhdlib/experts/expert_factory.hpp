@@ -5,15 +5,15 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 //
 
-#ifndef INCLUDED_UHD_EXPERTS_EXPERT_FACTORY_HPP
-#define INCLUDED_UHD_EXPERTS_EXPERT_FACTORY_HPP
+#pragma once
 
 #include <uhd/config.hpp>
 #include <uhd/property_tree.hpp>
 #include <uhd/utils/noncopyable.hpp>
 #include <uhdlib/experts/expert_container.hpp>
-#include <boost/bind.hpp>
+#include <functional>
 #include <memory>
+
 
 namespace uhd { namespace experts {
 
@@ -65,6 +65,16 @@ public:
     /*!
      * Add a expert property to a property tree AND an expert graph
      *
+     * The underlying property can be used like any other property tree property,
+     * including setting a coercer through set_coercer(). However, this means
+     * that the coercion is happening outside of the expert framework. This is
+     * primarily useful for tiny coercions (e.g., we accept both upper and lower
+     * case values, but only want lower case downstream) for which we don't want
+     * to bother with a full expert, or for which we don't want to trigger
+     * resolution at all (if mode is set to AUTO_RESOLVE_OFF).
+     * For more full-fledged coercion, prefer add_dual_prop_node(). This will
+     * properly engage the expert graph.
+     *
      * \param container A shared pointer to the expert container to add the node to
      * \param subtree A shared pointer to subtree to add the property to
      * \param path The path of the property in the subtree
@@ -87,13 +97,13 @@ public:
         const auto_resolve_mode_t mode = AUTO_RESOLVE_OFF)
     {
         property<data_t>& prop =
-            subtree->create<data_t>(path, property_tree::MANUAL_COERCE);
+            subtree->create<data_t>(path, property_tree::AUTO_COERCE);
         data_node_t<data_t>* node_ptr =
             new data_node_t<data_t>(name, init_val, &container->resolve_mutex());
         prop.set(init_val);
-        prop.add_desired_subscriber(
-            boost::bind(&data_node_t<data_t>::commit, node_ptr, _1));
-        prop.set_publisher(boost::bind(&data_node_t<data_t>::retrieve, node_ptr));
+        prop.add_coerced_subscriber(
+            std::bind(&data_node_t<data_t>::commit, node_ptr, std::placeholders::_1));
+        prop.set_publisher(std::bind(&data_node_t<data_t>::retrieve, node_ptr));
         container->add_data_node(node_ptr, mode);
         return prop;
     }
@@ -160,9 +170,9 @@ public:
             new data_node_t<data_t>(coerced_name, init_val, &container->resolve_mutex());
         prop.set(init_val);
         prop.set_coerced(init_val);
-        prop.add_desired_subscriber(
-            boost::bind(&data_node_t<data_t>::commit, desired_node_ptr, _1));
-        prop.set_publisher(boost::bind(&data_node_t<data_t>::retrieve, coerced_node_ptr));
+        prop.add_desired_subscriber(std::bind(
+            &data_node_t<data_t>::commit, desired_node_ptr, std::placeholders::_1));
+        prop.set_publisher(std::bind(&data_node_t<data_t>::retrieve, coerced_node_ptr));
 
         container->add_data_node(desired_node_ptr,
             auto_resolve_desired ? AUTO_RESOLVE_ON_WRITE : AUTO_RESOLVE_OFF);
@@ -345,5 +355,3 @@ public:
     }
 };
 }} // namespace uhd::experts
-
-#endif /* INCLUDED_UHD_EXPERTS_EXPERT_FACTORY_HPP */
