@@ -906,17 +906,18 @@ module antsdr_e200 (
         .m_axi_net_wstrb            ( m_axi_net_wstrb            ),
         .m_axi_net_wvalid           ( m_axi_net_wvalid           ),
 
-        .m_axis_dma_tdata           ( m_axis_dma_tdata           ),
-        .m_axis_dma_tlast           ( m_axis_dma_tlast           ),
-        .m_axis_dma_tready          ( m_axis_dma_tready          ),
-        .m_axis_dma_tvalid          ( m_axis_dma_tvalid          ),
+        .m_axis_dma_tdata           ( h2e_tdata           ),
+        .m_axis_dma_tkeep           ( h2e_tkeep           ),
+        .m_axis_dma_tlast           ( h2e_tlast           ),
+        .m_axis_dma_tready          ( h2e_tready          ),
+        .m_axis_dma_tvalid          ( h2e_tvalid          ),
 
-        .s_axis_dma_tdata           ( s_axis_dma_tdata           ),
-        .s_axis_dma_tlast           ( s_axis_dma_tlast           ),
-        .s_axis_dma_tready          ( s_axis_dma_tready          ),
-        .s_axis_dma_tvalid          ( s_axis_dma_tvalid          )
+        .s_axis_dma_tdata           ( e2h_tdata           ),
+        .s_axis_dma_tkeep           ( e2h_tkeep           ),
+        .s_axis_dma_tlast           ( e2h_tlast           ),
+        .s_axis_dma_tready          ( e2h_tready          ),
+        .s_axis_dma_tvalid          ( e2h_tvalid          )
     );
-
-
+    
 endmodule
 `default_nettype wire
