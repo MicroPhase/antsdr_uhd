@@ -618,7 +618,7 @@ tx_streamer::sptr ant_impl::get_tx_stream(const uhd::stream_args_t& args_)
                                                                  fc_cache,
                                                                  _data_tx_transport,
                                                                  fc_window,
-                                                                 _1));
+                                                                 boost::placeholders::_1));
             }
             else if(chan == 1){
                 task::sptr task =
@@ -633,14 +633,14 @@ tx_streamer::sptr ant_impl::get_tx_stream(const uhd::stream_args_t& args_)
                                                                  fc_cache,
                                                                  _data_tx1_transport,
                                                                  fc_window,
-                                                                 _1));
+                                                                 boost::placeholders::_1));
             }
 
         }
 
 
         my_streamer->set_async_receiver(boost::bind(
-                &async_md_type::pop_with_timed_wait, _async_task_data->async_md, _1, _2));
+                &async_md_type::pop_with_timed_wait, _async_task_data->async_md, boost::placeholders::_1, boost::placeholders::_2));
         my_streamer->set_xport_chan_sid(
                 stream_i, true, radio_index ? ANT_TX_DATA1_SID : ANT_TX_DATA0_SID);
         my_streamer->set_enable_trailer(false); // TODO not implemented trailer support
