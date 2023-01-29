@@ -5,9 +5,9 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 //
 
-#include "udp_common.hpp"
 #include <uhd/transport/udp_simple.hpp>
 #include <uhd/utils/log.hpp>
+#include <uhdlib/transport/udp_common.hpp>
 #include <boost/format.hpp>
 
 using namespace uhd::transport;
@@ -44,26 +44,28 @@ public:
             _socket->connect(_send_endpoint);
     }
 
-    size_t send(const asio::const_buffer& buff)
+    size_t send(const asio::const_buffer& buff) override
     {
         if (_connected)
             return _socket->send(asio::buffer(buff));
         return _socket->send_to(asio::buffer(buff), _send_endpoint);
     }
 
-    size_t recv(const asio::mutable_buffer& buff, double timeout)
+    size_t recv(const asio::mutable_buffer& buff, double timeout) override
     {
-        if (not wait_for_recv_ready(_socket->native_handle(), timeout))
+        const int32_t timeout_ms = static_cast<int32_t>(timeout * 1000);
+
+        if (not wait_for_recv_ready(_socket->native_handle(), timeout_ms))
             return 0;
         return _socket->receive_from(asio::buffer(buff), _recv_endpoint);
     }
 
-    std::string get_recv_addr(void)
+    std::string get_recv_addr(void) override
     {
         return _recv_endpoint.address().to_string();
     }
 
-    std::string get_send_addr(void)
+    std::string get_send_addr(void) override
     {
         return _send_endpoint.address().to_string();
     }
@@ -111,12 +113,12 @@ public:
         this->write_uart(""); // send an empty packet to init
     }
 
-    void write_uart(const std::string& buf)
+    void write_uart(const std::string& buf) override
     {
         _udp->send(asio::buffer(buf));
     }
 
-    std::string read_uart(double timeout)
+    std::string read_uart(double timeout) override
     {
         std::string line;
         const boost::system_time exit_time =

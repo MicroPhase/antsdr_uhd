@@ -5,28 +5,28 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 //
 
-#ifndef INCLUDED_LIBUHD_USRP_RX_FRONTEND_CORE_200_HPP
-#define INCLUDED_LIBUHD_USRP_RX_FRONTEND_CORE_200_HPP
+#pragma once
 
 #include <uhd/config.hpp>
 #include <uhd/property_tree.hpp>
 #include <uhd/types/wb_iface.hpp>
 #include <uhd/utils/noncopyable.hpp>
-#include <boost/shared_ptr.hpp>
 #include <complex>
+#include <memory>
 #include <string>
 
 class tx_frontend_core_200 : uhd::noncopyable
 {
 public:
-    typedef boost::shared_ptr<tx_frontend_core_200> sptr;
+    typedef std::shared_ptr<tx_frontend_core_200> sptr;
 
     static const std::complex<double> DEFAULT_DC_OFFSET_VALUE;
     static const std::complex<double> DEFAULT_IQ_BALANCE_VALUE;
 
     virtual ~tx_frontend_core_200(void) = 0;
 
-    static sptr make(uhd::wb_iface::sptr iface, const size_t base);
+    static sptr make(
+        uhd::wb_iface::sptr iface, const size_t base, const size_t offset = 4);
 
     virtual void set_mux(const std::string& mode) = 0;
 
@@ -36,5 +36,3 @@ public:
 
     virtual void populate_subtree(uhd::property_tree::sptr subtree) = 0;
 };
-
-#endif /* INCLUDED_LIBUHD_USRP_RX_FRONTEND_CORE_200_HPP */

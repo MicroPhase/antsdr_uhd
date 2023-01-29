@@ -8,13 +8,18 @@
 
 #include "mpmd_devices.hpp"
 #include "mpmd_impl.hpp"
+#include "mpmd_link_if_mgr.hpp"
 #include <uhd/transport/if_addrs.hpp>
 #include <uhd/transport/udp_simple.hpp>
 #include <uhd/types/device_addr.hpp>
-#include <uhdlib/transport/dpdk_common.hpp>
+#include <uhdlib/utils/prefs.hpp>
+#include <uhdlib/utils/serial_number.hpp>
 #include <boost/algorithm/string.hpp>
 #include <boost/asio.hpp>
 #include <future>
+#ifdef HAVE_DPDK
+#    include <uhdlib/transport/dpdk/common.hpp>
+#endif
 
 using namespace uhd;
 using namespace uhd::mpmd;
@@ -60,7 +65,8 @@ device_addrs_t mpmd_find_with_addr(
         const char* reply        = (const char*)buff;
         std::string reply_string = std::string(reply);
         std::vector<std::string> result;
-        boost::algorithm::split(result,
+        boost::algorithm::split(
+            result,
             reply_string,
             [](const char& in) { return in == ';'; },
             boost::token_compress_on);
@@ -89,29 +95,31 @@ device_addrs_t mpmd_find_with_addr(
 
         // Create result to return
         device_addr_t new_addr;
-        new_addr[xport::MGMT_ADDR_KEY] = recv_addr;
-        new_addr["type"]               = "mpmd"; // hwd will overwrite this
+        new_addr[MGMT_ADDR_KEY] = recv_addr;
+        new_addr["type"]        = "mpmd"; // hwd will overwrite this
         // remove ident string and put other informations into device_args dict
         result.erase(result.begin());
         // parse key-value pairs in the discovery string and add them to the
         // device_args
         for (const auto& el : result) {
             std::vector<std::string> value;
-            boost::algorithm::split(value,
+            boost::algorithm::split(
+                value,
                 el,
                 [](const char& in) { return in == '='; },
                 boost::token_compress_on);
-            if (value[0] != xport::MGMT_ADDR_KEY) {
+            if (value[0] != MGMT_ADDR_KEY) {
                 new_addr[value[0]] = value[1];
             }
         }
         // filter the discovered device below by matching optional keys
         if ((not hint_.has_key("name") or hint_["name"] == new_addr["name"])
-            and (not hint_.has_key("serial") or hint_["serial"] == new_addr["serial"])
+            and (not hint_.has_key("serial")
+                 or utils::serial_numbers_match(hint_["serial"], new_addr["serial"]))
             and (not hint_.has_key("type") or hint_["type"] == new_addr["type"]
-                    or hint_["type"] == MPM_CATCHALL_DEVICE_TYPE)
+                 or hint_["type"] == MPM_CATCHALL_DEVICE_TYPE)
             and (not hint_.has_key("product")
-                    or hint_["product"] == new_addr["product"])) {
+                 or hint_["product"] == new_addr["product"])) {
             UHD_LOG_TRACE(
                 "MPMD FIND", "Found device that matches hints: " << new_addr.to_string());
             addrs.push_back(new_addr);
@@ -131,13 +139,15 @@ device_addrs_t mpmd_find_with_addrs(const device_addrs_t& hints)
     device_addrs_t found_devices;
     found_devices.reserve(hints.size());
     for (const auto& hint : hints) {
-        if (not(hint.has_key(xport::FIRST_ADDR_KEY)
-                or hint.has_key(xport::MGMT_ADDR_KEY))) {
+        if (hint.has_key("resource")) {
+            continue;
+        }
+        if (not(hint.has_key(xport::FIRST_ADDR_KEY) or hint.has_key(MGMT_ADDR_KEY))) {
             UHD_LOG_DEBUG("MPMD FIND", "No address given in hint " << hint.to_string());
             continue;
         }
         const std::string mgmt_addr =
-            hint.get(xport::MGMT_ADDR_KEY, hint.get(xport::FIRST_ADDR_KEY, ""));
+            hint.get(MGMT_ADDR_KEY, hint.get(xport::FIRST_ADDR_KEY, ""));
         device_addrs_t reply_addrs = mpmd_find_with_addr(mgmt_addr, hint);
         if (reply_addrs.size() > 1) {
             UHD_LOG_ERROR("MPMD",
@@ -150,7 +160,7 @@ device_addrs_t mpmd_find_with_addrs(const device_addrs_t& hints)
         UHD_LOG_TRACE("MPMD FIND", "Device responded: " << reply_addrs[0].to_string());
         found_devices.push_back(reply_addrs[0]);
     }
-    if (found_devices.size() == 0) {
+    if (found_devices.empty()) {
         return device_addrs_t();
     } else if (found_devices.size() == 1) {
         return found_devices;
@@ -162,6 +172,9 @@ device_addrs_t mpmd_find_with_addrs(const device_addrs_t& hints)
 device_addrs_t mpmd_find_with_bcast(const device_addr_t& hint)
 {
     device_addrs_t addrs;
+    if (hint.has_key("resource")) {
+        return addrs;
+    }
     UHD_LOG_TRACE(
         "MPMD FIND", "Broadcasting on all available interfaces to find MPM devices.");
     std::vector<std::future<device_addrs_t>> task_list;
@@ -197,13 +210,18 @@ device_addrs_t mpmd_find(const device_addr_t& hint_)
 #ifdef HAVE_DPDK
     // Start DPDK so links come up
     if (hint_.has_key("use_dpdk")) {
-        auto& dpdk_ctx = uhd::transport::uhd_dpdk_ctx::get();
-        if (not dpdk_ctx.is_init_done()) {
-            dpdk_ctx.init(hint_);
+        auto dpdk_ctx = uhd::transport::dpdk::dpdk_ctx::get();
+        if (not dpdk_ctx->is_init_done()) {
+            dpdk_ctx->init(hint_);
         }
     }
 #endif
-    device_addrs_t hints = separate_device_addr(hint_);
+    device_addrs_t hints_without_prefs = separate_device_addr(hint_);
+    device_addrs_t hints;
+    for (size_t i = 0; i < hints_without_prefs.size(); i++) {
+        hints.push_back(prefs::get_usrp_args(hints_without_prefs[i]));
+    }
+
     if (hint_.has_key("type")) {
         if (std::find(MPM_DEVICE_TYPES.cbegin(), MPM_DEVICE_TYPES.cend(), hint_["type"])
             == MPM_DEVICE_TYPES.cend()) {
@@ -217,7 +235,7 @@ device_addrs_t mpmd_find(const device_addr_t& hint_)
     // Scenario 1): User gave us at least one address
     if (not hints.empty()
         and (hints[0].has_key(xport::FIRST_ADDR_KEY)
-                or hints[0].has_key(xport::MGMT_ADDR_KEY))) {
+             or hints[0].has_key(MGMT_ADDR_KEY))) {
         // Note: We don't try and connect to the devices in this mode, because
         // we only get here if the user specified addresses, and we assume she
         // knows what she's doing.

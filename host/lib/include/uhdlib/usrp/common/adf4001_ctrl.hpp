@@ -10,8 +10,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 //
 
-#ifndef INCLUDED_LIBUHD_USRP_COMMON_ADF4001_HPP
-#define INCLUDED_LIBUHD_USRP_COMMON_ADF4001_HPP
+#pragma once
 
 #include <uhd/types/serial.hpp>
 #include <uhdlib/usrp/cores/spi_core_3000.hpp>
@@ -106,6 +105,7 @@ class adf4001_ctrl
 {
 public:
     adf4001_ctrl(uhd::spi_iface::sptr _spi, int slaveno);
+    virtual ~adf4001_ctrl() = default;
     virtual void set_lock_to_ext_ref(bool external);
 
 private:
@@ -119,5 +119,3 @@ private:
 };
 
 }} // namespace uhd::usrp
-
-#endif

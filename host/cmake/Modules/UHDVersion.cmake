@@ -17,8 +17,8 @@ find_package(Git QUIET)
 #  - Increment patch for bugfixes and docs
 #  - set UHD_VERSION_DEVEL to true for master and development branches
 ########################################################################
-set(UHD_VERSION_MAJOR 3)
-set(UHD_VERSION_API   15)
+set(UHD_VERSION_MAJOR 4)
+set(UHD_VERSION_API   1)
 set(UHD_VERSION_ABI   0)
 set(UHD_VERSION_PATCH 0)
 set(UHD_VERSION_DEVEL FALSE)
@@ -36,7 +36,7 @@ endif(NOT DEFINED UHD_VERSION_DEVEL)
 set(UHD_GIT_BRANCH "")
 if(GIT_FOUND)
     execute_process(
-        WORKING_DIRECTORY ${UHD_SOURCE_DIR}
+        WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
         COMMAND ${GIT_EXECUTABLE} rev-parse --abbrev-ref HEAD
         OUTPUT_VARIABLE _git_branch OUTPUT_STRIP_TRAILING_WHITESPACE
         RESULT_VARIABLE _git_branch_result
@@ -75,7 +75,7 @@ endif(DEFINED UHD_GIT_BRANCH_OVERRIDE)
 
 #grab the git ref id for the current head
 execute_process(
-    WORKING_DIRECTORY ${UHD_SOURCE_DIR}
+    WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
     COMMAND ${GIT_EXECUTABLE} describe --always --abbrev=8 --long
     OUTPUT_VARIABLE _git_describe OUTPUT_STRIP_TRAILING_WHITESPACE
     RESULT_VARIABLE _git_describe_result
@@ -85,7 +85,7 @@ execute_process(
 if(_git_describe_result EQUAL 0)
     if(NOT UHD_GIT_COUNT)
         execute_process(
-            WORKING_DIRECTORY ${UHD_SOURCE_DIR}
+            WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
             COMMAND ${PYTHON_EXECUTABLE} -c "
 try:
     print('${_git_describe}'.split('-')[-2])
@@ -97,7 +97,7 @@ except IndexError:
     endif()
     if(NOT UHD_GIT_HASH)
         execute_process(
-            WORKING_DIRECTORY ${UHD_SOURCE_DIR}
+            WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
             COMMAND ${PYTHON_EXECUTABLE} -c "
 try:
     print('${_git_describe}'.split('-')[-1])
@@ -123,7 +123,7 @@ if(UHD_RELEASE_MODE)
 
     #Ignore UHD_GIT_COUNT in UHD_VERSION if the string 'release' is in UHD_RELEASE_MODE
     execute_process(
-        WORKING_DIRECTORY ${UHD_SOURCE_DIR}
+        WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
         COMMAND ${PYTHON_EXECUTABLE} -c "print ('release' in '${UHD_RELEASE_MODE}') or ('rc' in '${UHD_RELEASE_MODE}')"
         OUTPUT_VARIABLE TRIM_UHD_VERSION OUTPUT_STRIP_TRAILING_WHITESPACE
     )

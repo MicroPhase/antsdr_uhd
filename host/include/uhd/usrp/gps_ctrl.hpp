@@ -5,13 +5,12 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 //
 
-#ifndef INCLUDED_GPS_CTRL_HPP
-#define INCLUDED_GPS_CTRL_HPP
+#pragma once
 
 #include <uhd/types/sensors.hpp>
 #include <uhd/types/serial.hpp>
 #include <uhd/utils/noncopyable.hpp>
-#include <boost/shared_ptr.hpp>
+#include <memory>
 #include <vector>
 
 namespace uhd {
@@ -19,7 +18,7 @@ namespace uhd {
 class UHD_API gps_ctrl : uhd::noncopyable
 {
 public:
-    typedef boost::shared_ptr<gps_ctrl> sptr;
+    typedef std::shared_ptr<gps_ctrl> sptr;
 
     virtual ~gps_ctrl(void) = 0;
 
@@ -48,5 +47,3 @@ public:
 };
 
 } // namespace uhd
-
-#endif /* INCLUDED_GPS_CTRL_HPP */

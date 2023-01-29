@@ -13,12 +13,12 @@
 #include <uhdlib/usrp/cores/dsp_core_utils.hpp>
 #include <uhdlib/usrp/cores/rx_dsp_core_200.hpp>
 #include <boost/assign/list_of.hpp>
-#include <boost/math/special_functions/round.hpp>
 #include <boost/numeric/conversion/bounds.hpp>
 #include <algorithm>
 #include <chrono>
 #include <cmath>
 #include <thread>
+#include <tuple>
 
 #define REG_DSP_RX_FREQ _dsp_base + 0
 #define REG_DSP_RX_SCALE_IQ _dsp_base + 4
@@ -81,14 +81,14 @@ public:
         this->clear();
     }
 
-    ~rx_dsp_core_200_impl(void)
+    ~rx_dsp_core_200_impl(void) override
     {
         UHD_SAFE_CALL(
             // shutdown any possible streaming
             this->clear();)
     }
 
-    void clear(void)
+    void clear(void) override
     {
         _iface->poke32(REG_RX_CTRL_NCHANNELS, 0); // also reset
         _iface->poke32(REG_RX_CTRL_VRT_HDR,
@@ -100,19 +100,19 @@ public:
         _iface->poke32(REG_RX_CTRL_VRT_TLR, 0);
     }
 
-    void set_nsamps_per_packet(const size_t nsamps)
+    void set_nsamps_per_packet(const size_t nsamps) override
     {
         _iface->poke32(REG_RX_CTRL_NSAMPS_PP, nsamps);
     }
 
-    void issue_stream_command(const stream_cmd_t& stream_cmd)
+    void issue_stream_command(const stream_cmd_t& stream_cmd) override
     {
         UHD_ASSERT_THROW(stream_cmd.num_samps <= 0x0fffffff);
         _continuous_streaming = stream_cmd.stream_mode
                                 == stream_cmd_t::STREAM_MODE_START_CONTINUOUS;
 
         // setup the mode to instruction flags
-        typedef boost::tuple<bool, bool, bool, bool> inst_t;
+        typedef std::tuple<bool, bool, bool, bool> inst_t;
         static const uhd::dict<stream_cmd_t::stream_mode_t, inst_t> mode_to_inst =
             boost::assign::map_list_of
             // reload, chain, samps, stop
@@ -127,7 +127,7 @@ public:
 
         // setup the instruction flag values
         bool inst_reload, inst_chain, inst_samps, inst_stop;
-        boost::tie(inst_reload, inst_chain, inst_samps, inst_stop) =
+        std::tie(inst_reload, inst_chain, inst_samps, inst_stop) =
             mode_to_inst[stream_cmd.stream_mode];
 
         // calculate the word from flags and length
@@ -146,7 +146,7 @@ public:
         _iface->poke32(REG_RX_CTRL_TIME_LO, uint32_t(ticks >> 0)); // latches the command
     }
 
-    void set_mux(const std::string& mode, const bool fe_swapped)
+    void set_mux(const std::string& mode, const bool fe_swapped) override
     {
         static const uhd::dict<std::string, uint32_t> mode_to_mux =
             boost::assign::map_list_of("IQ", 0)("QI", FLAG_DSP_RX_MUX_SWAP_IQ)(
@@ -156,18 +156,18 @@ public:
             mode_to_mux[mode] ^ (fe_swapped ? FLAG_DSP_RX_MUX_SWAP_IQ : 0));
     }
 
-    void set_tick_rate(const double rate)
+    void set_tick_rate(const double rate) override
     {
         _tick_rate = rate;
     }
 
-    void set_link_rate(const double rate)
+    void set_link_rate(const double rate) override
     {
         //_link_rate = rate/sizeof(uint32_t); //in samps/s
         _link_rate = rate / sizeof(uint16_t); // in samps/s (allows for 8sc)
     }
 
-    uhd::meta_range_t get_host_rates(void)
+    uhd::meta_range_t get_host_rates(void) override
     {
         meta_range_t range;
         for (int rate = 512; rate > 256; rate -= 4) {
@@ -182,10 +182,10 @@ public:
         return range;
     }
 
-    double set_host_rate(const double rate)
+    double set_host_rate(const double rate) override
     {
         const size_t decim_rate =
-            boost::math::iround(_tick_rate / this->get_host_rates().clip(rate, true));
+            std::lround(_tick_rate / this->get_host_rates().clip(rate, true));
         size_t decim = decim_rate;
 
         // determine which half-band filters are activated
@@ -228,18 +228,18 @@ public:
         const double factor = 1.0 + std::max(ceil_log2(_scaling_adjustment), 0.0);
         const double target_scalar =
             (1 << 17) * _scaling_adjustment / _dsp_extra_scaling / factor;
-        const int32_t actual_scalar = boost::math::iround(target_scalar);
+        const int32_t actual_scalar = static_cast<int32_t>(std::lround(target_scalar));
         _fxpt_scalar_correction =
             target_scalar / actual_scalar * factor; // should be small
         _iface->poke32(REG_DSP_RX_SCALE_IQ, actual_scalar);
     }
 
-    double get_scaling_adjustment(void)
+    double get_scaling_adjustment(void) override
     {
         return _fxpt_scalar_correction * _host_extra_scaling / 32767.;
     }
 
-    double set_freq(const double requested_freq)
+    double set_freq(const double requested_freq) override
     {
         double actual_freq;
         int32_t freq_word;
@@ -248,19 +248,19 @@ public:
         return actual_freq;
     }
 
-    uhd::meta_range_t get_freq_range(void)
+    uhd::meta_range_t get_freq_range(void) override
     {
         return uhd::meta_range_t(
             -_tick_rate / 2, +_tick_rate / 2, _tick_rate / std::pow(2.0, 32));
     }
 
-    void handle_overflow(void)
+    void handle_overflow(void) override
     {
         if (_continuous_streaming)
             issue_stream_command(stream_cmd_t::STREAM_MODE_START_CONTINUOUS);
     }
 
-    void setup(const uhd::stream_args_t& stream_args)
+    void setup(const uhd::stream_args_t& stream_args) override
     {
         if (not stream_args.args.has_key("noclear"))
             this->clear();

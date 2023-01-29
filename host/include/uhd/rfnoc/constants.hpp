@@ -5,9 +5,9 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 //
 
-#ifndef INCLUDED_LIBUHD_RFNOC_CONSTANTS_HPP
-#define INCLUDED_LIBUHD_RFNOC_CONSTANTS_HPP
+#pragma once
 
+#include <uhd/rfnoc/defaults.hpp>
 #include <uhd/types/dict.hpp>
 #include <stdint.h>
 #include <boost/assign/list_of.hpp>
@@ -15,17 +15,10 @@
 
 namespace uhd { namespace rfnoc {
 
-// All these configure the XML reader
-//! Where the RFNoC block/component definition files lie, relative to UHD_PKG_DIR
-static const std::string XML_DEFAULT_PATH = "share/uhd/rfnoc";
-//! The name of the environment variable storing the bath to the block definition files
-static const std::string XML_PATH_ENV = "UHD_RFNOC_DIR";
+constexpr uint16_t RFNOC_PROTO_VER = 0x0100;
 
-//! If the block name can't be automatically detected, this name is used
-static const std::string DEFAULT_BLOCK_NAME = "Block";
-static const uint64_t DEFAULT_NOC_ID        = 0xFFFFFFFFFFFFFFFF;
-static const size_t NOC_SHELL_COMPAT_MAJOR  = 6;
-static const size_t NOC_SHELL_COMPAT_MINOR  = 0;
+static const size_t NOC_SHELL_COMPAT_MAJOR = 5;
+static const size_t NOC_SHELL_COMPAT_MINOR = 1;
 
 static const size_t MAX_PACKET_SIZE     = 8000; // bytes
 static const size_t DEFAULT_PACKET_SIZE = 1456; // bytes
@@ -98,10 +91,8 @@ static const size_t ANY_PORT      = size_t(~0);
 static const size_t MAX_NUM_PORTS = 16;
 
 // Regular expressions
-static const std::string VALID_BLOCKNAME_REGEX = "[A-Za-z][A-Za-z0-9]*";
+static const std::string VALID_BLOCKNAME_REGEX = "[A-Za-z][A-Za-z0-9_]*";
 static const std::string VALID_BLOCKID_REGEX =
-    "(?:(\\d+)(?:/))?([A-Za-z][A-Za-z0-9]*)(?:(?:_)(\\d\\d?))?";
+    "(?:(\\d+)(?:/))?([A-Za-z][A-Za-z0-9]*)(?:(?:#)(\\d\\d?))?";
 
 }} /* namespace uhd::rfnoc */
-
-#endif /* INCLUDED_LIBUHD_RFNOC_CONSTANTS_HPP */

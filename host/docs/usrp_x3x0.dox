@@ -307,7 +307,7 @@ of the device. There are multiple tools available to access the FPGA through the
 
 If you have Vivado installed, we provide a command-line script to flash images. Make sure your X3x0 is powered on and connected to your computer using the front panel USB JTAG connector (USB 2.0 is fine for this). Head to the X3x0 FPGA directory, then run the following commands:
 
-    $ cd uhd/fpga-src/usrp3/top/x300 # Assuming this is where the FPGA code is checked out
+    $ cd uhd/fpga/usrp3/top/x300 # Assuming this is where the FPGA code is checked out
     $ source ./setupenv.sh
     $ viv_jtag_program /path/to/bitfile.bit
 
@@ -772,6 +772,15 @@ USRP-X series devices can be used with Xilinx chipscope using the onboard USB JT
 Further information on how to use Chipscope can be found in the Xilinx Chipscope Pro Software and Cores User Guide (UG029).
 
 \section x3x0_misc Miscellaneous
+
+\subsection x3x0_misc_power Power API
+
+The X300 series support the UHD power calibration API (see: \ref page_power).
+Calibration data is daughterboard-specific, i.e., the daughterboard serial is
+used to map calibration data to a serial.
+
+Daughterboards have to be manually calibrated using a calibrated power meter or
+signal generator.
 
 \subsection x3x0_misc_settings Configuring the device in an application
 

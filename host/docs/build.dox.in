@@ -63,18 +63,18 @@ The directory to which you extract libusb must not contain spaces. This is to sa
 
 ### Python
 
-- **Purpose:** Used by mako build time, and utility scripts and the Python API at runtime
-- **Minimum Version:** 2.7
+- **Purpose:** Used by mako build time,  and utility scripts and the Python API at runtime
+- **Minimum Version:** 3.5
 - **Usage:** build time + runtime utility scripts (required)
 - **Download URL:** http://www.python.org/download/
 - **Comments for Windows Users:**
   - The Python binary installer must be selected to match the system processor. Although, the 32-bit Python version can be used with 32-bit or 64-bit Windows system, it is recommended to match between Python and Windows installers. If the system is occupied with 64-bit Windows and x64-based processor, the `Windows x86-64 MSI Installer -> python-version.amd64.msi` needs to be used.
   - The Python path needs to be added to the environment variables.
-  - Install fundamental packages for Python: On Windows Terminal, navigate to Python scripts folder, e.g. `C:\\local\\Python37\\Scripts`, and execute the following commands to install requests, numpy, six, and setuptools packages, respectively:
+  - Install fundamental packages for Python: On Windows Terminal, navigate to Python scripts folder, e.g. `C:\local\Python37\Scripts`, and execute the following commands to install requests and numpy packages, respectively:
 
     pip3 install requests
     pip3 install numpy
-    pip3 install six
+    pip3 install ruamel.yaml
     pip3 install setuptools
 
   - For curses package installation:
@@ -94,7 +94,7 @@ The directory to which you extract libusb must not contain spaces. This is to sa
 - **Minimum Version:** @PY_MAKO_MIN_VERSION@
 - **Usage:** build time (required)
 - **Download URL:** http://www.makotemplates.org/download.html
-- **Alternative method:** You can use `pip3` or `easy_install` to install Mako from PyPi. To install it using 'pip3' on Windows, navigate to Python scripts folder, e.g. ´C:\\local\\Python37\\Scripts`, and run the following command:
+- **Alternative method:** You can use `pip3` or `easy_install` to install Mako from PyPi. To install it using 'pip3' on Windows, navigate to Python scripts folder, e.g. `C:\local\Python37\Scripts`, and run the following command:
 
     pip3 install mako
 
@@ -125,7 +125,7 @@ or install msysGit from http://code.google.com/p/msysgit/downloads/list.
 
 You can install all the dependencies through the package manager:
 
-    sudo apt-get install libboost-all-dev libusb-1.0-0-dev doxygen python3-docutils python3-mako python3-numpy python3-requests python3-setuptools cmake build-essential
+    sudo apt-get install libboost-all-dev libusb-1.0-0-dev doxygen python3-docutils python3-mako python3-numpy python3-requests python3-ruamel.yaml python3-setuptools cmake build-essential
 
 Your actual command may differ.
 
@@ -133,33 +133,34 @@ Your actual command may differ.
 
 You can install all the dependencies through the package manager:
 
-    sudo yum -y install boost-devel libusb1-devel doxygen python3-docutils python3-mako python3-numpy python3-requests python3-setuptools cmake make gcc gcc-c++
+    sudo yum -y install boost-devel libusb1-devel doxygen python3-docutils python3-mako python3-numpy python3-requests python3-ruamel-yaml python3-setuptools cmake make gcc gcc-c++
 
 or
 
-    sudo dnf -y install boost-devel libusb1-devel doxygen python3-docutils python3-mako python3-numpy python3-requests python3-setuptools cmake make gcc gcc-c++
+    sudo dnf -y install boost-devel libusb1-devel doxygen python3-docutils python3-mako python3-numpy python3-requests python3-ruamel-yaml python3-setuptools cmake make gcc gcc-c++
 
 Your actual command may differ.
 
 \section build_get_source Getting the source code
 
-The UHD source is stored in a Git repository. To download it, follow these instructions:
+The UHD source is stored in a git repository. To download it, follow these
+instructions:
 
-    git clone git://github.com/EttusResearch/uhd.git
+    git clone https://github.com/EttusResearch/uhd.git
 
-If you also want the FPGA code (which is not necessary for building UHD and applications which depend on it), run:
+Our source code repository contains of the following branches:
 
-    git clone --recursive git://github.com/EttusResearch/uhd.git
-
-This will populate the `fpga-src` submodule inside the repository. You can also do this after cloning the repository by running these commands from the top level source directory:
-
-    git submodule init
-    git submodule update
-
-Our source code repository contains of two main branches:
-
-\li \b master: This is the main development branch, with updated new features and bug fixes.
-\li \b maint: This branch has all bugfixes since the last major release, but there are no new features. This is what you should be using if you need a stable release.
+- \b master: This is the main development branch, with updated new features and
+  bug fixes.
+- \b UHD-*: These branches are created from master upon a release or release
+  candidate. They are used to create releases within a stable release cycle, and
+  usually only receive bugfixes. For example, all 3.14.* releases are taken from
+  the same branch (UHD-3.14). These branches usually no longer receive updates
+  once the following major release branch is created (for example, when the
+  UHD-3.14 branch was created, the UHD-3.13 branch would only receive updates
+  under special circumstances).
+- \b UHD-*.LTS: These are long-term support branches. They serve the same purpose
+  as the other UHD-* branches, but generally receive bugfixes for much longer.
 
 We might also be publishing experimental feature branches which can then be found in the same repository.
 All of our versioned releases are associated with tags in the repository.
@@ -193,10 +194,41 @@ Example usage:
 
     cmake -DCMAKE_INSTALL_PREFIX=/opt/uhd ../
 
+<b>Ubuntu 20.04 note:</b> When building for Ubuntu 20.04, you may run into
+errors such as this during CMake's generation stage:
+
+    CMake Error in python/CMakeLists.txt:
+    Imported target "Boost::chrono" includes non-existent path
+
+    "/include"
+
+    in its INTERFACE_INCLUDE_DIRECTORIES.  Possible reasons include:
+
+    * The path was deleted, renamed, or moved to another location.
+
+    * An install or uninstall procedure did not complete successfully.
+
+    * The installation package was faulty and references files it does not
+      provide.
+
+These errors occur when CMake finds filesystem items by following the `/bin`
+symlink to `/usr/bin` and thus incorrectly calculating the root path for
+various directories needed by the build.
+
+If you encounter this issue, ensure that `/usr/bin` appears before `/bin` in
+the PATH environment variable of the process executing CMake. Alternatively,
+you can pass the `CMAKE_FIND_ROOT_PATH` configuration variable to CMake
+with a value of `/usr` to point it to the right starting directory for
+filesystem item searches.
+
+Example usage:
+
+    cmake -DCMAKE_FIND_ROOT_PATH=/usr ../
+
 \subsection build_install_unix Build and install
 
     make
-    make test
+    make test # This step is optional
     sudo make install
 
 \subsection libpath_linux Setup the library path (Linux)
@@ -225,8 +257,7 @@ extensions:
   want it to be (check the PYTHON_VERSION variable)
 - Open the CMake GUI.
 - Set the path to the source code: `<uhd-repo-path>/host`.
-- Set the path to the build directory (this may require creating the folder "build"):
-  `<uhd-repo-path>/host/build`.
+- Set the path to the build directory (this may require creating the folder \\build\\): `<uhd-repo-path>\host\build`.
 - Make sure that the paths do not contain spaces.
 - Check the Advanced checkbox.
 - Click "Configure".
@@ -244,7 +275,7 @@ extensions:
   - Click on "Generate", and a project file will be created in the build directory.
 
 \subsection msvc_generate Compile and Install with Visual Studio
-- Open the `<uhd-repo-path>\\host\\build\\ALL_BUILD.vcxproj` in visual studio, generate the project. Watch the output console for errors.
+- Open the `<uhd-repo-path>\host\build\ALL_BUILD.vcxproj` in visual studio, generate the project. Watch the output console for errors.
 - If you did not specify a `CMAKE_INSTALL_PREFIX` where your user has write privileges, you must close Visual Studio, run it again with Administrator Privileges, and open `ALL_BUILD.vcxproj`.
 - Right click on the **INSTALL** project in the project explorer, generate it. Watch the output console for errors.
 
@@ -254,15 +285,15 @@ On Windows, CMake does not have the advantage of `pkg-config`,
 so we must manually tell CMake how to locate the LibUSB header and lib.
 
 - From the CMake GUI, select "Advanced View".
-- Set or add the following entry with type PATH `LIBUSB_INCLUDE_DIRS` to the directory for `libusb.h`, e.g. `C:\\local\\libusb-1.0.22\\include\\libusb-1.0`.
-- Set or add the following entry with type FILEPATH `LIBUSB_LIBRARIES` to the full path for `libusb-1.0.lib`, e.g. `C:\\local\\libusb-1.0.22\\MS64\\dll\\libusb-1.0.lib`.
+- Set or add the following entry with type PATH `LIBUSB_INCLUDE_DIRS` to the directory for `libusb.h`, e.g. `C:\local\libusb-1.0.22\include\libusb-1.0`.
+- Set or add the following entry with type FILEPATH `LIBUSB_LIBRARIES` to the full path for `libusb-1.0.lib`, e.g. `C:\local\libusb-1.0.22\MS64\dll\libusb-1.0.lib`.
 - Recommend the static `libusb-1.0.lib` to simplify runtime dependencies.
 - Check the box to enable USB support, click "Configure" and "Generate".
 
 <b>Note:</b> On Windows, LibUSB v1.0.19 is required to use most USB3 controllers.
 
 \subsection build_in_msvc Build the project in MSVC
-- Open the generated project file in MSVC, e.g. `C:\\cygwin64\\home\\admin\\uhd\\host\\build\\UHD.sln`.
+- Open the generated project file in MSVC, e.g. `C:\cygwin64\home\admin\uhd\host\build\UHD.sln`.
 - Change the build type from "Debug" to "Release".
 - Select the "Build All" target, right-click, and choose "Build".
 - Select the install target, right-click, and choose "Build".
@@ -274,7 +305,7 @@ You need to be an administrator or to run MSVC as administrator.
 \subsection build_msvc_cmd_line Build the project in MSVC (command line)
 Open the Visual Studio Command Prompt Shorcut:
 
-    cd <uhd-repo-path>\\host\\build
+    cd <uhd-repo-path>\host\build
     DevEnv uhd.sln /build Release /project ALL_BUILD
     DevEnv uhd.sln /build Release /project INSTALL
 
@@ -283,7 +314,7 @@ Open the Visual Studio Command Prompt Shorcut:
 - Select the "PACKAGE" project in the Solution Explorer, right-click, and choose "Build".
 
 \subsection path_env Setup the PATH environment variable
-* Add the UHD bin path to `%PATH%` (usually `C:\\Program Files\\UHD\\bin`)
+* Add the UHD bin path to `%PATH%` (usually `C:\Program Files\UHD\bin`)
 
 <b>Note:</b>
 The default interface for editing environment variable paths in Windows is very poor.

@@ -5,8 +5,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 //
 
-#ifndef INCLUDED_UHD_CONFIG_HPP
-#define INCLUDED_UHD_CONFIG_HPP
+#pragma once
 
 #include <boost/config.hpp>
 #include <boost/version.hpp>
@@ -39,8 +38,11 @@
 #    include <ciso646>
 
 // define ssize_t
-#    include <cstddef>
-typedef ptrdiff_t ssize_t;
+#ifndef _SSIZE_T_DEFINED
+#define _SSIZE_T_DEFINED
+#    include <BaseTsd.h>
+typedef SSIZE_T ssize_t;
+#endif /* _SSIZE_T_DEFINED */
 
 #endif // BOOST_MSVC
 
@@ -85,7 +87,7 @@ typedef ptrdiff_t ssize_t;
 #    define UHD_ALIGNED(x) __attribute__((aligned(x)))
 #    define UHD_UNUSED(x) x __attribute__((unused))
 #    if __clang_major__ > 3 || (__clang_major__ == 3 && __clang_minor__ >= 8)
-#        define UHD_FALLTHROUGH [[clang:fallthrough]]
+#        define UHD_FALLTHROUGH [[clang:fallthrough]];
 #    else
 #        define UHD_FALLTHROUGH
 #    endif
@@ -110,13 +112,6 @@ typedef ptrdiff_t ssize_t;
 #        define UHD_API UHD_IMPORT
 #    endif // UHD_DLL_EXPORTS
 #endif // UHD_STATIC_LIB
-
-#ifdef UHD_RFNOC_ENABLED
-#    define UHD_RFNOC_API UHD_API
-#else
-#    define UHD_RFNOC_API
-#endif // UHD_RFNOC_ENABLED
-
 
 // Platform defines for conditional parts of headers:
 // Taken from boost/config/select_platform_config.hpp,
@@ -144,5 +139,3 @@ typedef ptrdiff_t ssize_t;
 #endif
 
 #define STR(x) XSTR(x)
-
-#endif /* INCLUDED_UHD_CONFIG_HPP */

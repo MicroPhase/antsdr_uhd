@@ -16,25 +16,49 @@ The receiver is capable of fast frequency hopping to detect frequency agile emit
 
 The TwinRX daughterboard only works with the X300/X310 series of USRPs.
 
-\subsection twinrx_dboards_mcr Master Clock Rate, Sampling Rate, and Tick Rate
+\subsection twinrx_dboards_mcr Master Clock Rate, Tick Rate, and Sampling Rate
 
-Due to the specific configuration of the analog filters, the TwinRX can only
-support a master clock rate of 200 MHz. Since the X310/X300 only has a single
+Due to the specific configuration of the analog filters, the TwinRX only
+supports a master clock rate of 200 MHz. Since the X300/X310 only has a single
 master clock, this means that the only valid tick rate for the X300/X310 is
 200 MHz, even if there is another daughterboard in the same device which could
 support a different tick rate.
 
-The TwinRX uses the dual-ADC of each X300 channel to sample two separate IF
-streams, thus enabling two receive channels where there usually only is one.
-Every IF channel is sampled at 200 MHz (real sampling), and then converted to
-a 100 Msps complex sample stream per channel. This means the total output of
-one daughterboard is 2x100 Msps, which is the same aggregate sampling rate as
-with single-channel daughterboards such as the UBX.
+The maximum supported sample rate is 200 Msps if using one channel and
+100 Msps if using both channels.  TwinRX only supports instantaneous
+bandwidth up to 80 MHz, so a sample rate of 100 Msps or less is sufficient
+for all applications.  Decimation from the 200 Msps tick rate to the desired
+sample rate is handled automatically when using the default FPGA images
+either by setting the sample rate (if using the multi_usrp API) or by
+setting the output rate of the DDC (if using the RFNoC API).
 
-The tick rate is then also halved to match the sampling rate. Timed commands
-are executed relative to a sample edge in the I/Q domain, i.e., at a granularity
-of 1/100 MHz = 10 ns.
+IMPORTANT NOTE:  If building a custom RFNoC image and using both channels
+of the TwinRX, the 400 Msps produced by the Radio block (2 channels at
+200 Msps each) exceeds the 200 Msps throughput capacity of the crossbar
+in the RFNoC framework. To resolve this, a block that consumes the 400 Msps
+and produces less than 200 Msps must be statically connected to the Radio
+block.  The default X300 and X310 FPGA images have a DDC block statically
+connected to the Radio block which handles the decimation automatically by
+setting the output rate on each channel of the DDC to 100 Msps or less.
+It is recommended to leave the DDC statically connected to the Radio for
+custom RFNoC FPGA images, but the DDC can be replaced by a custom block
+as long as it consumes the 400 Msps and produces an aggregate of less than
+200 Msps.
 
+Starting with UHD release 4.1, the X310/X300 FPGA images no longer contain a
+halfband anti-aliasing filter directly after the ADC when using TwinRX. The
+filter was left out because the radio no longer decimates the sampling rate for
+TwinRX, instead relying on the DDC RFNoC block to adjust the sampling rate, and
+the DSP utilization of the filter was permanent, even when no TwinRX daughtercard
+was used. This means the output of the radio block (which produces a 200 Msps
+output signal when using TwinRX) contains aliases of the signal. The following
+image shows the output of the X310+TwinRX when configuring it to run at 200 Msps.
+The center frequency is set to 2.1 GHz, and a signal is applied at approx. 2.13 GHz.
+
+\image html twinrx_alias.png "TwinRX Signal Aliases"
+
+Due to aliasing, a mirrored alias signal will also appear at 2.17 GHz. The
+statically connected DDC block will remove these aliases.
 
 \image html TwinRX_Block_Diagram.png "TwinRX Block Diagram"
 
@@ -90,6 +114,34 @@ and at similar gain settings the effect will be minimal, but if the frequency or
 gain on the second channel could be significantly lower or higher than expected. Additionally the signal path length
 will increase in comparison to the direct antenna mapping so the phase of the received signal will be different
 depending on the antenna mapping.
+
+\subsection twinrx_power_cal Power Calibration
+
+The X300/X310 motherboards support power-calibrating the daughterboards, and
+therefore TwinRX can also make use of this calibration API (see also \ref page_power).
+
+However, unlike other daughterboards, the relationship between actual, received
+power, and power measured at the ADC depend on more parameters than with the
+other daughterboards. First of all, the TwinRX has two complete analog receiver
+chains, unlike all the other daughterboards. Both receiver chains can be connected
+to any RF input, which already increases the number of combinations that need to
+be calibrated. Furthermore, the RF paths inside the daughterboard have an
+optional switch, which allows both receivers to receive from the same input, at
+different frequencies.
+
+
+single chan
+
+x3xx_power_cal_rx_rx1 + serial:{0, 1}
+x3xx_power_cal_rx_rx2 + serial:{0, 1}
+
+dual chan
+
+
+x3xx_power_cal_rx_rx1 + serial:{00, 11}
+x3xx_power_cal_rx_rx2 + serial:{00, 11}
+
+
 
 */
 // vim:ft=doxygen:

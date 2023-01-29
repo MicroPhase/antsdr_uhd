@@ -5,14 +5,14 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 //
 
-#include "udp_common.hpp"
 #include <uhd/transport/buffer_pool.hpp>
 #include <uhd/transport/tcp_zero_copy.hpp>
 #include <uhd/utils/log.hpp>
+#include <uhdlib/transport/udp_common.hpp>
 #include <uhdlib/utils/atomic.hpp>
 #include <boost/format.hpp>
-#include <boost/make_shared.hpp>
 #include <chrono>
+#include <memory>
 #include <thread>
 #include <vector>
 
@@ -35,7 +35,7 @@ public:
     { /*NOP*/
     }
 
-    void release(void)
+    void release(void) override
     {
         _claimer.release();
     }
@@ -52,8 +52,9 @@ public:
             return make(this, _mem, size_t(_len));
         }
 #endif
+        const int32_t timeout_ms = static_cast<int32_t>(timeout * 1000);
 
-        if (wait_for_recv_ready(_sock_fd, timeout)) {
+        if (wait_for_recv_ready(_sock_fd, timeout_ms)) {
             _len = ::recv(_sock_fd, (char*)_mem, _frame_size, 0);
             index++; // advances the caller's buffer
             return make(this, _mem, size_t(_len));
@@ -83,7 +84,7 @@ public:
     { /*NOP*/
     }
 
-    void release(void)
+    void release(void) override
     {
         // Retry logic because send may fail with ENOBUFS.
         // This is known to occur at least on some OSX systems.
@@ -132,7 +133,7 @@ tcp_zero_copy::~tcp_zero_copy(void)
 class tcp_zero_copy_asio_impl : public tcp_zero_copy
 {
 public:
-    typedef boost::shared_ptr<tcp_zero_copy_asio_impl> sptr;
+    typedef std::shared_ptr<tcp_zero_copy_asio_impl> sptr;
 
     tcp_zero_copy_asio_impl(
         const std::string& addr, const std::string& port, const device_addr_t& hints)
@@ -168,13 +169,13 @@ public:
 
         // allocate re-usable managed receive buffers
         for (size_t i = 0; i < get_num_recv_frames(); i++) {
-            _mrb_pool.push_back(boost::make_shared<tcp_zero_copy_asio_mrb>(
+            _mrb_pool.push_back(std::make_shared<tcp_zero_copy_asio_mrb>(
                 _recv_buffer_pool->at(i), _sock_fd, get_recv_frame_size()));
         }
 
         // allocate re-usable managed send buffers
         for (size_t i = 0; i < get_num_send_frames(); i++) {
-            _msb_pool.push_back(boost::make_shared<tcp_zero_copy_asio_msb>(
+            _msb_pool.push_back(std::make_shared<tcp_zero_copy_asio_msb>(
                 _send_buffer_pool->at(i), _sock_fd, get_send_frame_size()));
         }
     }
@@ -183,18 +184,18 @@ public:
      * Receive implementation:
      * Block on the managed buffer's get call and advance the index.
      ******************************************************************/
-    managed_recv_buffer::sptr get_recv_buff(double timeout)
+    managed_recv_buffer::sptr get_recv_buff(double timeout) override
     {
         if (_next_recv_buff_index == _num_recv_frames)
             _next_recv_buff_index = 0;
         return _mrb_pool[_next_recv_buff_index]->get_new(timeout, _next_recv_buff_index);
     }
 
-    size_t get_num_recv_frames(void) const
+    size_t get_num_recv_frames(void) const override
     {
         return _num_recv_frames;
     }
-    size_t get_recv_frame_size(void) const
+    size_t get_recv_frame_size(void) const override
     {
         return _recv_frame_size;
     }
@@ -203,18 +204,18 @@ public:
      * Send implementation:
      * Block on the managed buffer's get call and advance the index.
      ******************************************************************/
-    managed_send_buffer::sptr get_send_buff(double timeout)
+    managed_send_buffer::sptr get_send_buff(double timeout) override
     {
         if (_next_send_buff_index == _num_send_frames)
             _next_send_buff_index = 0;
         return _msb_pool[_next_send_buff_index]->get_new(timeout, _next_send_buff_index);
     }
 
-    size_t get_num_send_frames(void) const
+    size_t get_num_send_frames(void) const override
     {
         return _num_send_frames;
     }
-    size_t get_send_frame_size(void) const
+    size_t get_send_frame_size(void) const override
     {
         return _send_frame_size;
     }
@@ -224,13 +225,13 @@ private:
     const size_t _recv_frame_size, _num_recv_frames;
     const size_t _send_frame_size, _num_send_frames;
     buffer_pool::sptr _recv_buffer_pool, _send_buffer_pool;
-    std::vector<boost::shared_ptr<tcp_zero_copy_asio_msb>> _msb_pool;
-    std::vector<boost::shared_ptr<tcp_zero_copy_asio_mrb>> _mrb_pool;
+    std::vector<std::shared_ptr<tcp_zero_copy_asio_msb>> _msb_pool;
+    std::vector<std::shared_ptr<tcp_zero_copy_asio_mrb>> _mrb_pool;
     size_t _next_recv_buff_index, _next_send_buff_index;
 
     // asio guts -> socket and service
     asio::io_service _io_service;
-    boost::shared_ptr<asio::ip::tcp::socket> _socket;
+    std::shared_ptr<asio::ip::tcp::socket> _socket;
     int _sock_fd;
 };
 

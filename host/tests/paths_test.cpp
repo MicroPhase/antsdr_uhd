@@ -1,5 +1,6 @@
 //
 // Copyright 2018 Ettus Research, a National Instruments Company
+// Copyright 2019 Ettus Research, A National Instruments Brand
 //
 // SPDX-License-Identifier: GPL-3.0-or-later
 //
@@ -16,7 +17,7 @@
 BOOST_AUTO_TEST_CASE(test_paths_expandvars)
 {
 #ifdef UHD_PLATFORM_WIN32
-    const std::string path_to_expand("\%programdata%/uhd/uhd.conf");
+    const std::string path_to_expand("%programdata%/uhd/uhd.conf");
 #else
     const std::string path_to_expand("$HOME/.uhd/uhd.conf");
 #endif
@@ -40,20 +41,21 @@ BOOST_AUTO_TEST_CASE(test_get_paths)
 {
     using namespace uhd;
 
-    const std::string tmp_path = get_tmp_path();
-    const std::string app_path = get_app_path();
-    const std::string pkg_path = get_pkg_path();
-    const auto module_paths    = get_module_paths();
+    std::cout << "tmp_path: " << get_tmp_path() << std::endl;
+    BOOST_CHECK(true);
+    std::cout << "pkg_path: " << get_pkg_path() << std::endl;
+    BOOST_CHECK(true);
+    std::cout << "cal_path: " << get_cal_data_path() << std::endl;
+    BOOST_CHECK(true);
 
-    std::cout << "tmp_path: " << tmp_path << std::endl;
-    std::cout << "app_path: " << app_path << std::endl;
-    std::cout << "pkg_path: " << pkg_path << std::endl;
+    const auto module_paths    = get_module_paths();
     for (const auto& module_path : module_paths) {
         std::cout << "module path: " << module_path << std::endl;
     }
+    BOOST_CHECK(true);
 
     const std::string images_dir_search_path = "";
-    const std::string images_dir             = get_images_dir(images_dir_search_path);
+    std::cout << "images_dir: " << get_images_dir(images_dir_search_path) << std::endl;
     BOOST_REQUIRE_THROW(
         find_image_path("this_device_does_not_exist.bit", ""), uhd::io_error);
 
@@ -62,5 +64,5 @@ BOOST_AUTO_TEST_CASE(test_get_paths)
 
     const std::string utility_error =
         print_utility_error("uhd_images_downloader", "--help");
-    std::cout << "utility_error: " << tmp_path << std::endl;
+    std::cout << "utility_error: " << utility_error << std::endl;
 }

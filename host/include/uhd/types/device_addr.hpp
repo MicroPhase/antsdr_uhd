@@ -5,8 +5,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 //
 
-#ifndef INCLUDED_UHD_TYPES_DEVICE_ADDR_HPP
-#define INCLUDED_UHD_TYPES_DEVICE_ADDR_HPP
+#pragma once
 
 #include <uhd/config.hpp>
 #include <uhd/types/dict.hpp>
@@ -77,17 +76,7 @@ public:
         if (not this->has_key(key))
             return def;
         try {
-            // Avoid Boost warnings from lexical_cast. Some Boost versions use
-            // default-initializers, which can throw off the compiler if they're
-            // not defined.
-#if defined(__clang__) || defined(__GNUC__)
-#    pragma GCC diagnostic push
-#    pragma GCC diagnostic ignored "-Wmaybe-uninitialized"
-#endif
             return boost::lexical_cast<T>((*this)[key]);
-#if defined(__clang__) || defined(__GNUC__)
-#    pragma GCC diagnostic pop
-#endif
         } catch (const boost::bad_lexical_cast&) {
             throw std::runtime_error("cannot cast " + key + " = " + (*this)[key]);
         }
@@ -104,5 +93,3 @@ UHD_API device_addrs_t separate_device_addr(const device_addr_t& dev_addr);
 UHD_API device_addr_t combine_device_addrs(const device_addrs_t& dev_addrs);
 
 } // namespace uhd
-
-#endif /* INCLUDED_UHD_TYPES_DEVICE_ADDR_HPP */

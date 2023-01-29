@@ -1,6 +1,7 @@
 //
 // Copyright 2010-2012 Ettus Research LLC
 // Copyright 2018 Ettus Research, a National Instruments Company
+// Copyright 2019 Ettus Research, A National Instruments Brand
 //
 // SPDX-License-Identifier: GPL-3.0-or-later
 //
@@ -26,15 +27,16 @@
 #include <uhd/utils/assert_has.hpp>
 #include <uhd/utils/log.hpp>
 #include <uhd/utils/static.hpp>
+#include <uhdlib/utils/narrow.hpp>
 #include <tuner_4937di5_regs.hpp>
 #include <boost/array.hpp>
 #include <boost/assign/list_of.hpp>
-#include <boost/bind.hpp>
 #include <boost/format.hpp>
 #include <boost/math/special_functions/round.hpp>
 #include <boost/thread.hpp>
 #include <cfloat>
 #include <cmath>
+#include <functional>
 #include <limits>
 #include <utility>
 
@@ -185,7 +187,7 @@ class tvrx : public rx_dboard_base
 {
 public:
     tvrx(ctor_args_t args);
-    virtual ~tvrx(void);
+    ~tvrx(void) override;
 
 private:
     uhd::dict<std::string, double> _gains;
@@ -245,14 +247,14 @@ tvrx::tvrx(ctor_args_t args) : rx_dboard_base(args)
     for (const std::string& name : get_tvrx_gain_ranges().keys()) {
         this->get_rx_subtree()
             ->create<double>("gains/" + name + "/value")
-            .set_coercer(boost::bind(&tvrx::set_gain, this, _1, name));
+            .set_coercer(std::bind(&tvrx::set_gain, this, std::placeholders::_1, name));
         this->get_rx_subtree()
             ->create<meta_range_t>("gains/" + name + "/range")
             .set(get_tvrx_gain_ranges()[name]);
     }
     this->get_rx_subtree()
         ->create<double>("freq/value")
-        .set_coercer(boost::bind(&tvrx::set_freq, this, _1));
+        .set_coercer(std::bind(&tvrx::set_freq, this, std::placeholders::_1));
     this->get_rx_subtree()->create<meta_range_t>("freq/range").set(tvrx_freq_range);
     this->get_rx_subtree()->create<std::string>("antenna/value").set(tvrx_antennas.at(0));
     this->get_rx_subtree()
@@ -332,8 +334,9 @@ static double gain_interp(double gain,
     uint8_t gain_step = 0;
     // find which bin we're in
     for (size_t i = 0; i < db_vector.size() - 1; i++) {
-        if (gain >= db_vector[i] && gain <= db_vector[i + 1])
-            gain_step = i;
+        if (gain >= db_vector[i] && gain <= db_vector[i + 1]) {
+            gain_step = uhd::narrow_cast<uint8_t>(i);
+        }
     }
 
     // find the current slope for linear interpolation
