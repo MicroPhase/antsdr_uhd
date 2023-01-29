@@ -5,8 +5,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 //
 
-#ifndef INCLUDED_LIBUHD_USRP_TX_VITA_CORE_3000_HPP
-#define INCLUDED_LIBUHD_USRP_TX_VITA_CORE_3000_HPP
+#pragma once
 
 #include <uhd/config.hpp>
 #include <uhd/stream.hpp>
@@ -14,13 +13,13 @@
 #include <uhd/types/stream_cmd.hpp>
 #include <uhd/types/wb_iface.hpp>
 #include <uhd/utils/noncopyable.hpp>
-#include <boost/shared_ptr.hpp>
+#include <memory>
 #include <string>
 
 class tx_vita_core_3000 : uhd::noncopyable
 {
 public:
-    typedef boost::shared_ptr<tx_vita_core_3000> sptr;
+    typedef std::shared_ptr<tx_vita_core_3000> sptr;
 
     enum fc_monitor_loc { FC_DEFAULT, FC_PRE_RADIO, FC_PRE_FIFO };
 
@@ -39,5 +38,3 @@ public:
     virtual void configure_flow_control(
         const size_t cycs_per_up, const size_t pkts_per_up) = 0;
 };
-
-#endif /* INCLUDED_LIBUHD_USRP_TX_VITA_CORE_3000_HPP */

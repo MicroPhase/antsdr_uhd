@@ -15,16 +15,15 @@
 #include <uhd/utils/safe_call.hpp>
 #include <uhd/utils/static.hpp>
 #include <uhdlib/usrp/common/apply_corrections.hpp>
-#include <boost/asio.hpp> //used for htonl and ntohl
+#include <boost/asio.hpp>
 #include <boost/asio/ip/address_v4.hpp>
-#include <boost/bind.hpp>
 #include <boost/format.hpp>
-#include <boost/thread.hpp>
+#include <cmath>
+#include <functional>
 
 using namespace uhd;
 using namespace uhd::usrp;
 using namespace uhd::transport;
-namespace asio = boost::asio;
 
 // A reasonable number of frames for send/recv and async/sync
 static const size_t DEFAULT_NUM_FRAMES = 32;
@@ -75,7 +74,7 @@ device_addrs_t usrp2_find(const device_addr_t& hint_)
     if (not hint.has_key("addr")) {
         for (const if_addrs_t& if_addrs : get_if_addrs()) {
             // avoid the loopback device
-            if (if_addrs.inet == asio::ip::address_v4::loopback().to_string())
+            if (if_addrs.inet == boost::asio::ip::address_v4::loopback().to_string())
                 continue;
 
             // create a new hint with this broadcast address
@@ -98,8 +97,8 @@ device_addrs_t usrp2_find(const device_addr_t& hint_)
         udp_transport = udp_simple::make_broadcast(
             hint["addr"], BOOST_STRINGIZE(USRP2_UDP_CTRL_PORT));
     } catch (const std::exception& e) {
-        UHD_LOGGER_ERROR("USRP2") << boost::format("Cannot open UDP transport on %s\n%s")
-                                         % hint["addr"] % e.what();
+        UHD_LOGGER_ERROR("USRP2")
+            << "Cannot open UDP transport on " << hint["addr"] << ": " << e.what();
         return usrp2_addrs; // dont throw, but return empty address so caller can insert
     }
 
@@ -120,7 +119,7 @@ device_addrs_t usrp2_find(const device_addr_t& hint_)
     const usrp2_ctrl_data_t* ctrl_data_in =
         reinterpret_cast<const usrp2_ctrl_data_t*>(usrp2_ctrl_data_in_mem);
     while (true) {
-        size_t len = udp_transport->recv(asio::buffer(usrp2_ctrl_data_in_mem));
+        size_t len = udp_transport->recv(boost::asio::buffer(usrp2_ctrl_data_in_mem));
         if (len > offsetof(usrp2_ctrl_data_t, data)
             and ntohl(ctrl_data_in->id) == USRP2_CTRL_ID_WAZZUP_DUDE) {
             // make a boost asio ipv4 with the raw addr in host byte order
@@ -138,7 +137,7 @@ device_addrs_t usrp2_find(const device_addr_t& hint_)
             udp_simple::sptr ctrl_xport = udp_simple::make_connected(
                 new_addr["addr"], BOOST_STRINGIZE(USRP2_UDP_CTRL_PORT));
             ctrl_xport->send(boost::asio::buffer(&ctrl_data_out, sizeof(ctrl_data_out)));
-            size_t len = ctrl_xport->recv(asio::buffer(usrp2_ctrl_data_in_mem));
+            size_t len = ctrl_xport->recv(boost::asio::buffer(usrp2_ctrl_data_in_mem));
             if (len > offsetof(usrp2_ctrl_data_t, data)
                 and ntohl(ctrl_data_in->id) == USRP2_CTRL_ID_WAZZUP_DUDE) {
                 // found the device, open up for communication!
@@ -166,7 +165,7 @@ device_addrs_t usrp2_find(const device_addr_t& hint_)
             // filter the discovered device below by matching optional keys
             if ((not hint.has_key("name") or hint["name"] == new_addr["name"])
                 and (not hint.has_key("serial")
-                        or hint["serial"] == new_addr["serial"])) {
+                     or hint["serial"] == new_addr["serial"])) {
                 usrp2_addrs.push_back(new_addr);
             }
 
@@ -350,9 +349,9 @@ usrp2_impl::usrp2_impl(const device_addr_t& _device_addr)
         device_addr["send_frame_size"] = std::to_string(mtu.send_mtu);
 
         UHD_LOGGER_INFO("USRP2")
-            << boost::format("Current recv frame size: %d bytes") % mtu.recv_mtu;
+            << "Current recv frame size: " << mtu.recv_mtu << " bytes";
         UHD_LOGGER_INFO("USRP2")
-            << boost::format("Current send frame size: %d bytes") % mtu.send_mtu;
+            << "Current send frame size: " << mtu.send_mtu << " bytes";
     } catch (const uhd::not_implemented_error&) {
         // just ignore this error, makes older fw work...
     }
@@ -471,7 +470,7 @@ usrp2_impl::usrp2_impl(const device_addr_t& _device_addr)
         _tree->create<mboard_eeprom_t>(mb_path / "eeprom")
             .set(_mbc[mb].iface->mb_eeprom)
             .add_coerced_subscriber(
-                boost::bind(&usrp2_impl::set_mb_eeprom, this, mb, _1));
+                std::bind(&usrp2_impl::set_mb_eeprom, this, mb, std::placeholders::_1));
 
         ////////////////////////////////////////////////////////////////
         // create clock control objects
@@ -479,8 +478,9 @@ usrp2_impl::usrp2_impl(const device_addr_t& _device_addr)
         _mbc[mb].clock = usrp2_clock_ctrl::make(_mbc[mb].iface, _mbc[mb].spiface);
         _tree->create<double>(mb_path / "tick_rate")
             .set_publisher(
-                boost::bind(&usrp2_clock_ctrl::get_master_clock_rate, _mbc[mb].clock))
-            .add_coerced_subscriber(boost::bind(&usrp2_impl::update_tick_rate, this, _1));
+                std::bind(&usrp2_clock_ctrl::get_master_clock_rate, _mbc[mb].clock))
+            .add_coerced_subscriber(
+                std::bind(&usrp2_impl::update_tick_rate, this, std::placeholders::_1));
 
         ////////////////////////////////////////////////////////////////
         // create codec control objects
@@ -499,14 +499,18 @@ usrp2_impl::usrp2_impl(const device_addr_t& _device_addr)
                 _tree->create<meta_range_t>(rx_codec_path / "gains/digital/range")
                     .set(meta_range_t(0, 6.0, 0.5));
                 _tree->create<double>(rx_codec_path / "gains/digital/value")
-                    .add_coerced_subscriber(boost::bind(
-                        &usrp2_codec_ctrl::set_rx_digital_gain, _mbc[mb].codec, _1))
+                    .add_coerced_subscriber(
+                        std::bind(&usrp2_codec_ctrl::set_rx_digital_gain,
+                            _mbc[mb].codec,
+                            std::placeholders::_1))
                     .set(0);
                 _tree->create<meta_range_t>(rx_codec_path / "gains/fine/range")
                     .set(meta_range_t(0, 0.5, 0.05));
                 _tree->create<double>(rx_codec_path / "gains/fine/value")
-                    .add_coerced_subscriber(boost::bind(
-                        &usrp2_codec_ctrl::set_rx_digital_fine_gain, _mbc[mb].codec, _1))
+                    .add_coerced_subscriber(
+                        std::bind(&usrp2_codec_ctrl::set_rx_digital_fine_gain,
+                            _mbc[mb].codec,
+                            std::placeholders::_1))
                     .set(0);
             } break;
 
@@ -552,7 +556,7 @@ usrp2_impl::usrp2_impl(const device_addr_t& _device_addr)
                 for (const std::string& name : _mbc[mb].gps->get_sensors()) {
                     _tree->create<sensor_value_t>(mb_path / "sensors" / name)
                         .set_publisher(
-                            boost::bind(&gps_ctrl::get_sensor, _mbc[mb].gps, name));
+                            std::bind(&gps_ctrl::get_sensor, _mbc[mb].gps, name));
                 }
             } else {
                 _mbc[mb].iface->pokefw(U2_FW_REG_HAS_GPSDO, dont_look_for_gpsdo);
@@ -563,9 +567,9 @@ usrp2_impl::usrp2_impl(const device_addr_t& _device_addr)
         // and do the misc mboard sensors
         ////////////////////////////////////////////////////////////////
         _tree->create<sensor_value_t>(mb_path / "sensors/mimo_locked")
-            .set_publisher(boost::bind(&usrp2_impl::get_mimo_locked, this, mb));
+            .set_publisher(std::bind(&usrp2_impl::get_mimo_locked, this, mb));
         _tree->create<sensor_value_t>(mb_path / "sensors/ref_locked")
-            .set_publisher(boost::bind(&usrp2_impl::get_ref_locked, this, mb));
+            .set_publisher(std::bind(&usrp2_impl::get_ref_locked, this, mb));
 
         ////////////////////////////////////////////////////////////////
         // create frontend control objects
@@ -576,34 +580,39 @@ usrp2_impl::usrp2_impl(const device_addr_t& _device_addr)
             tx_frontend_core_200::make(_mbc[mb].wbiface, U2_REG_SR_ADDR(SR_TX_FRONT));
 
         _tree->create<subdev_spec_t>(mb_path / "rx_subdev_spec")
-            .add_coerced_subscriber(
-                boost::bind(&usrp2_impl::update_rx_subdev_spec, this, mb, _1));
+            .add_coerced_subscriber(std::bind(
+                &usrp2_impl::update_rx_subdev_spec, this, mb, std::placeholders::_1));
         _tree->create<subdev_spec_t>(mb_path / "tx_subdev_spec")
-            .add_coerced_subscriber(
-                boost::bind(&usrp2_impl::update_tx_subdev_spec, this, mb, _1));
+            .add_coerced_subscriber(std::bind(
+                &usrp2_impl::update_tx_subdev_spec, this, mb, std::placeholders::_1));
 
         const fs_path rx_fe_path = mb_path / "rx_frontends" / "A";
         const fs_path tx_fe_path = mb_path / "tx_frontends" / "A";
 
         _tree->create<std::complex<double>>(rx_fe_path / "dc_offset" / "value")
-            .set_coercer(
-                boost::bind(&rx_frontend_core_200::set_dc_offset, _mbc[mb].rx_fe, _1))
+            .set_coercer(std::bind(&rx_frontend_core_200::set_dc_offset,
+                _mbc[mb].rx_fe,
+                std::placeholders::_1))
             .set(std::complex<double>(0.0, 0.0));
         _tree->create<bool>(rx_fe_path / "dc_offset" / "enable")
-            .add_coerced_subscriber(boost::bind(
-                &rx_frontend_core_200::set_dc_offset_auto, _mbc[mb].rx_fe, _1))
+            .add_coerced_subscriber(std::bind(&rx_frontend_core_200::set_dc_offset_auto,
+                _mbc[mb].rx_fe,
+                std::placeholders::_1))
             .set(true);
         _tree->create<std::complex<double>>(rx_fe_path / "iq_balance" / "value")
-            .add_coerced_subscriber(
-                boost::bind(&rx_frontend_core_200::set_iq_balance, _mbc[mb].rx_fe, _1))
+            .add_coerced_subscriber(std::bind(&rx_frontend_core_200::set_iq_balance,
+                _mbc[mb].rx_fe,
+                std::placeholders::_1))
             .set(std::complex<double>(0.0, 0.0));
         _tree->create<std::complex<double>>(tx_fe_path / "dc_offset" / "value")
-            .set_coercer(
-                boost::bind(&tx_frontend_core_200::set_dc_offset, _mbc[mb].tx_fe, _1))
+            .set_coercer(std::bind(&tx_frontend_core_200::set_dc_offset,
+                _mbc[mb].tx_fe,
+                std::placeholders::_1))
             .set(std::complex<double>(0.0, 0.0));
         _tree->create<std::complex<double>>(tx_fe_path / "iq_balance" / "value")
-            .add_coerced_subscriber(
-                boost::bind(&tx_frontend_core_200::set_iq_balance, _mbc[mb].tx_fe, _1))
+            .add_coerced_subscriber(std::bind(&tx_frontend_core_200::set_iq_balance,
+                _mbc[mb].tx_fe,
+                std::placeholders::_1))
             .set(std::complex<double>(0.0, 0.0));
 
         ////////////////////////////////////////////////////////////////
@@ -622,27 +631,34 @@ usrp2_impl::usrp2_impl(const device_addr_t& _device_addr)
         for (size_t dspno = 0; dspno < _mbc[mb].rx_dsps.size(); dspno++) {
             _mbc[mb].rx_dsps[dspno]->set_link_rate(USRP2_LINK_RATE_BPS);
             _tree->access<double>(mb_path / "tick_rate")
-                .add_coerced_subscriber(boost::bind(
-                    &rx_dsp_core_200::set_tick_rate, _mbc[mb].rx_dsps[dspno], _1));
-            fs_path rx_dsp_path = mb_path / str(boost::format("rx_dsps/%u") % dspno);
+                .add_coerced_subscriber(std::bind(&rx_dsp_core_200::set_tick_rate,
+                    _mbc[mb].rx_dsps[dspno],
+                    std::placeholders::_1));
+            fs_path rx_dsp_path = mb_path / "rx_dsps" / dspno;
             _tree->create<meta_range_t>(rx_dsp_path / "rate/range")
-                .set_publisher(boost::bind(
-                    &rx_dsp_core_200::get_host_rates, _mbc[mb].rx_dsps[dspno]));
+                .set_publisher(
+                    std::bind(&rx_dsp_core_200::get_host_rates, _mbc[mb].rx_dsps[dspno]));
             _tree->create<double>(rx_dsp_path / "rate/value")
                 .set(1e6) // some default
-                .set_coercer(boost::bind(
-                    &rx_dsp_core_200::set_host_rate, _mbc[mb].rx_dsps[dspno], _1))
-                .add_coerced_subscriber(
-                    boost::bind(&usrp2_impl::update_rx_samp_rate, this, mb, dspno, _1));
+                .set_coercer(std::bind(&rx_dsp_core_200::set_host_rate,
+                    _mbc[mb].rx_dsps[dspno],
+                    std::placeholders::_1))
+                .add_coerced_subscriber(std::bind(&usrp2_impl::update_rx_samp_rate,
+                    this,
+                    mb,
+                    dspno,
+                    std::placeholders::_1));
             _tree->create<double>(rx_dsp_path / "freq/value")
-                .set_coercer(
-                    boost::bind(&rx_dsp_core_200::set_freq, _mbc[mb].rx_dsps[dspno], _1));
+                .set_coercer(std::bind(&rx_dsp_core_200::set_freq,
+                    _mbc[mb].rx_dsps[dspno],
+                    std::placeholders::_1));
             _tree->create<meta_range_t>(rx_dsp_path / "freq/range")
-                .set_publisher(boost::bind(
-                    &rx_dsp_core_200::get_freq_range, _mbc[mb].rx_dsps[dspno]));
+                .set_publisher(
+                    std::bind(&rx_dsp_core_200::get_freq_range, _mbc[mb].rx_dsps[dspno]));
             _tree->create<stream_cmd_t>(rx_dsp_path / "stream_cmd")
-                .add_coerced_subscriber(boost::bind(
-                    &rx_dsp_core_200::issue_stream_command, _mbc[mb].rx_dsps[dspno], _1));
+                .add_coerced_subscriber(std::bind(&rx_dsp_core_200::issue_stream_command,
+                    _mbc[mb].rx_dsps[dspno],
+                    std::placeholders::_1));
         }
 
         ////////////////////////////////////////////////////////////////
@@ -700,29 +716,31 @@ usrp2_impl::usrp2_impl(const device_addr_t& _device_addr)
             time64_rb_bases,
             mimo_clock_sync_delay_cycles);
         _tree->access<double>(mb_path / "tick_rate")
-            .add_coerced_subscriber(
-                boost::bind(&time64_core_200::set_tick_rate, _mbc[mb].time64, _1));
+            .add_coerced_subscriber(std::bind(
+                &time64_core_200::set_tick_rate, _mbc[mb].time64, std::placeholders::_1));
         _tree->create<time_spec_t>(mb_path / "time/now")
-            .set_publisher(boost::bind(&time64_core_200::get_time_now, _mbc[mb].time64))
-            .add_coerced_subscriber(
-                boost::bind(&time64_core_200::set_time_now, _mbc[mb].time64, _1));
+            .set_publisher(std::bind(&time64_core_200::get_time_now, _mbc[mb].time64))
+            .add_coerced_subscriber(std::bind(
+                &time64_core_200::set_time_now, _mbc[mb].time64, std::placeholders::_1));
         _tree->create<time_spec_t>(mb_path / "time/pps")
             .set_publisher(
-                boost::bind(&time64_core_200::get_time_last_pps, _mbc[mb].time64))
-            .add_coerced_subscriber(
-                boost::bind(&time64_core_200::set_time_next_pps, _mbc[mb].time64, _1));
+                std::bind(&time64_core_200::get_time_last_pps, _mbc[mb].time64))
+            .add_coerced_subscriber(std::bind(&time64_core_200::set_time_next_pps,
+                _mbc[mb].time64,
+                std::placeholders::_1));
         // setup time source props
         _tree->create<std::string>(mb_path / "time_source/value")
-            .add_coerced_subscriber(
-                boost::bind(&time64_core_200::set_time_source, _mbc[mb].time64, _1))
+            .add_coerced_subscriber(std::bind(&time64_core_200::set_time_source,
+                _mbc[mb].time64,
+                std::placeholders::_1))
             .set("none");
         _tree->create<std::vector<std::string>>(mb_path / "time_source/options")
             .set_publisher(
-                boost::bind(&time64_core_200::get_time_sources, _mbc[mb].time64));
+                std::bind(&time64_core_200::get_time_sources, _mbc[mb].time64));
         // setup reference source props
         _tree->create<std::string>(mb_path / "clock_source/value")
-            .add_coerced_subscriber(
-                boost::bind(&usrp2_impl::update_clock_source, this, mb, _1))
+            .add_coerced_subscriber(std::bind(
+                &usrp2_impl::update_clock_source, this, mb, std::placeholders::_1))
             .set("internal");
         std::vector<std::string> clock_sources{"internal", "external", "mimo"};
         if (_mbc[mb].gps and _mbc[mb].gps->gps_detected()) {
@@ -737,14 +755,16 @@ usrp2_impl::usrp2_impl(const device_addr_t& _device_addr)
             case usrp2_iface::USRP_N200_R4:
             case usrp2_iface::USRP_N210_R4:
                 _tree->create<time_spec_t>(mb_path / "time/cmd")
-                    .add_coerced_subscriber(
-                        boost::bind(&usrp2_fifo_ctrl::set_time, _mbc[mb].fifo_ctrl, _1));
+                    .add_coerced_subscriber(std::bind(&usrp2_fifo_ctrl::set_time,
+                        _mbc[mb].fifo_ctrl,
+                        std::placeholders::_1));
             default:
                 break; // otherwise, do not register
         }
         _tree->access<double>(mb_path / "tick_rate")
-            .add_coerced_subscriber(
-                boost::bind(&usrp2_fifo_ctrl::set_tick_rate, _mbc[mb].fifo_ctrl, _1));
+            .add_coerced_subscriber(std::bind(&usrp2_fifo_ctrl::set_tick_rate,
+                _mbc[mb].fifo_ctrl,
+                std::placeholders::_1));
 
         ////////////////////////////////////////////////////////////////////
         // create user-defined control objects
@@ -752,8 +772,8 @@ usrp2_impl::usrp2_impl(const device_addr_t& _device_addr)
         _mbc[mb].user =
             user_settings_core_200::make(_mbc[mb].wbiface, U2_REG_SR_ADDR(SR_USER_REGS));
         _tree->create<user_settings_core_200::user_reg_t>(mb_path / "user/regs")
-            .add_coerced_subscriber(
-                boost::bind(&user_settings_core_200::set_reg, _mbc[mb].user, _1));
+            .add_coerced_subscriber(std::bind(
+                &user_settings_core_200::set_reg, _mbc[mb].user, std::placeholders::_1));
 
         ////////////////////////////////////////////////////////////////
         // create dboard control objects
@@ -772,16 +792,16 @@ usrp2_impl::usrp2_impl(const device_addr_t& _device_addr)
         // create the properties and register subscribers
         _tree->create<dboard_eeprom_t>(mb_path / "dboards/A/rx_eeprom")
             .set(rx_db_eeprom)
-            .add_coerced_subscriber(
-                boost::bind(&usrp2_impl::set_db_eeprom, this, mb, "rx", _1));
+            .add_coerced_subscriber(std::bind(
+                &usrp2_impl::set_db_eeprom, this, mb, "rx", std::placeholders::_1));
         _tree->create<dboard_eeprom_t>(mb_path / "dboards/A/tx_eeprom")
             .set(tx_db_eeprom)
-            .add_coerced_subscriber(
-                boost::bind(&usrp2_impl::set_db_eeprom, this, mb, "tx", _1));
+            .add_coerced_subscriber(std::bind(
+                &usrp2_impl::set_db_eeprom, this, mb, "tx", std::placeholders::_1));
         _tree->create<dboard_eeprom_t>(mb_path / "dboards/A/gdb_eeprom")
             .set(gdb_eeprom)
-            .add_coerced_subscriber(
-                boost::bind(&usrp2_impl::set_db_eeprom, this, mb, "gdb", _1));
+            .add_coerced_subscriber(std::bind(
+                &usrp2_impl::set_db_eeprom, this, mb, "gdb", std::placeholders::_1));
 
         // create a new dboard interface and manager
         _mbc[mb].dboard_manager = dboard_manager::make(rx_db_eeprom,
@@ -797,14 +817,14 @@ usrp2_impl::usrp2_impl(const device_addr_t& _device_addr)
         const fs_path db_tx_fe_path = mb_path / "dboards" / "A" / "tx_frontends";
         for (const std::string& name : _tree->list(db_tx_fe_path)) {
             _tree->access<double>(db_tx_fe_path / name / "freq" / "value")
-                .add_coerced_subscriber(
-                    boost::bind(&usrp2_impl::set_tx_fe_corrections, this, mb, _1));
+                .add_coerced_subscriber(std::bind(
+                    &usrp2_impl::set_tx_fe_corrections, this, mb, std::placeholders::_1));
         }
         const fs_path db_rx_fe_path = mb_path / "dboards" / "A" / "rx_frontends";
         for (const std::string& name : _tree->list(db_rx_fe_path)) {
             _tree->access<double>(db_rx_fe_path / name / "freq" / "value")
-                .add_coerced_subscriber(
-                    boost::bind(&usrp2_impl::set_rx_fe_corrections, this, mb, _1));
+                .add_coerced_subscriber(std::bind(
+                    &usrp2_impl::set_rx_fe_corrections, this, mb, std::placeholders::_1));
         }
     }
 
@@ -896,22 +916,21 @@ double usrp2_impl::set_tx_dsp_freq(const std::string& mb, const double freq_)
     const double tick_rate = _tree->access<double>("/mboards/" + mb + "/tick_rate").get();
 
     // calculate the DAC shift (multiples of rate)
-    const int sign         = boost::math::sign(new_freq);
-    const int zone         = std::min(boost::math::iround(new_freq / tick_rate), 2);
-    const double dac_shift = sign * zone * tick_rate;
+    const int zone         = std::max(std::min<int>(std::lround(new_freq / tick_rate), 2), -2);
+    const double dac_shift = zone * tick_rate;
     new_freq -= dac_shift; // update FPGA DSP target freq
     UHD_LOG_TRACE("USRP2",
         "DSP Tuning: Requested " + std::to_string(freq_ / 1e6)
             + " MHz, Using "
               "Nyquist zone "
-            + std::to_string(sign * zone)
+            + std::to_string(zone)
             + ", leftover DSP tuning: " + std::to_string(new_freq / 1e6) + " MHz.");
 
     // set the DAC shift (modulation mode)
     if (zone == 0) {
         _mbc[mb].codec->set_tx_mod_mode(0); // no shift
     } else {
-        _mbc[mb].codec->set_tx_mod_mode(sign * 4 / zone); // DAC interp = 4
+        _mbc[mb].codec->set_tx_mod_mode(4 / zone); // DAC interp = 4
     }
 
     return _mbc[mb].tx_dsp->set_freq(new_freq) + dac_shift; // actual freq

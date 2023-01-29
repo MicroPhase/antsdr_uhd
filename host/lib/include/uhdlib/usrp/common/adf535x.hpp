@@ -1,11 +1,11 @@
 //
 // Copyright 2015, 2017 Ettus Research, A National Instruments Company
+// Copyright 2019 Ettus Research, A National Instruments Brand
 //
 // SPDX-License-Identifier: GPL-3.0-or-later
 //
 
-#ifndef INCLUDED_ADF535X_HPP
-#define INCLUDED_ADF535X_HPP
+#pragma once
 
 #include "adf5355_regs.hpp"
 #include "adf5356_regs.hpp"
@@ -13,10 +13,11 @@
 #include <uhd/utils/log.hpp>
 #include <uhd/utils/math.hpp>
 #include <uhd/utils/safe_call.hpp>
+#include <uhdlib/utils/narrow.hpp>
 #include <stdint.h>
 #include <boost/format.hpp>
-#include <boost/function.hpp>
 #include <algorithm>
+#include <functional>
 #include <iomanip>
 #include <utility>
 #include <vector>
@@ -54,22 +55,24 @@ public:
         MUXOUT_DLD
     };
 
-    virtual void set_reference_freq(double fref, bool force = false) = 0;
+    virtual void set_reference_freq(const double fref, const bool force = false) = 0;
 
-    virtual void set_pfd_freq(double pfd_freq) = 0;
+    virtual void set_pfd_freq(const double pfd_freq) = 0;
 
-    virtual void set_feedback_select(feedback_sel_t fb_sel) = 0;
+    virtual void set_feedback_select(const feedback_sel_t fb_sel) = 0;
 
-    virtual void set_output_power(output_power_t power) = 0;
+    virtual void set_output_power(const output_power_t power) = 0;
 
-    virtual void set_output_enable(output_t output, bool enable) = 0;
+    virtual void set_output_enable(const output_t output, const bool enable) = 0;
 
-    virtual void set_muxout_mode(muxout_t mode) = 0;
+    virtual void set_muxout_mode(const muxout_t mode) = 0;
 
-    virtual double set_frequency(
-        double target_freq, double freq_resolution, bool flush = false) = 0;
+    virtual double set_frequency(const double target_freq,
+        const uint32_t mod2 = 2,
+        const bool flush = false) = 0;
 
-    virtual double set_charge_pump_current(double target_current, bool flush = false) = 0;
+    virtual double set_charge_pump_current(
+        const double target_current, const bool flush = false) = 0;
 
     virtual uhd::meta_range_t get_charge_pump_current_range() = 0;
 
@@ -93,8 +96,10 @@ const double ADF535X_MIN_OUT_FREQ = (3.4e9 / 64);
 const double ADF535X_PHASE_RESYNC_TIME = 400e-6;
 
 const uint32_t ADF535X_MOD1      = 16777216;
-const uint32_t ADF535X_MAX_MOD2  = 16383;
-const uint32_t ADF535X_MAX_FRAC2 = 16383;
+const uint32_t ADF5355_MAX_MOD2  = 16383;
+const uint32_t ADF5355_MAX_FRAC2 = 16383;
+const uint32_t ADF5356_MAX_MOD2  = 268435455;
+const uint32_t ADF5356_MAX_FRAC2 = 268435455;
 // const uint16_t ADF535X_MIN_INT_PRESCALER_89 = 75;
 } // namespace
 
@@ -135,12 +140,6 @@ public:
     void set_feedback_select(const feedback_sel_t fb_sel) override
     {
         _fb_after_divider = (fb_sel == FB_SEL_DIVIDED);
-
-        if (_fb_after_divider) {
-            _regs.feedback_select = adf535x_regs_t::FEEDBACK_SELECT_DIVIDED;
-        } else {
-            _regs.feedback_select = adf535x_regs_t::FEEDBACK_SELECT_FUNDAMENTAL;
-        }
     }
 
     void set_pfd_freq(const double pfd_freq) override
@@ -202,7 +201,7 @@ public:
 
         //-----------------------------------------------------------
         // Set VCO band divider
-        _regs.vco_band_div = static_cast<uint8_t>(ceil(_pfd_freq / 2.4e6));
+        _regs.vco_band_div = _set_vco_band_div(_pfd_freq);
 
         //-----------------------------------------------------------
         // Set ADC delay (code from ADI driver)
@@ -227,10 +226,10 @@ public:
     }
 
     double set_frequency(const double target_freq,
-        const double freq_resolution,
+        const uint32_t mod2 = 2,
         const bool flush = false) override
     {
-        return _set_frequency(target_freq, freq_resolution, flush);
+        return _set_frequency(target_freq, mod2, flush);
     }
 
     double set_charge_pump_current(const double current, const bool flush) override
@@ -238,7 +237,8 @@ public:
         const auto cp_range = get_charge_pump_current_range();
 
         const auto coerced_current = cp_range.clip(current, true);
-        const int current_step     = std::round((coerced_current / cp_range.step()) - 1);
+        const int current_step =
+            uhd::narrow_cast<int>(std::round((coerced_current / cp_range.step()) - 1));
 
         UHD_ASSERT_THROW(current_step >= 0 and current_step < 16);
         _regs.charge_pump_current =
@@ -338,7 +338,8 @@ public:
     }
 
 protected:
-    double _set_frequency(double, double, bool);
+    uint8_t _set_vco_band_div(double);
+    double _set_frequency(double, uint32_t, bool);
     uhd::meta_range_t _get_charge_pump_current_range();
     void _commit();
 
@@ -352,19 +353,25 @@ private: // Members
     uint32_t _wait_time_us;
     double _ref_freq;
     double _pfd_freq;
-    double _fb_after_divider;
+    bool _fb_after_divider;
 };
 
 // ADF5355 Functions
 template <>
+inline uint8_t adf535x_impl<adf5355_regs_t>::_set_vco_band_div(double pfd_freq)
+{
+    return static_cast<uint8_t>(ceil(pfd_freq / 2.4e6));
+}
+
+template <>
 inline double adf535x_impl<adf5355_regs_t>::_set_frequency(
-    double target_freq, double freq_resolution, bool flush)
+    double target_freq, uint32_t mod2, bool flush)
 {
     if (target_freq > ADF535X_MAX_OUT_FREQ or target_freq < ADF535X_MIN_OUT_FREQ) {
         throw uhd::runtime_error("requested frequency out of range.");
     }
-    if ((uint32_t)freq_resolution == 0) {
-        throw uhd::runtime_error("requested resolution cannot be less than 1.");
+    if (mod2 < 2 or mod2 > ADF5355_MAX_MOD2) {
+        throw uhd::runtime_error("requested mod2 out of range.");
     }
 
     /* Calculate target VCOout frequency */
@@ -413,12 +420,13 @@ inline double adf535x_impl<adf5355_regs_t>::_set_frequency(
     const auto FRAC1     = static_cast<uint32_t>(floor((N - INT) * ADF535X_MOD1));
     const double residue = (N - INT) * ADF535X_MOD1 - FRAC1;
 
-    const double gcd = double(
-        uhd::math::gcd(static_cast<int>(_pfd_freq), static_cast<int>(freq_resolution)));
-    const auto MOD2 = static_cast<uint16_t>(
-        std::min(floor(_pfd_freq / gcd), static_cast<double>(ADF535X_MAX_MOD2)));
-    const auto FRAC2 = static_cast<uint16_t>(
-        std::min(ceil(residue * MOD2), static_cast<double>(ADF535X_MAX_FRAC2)));
+    // The data sheet recommends reducing FRAC2 and MOD2 to the lowest possible values
+    const auto frac2 = static_cast<uint16_t>(
+        std::min(ceil(residue * mod2), static_cast<double>(ADF5355_MAX_FRAC2)));
+    const auto gcd = 
+        uhd::math::gcd(static_cast<int>(frac2), static_cast<int>(mod2));
+    const auto FRAC2 = frac2 == 0 ? 0 : frac2 / gcd;
+    const auto MOD2 = frac2 == 0 ? 2 : mod2 / gcd;
 
     const double coerced_vco_freq =
         _pfd_freq * (_fb_after_divider ? rf_divider : 1)
@@ -428,7 +436,22 @@ inline double adf535x_impl<adf5355_regs_t>::_set_frequency(
 
     const double coerced_out_freq = coerced_vco_freq / rf_divider;
 
+    UHD_LOG_TRACE("ADF5355",
+        boost::format("ADF5355 Frequencies (MHz): Requested=%f "
+                      "Actual=%f TargetVCO=%f ActualVCO=%f")
+            % (target_freq / 1e6) % (coerced_out_freq / 1e6) % (target_vco_freq / 1e6)
+            % (coerced_vco_freq / 1e6));
+    UHD_LOG_TRACE("ADF5355",
+        boost::format("ADF5355 Settings: N=%f INT=%d FRAC1=%u MOD2=%d FRAC2=%u") % N % INT
+            % FRAC1 % MOD2 % FRAC2);
+
     /* Update registers */
+    if ((rf_divider == 1) or not _fb_after_divider) {
+        _regs.feedback_select = adf5355_regs_t::FEEDBACK_SELECT_FUNDAMENTAL;
+    }
+    else {
+        _regs.feedback_select = adf5355_regs_t::FEEDBACK_SELECT_DIVIDED;
+    }
     _regs.int_16_bit   = INT;
     _regs.frac1_24_bit = FRAC1;
     _regs.frac2_14_bit = FRAC2;
@@ -479,14 +502,20 @@ inline void adf535x_impl<adf5355_regs_t>::_commit()
 
 // ADF5356 Functions
 template <>
+inline uint8_t adf535x_impl<adf5356_regs_t>::_set_vco_band_div(double pfd_freq)
+{
+    return static_cast<uint8_t>(ceil(pfd_freq / 1.6e6));
+}
+
+template <>
 inline double adf535x_impl<adf5356_regs_t>::_set_frequency(
-    double target_freq, double freq_resolution, bool flush)
+    double target_freq, uint32_t mod2, bool flush)
 {
     if (target_freq > ADF535X_MAX_OUT_FREQ or target_freq < ADF535X_MIN_OUT_FREQ) {
         throw uhd::runtime_error("requested frequency out of range.");
     }
-    if ((uint32_t)freq_resolution == 0) {
-        throw uhd::runtime_error("requested resolution cannot be less than 1.");
+    if (mod2 < 2 or mod2 > ADF5355_MAX_MOD2) {
+        throw uhd::runtime_error("requested mod2 out of range.");
     }
 
     /* Calculate target VCOout frequency */
@@ -535,12 +564,13 @@ inline double adf535x_impl<adf5356_regs_t>::_set_frequency(
     const auto FRAC1     = static_cast<uint32_t>(floor((N - INT) * ADF535X_MOD1));
     const double residue = (N - INT) * ADF535X_MOD1 - FRAC1;
 
-    const double gcd = double(
-        uhd::math::gcd(static_cast<int>(_pfd_freq), static_cast<int>(freq_resolution)));
-    const auto MOD2 = static_cast<uint16_t>(
-        std::min(floor(_pfd_freq / gcd), static_cast<double>(ADF535X_MAX_MOD2)));
-    const auto FRAC2 = static_cast<uint16_t>(
-        std::min(round(residue * MOD2), static_cast<double>(ADF535X_MAX_FRAC2)));
+    // The data sheet recommends reducing FRAC2 and MOD2 to the lowest possible values
+    const auto frac2 = static_cast<uint16_t>(
+        std::min(ceil(residue * mod2), static_cast<double>(ADF5356_MAX_FRAC2)));
+    const auto gcd =
+        uhd::math::gcd(static_cast<int>(frac2), static_cast<int>(mod2));
+    const auto FRAC2 = frac2 == 0 ? 0 : frac2 / gcd;
+    const auto MOD2 = frac2 == 0 ? 2 : mod2 / gcd;
 
     const double coerced_vco_freq =
         _pfd_freq * (_fb_after_divider ? rf_divider : 1)
@@ -550,12 +580,33 @@ inline double adf535x_impl<adf5356_regs_t>::_set_frequency(
 
     const double coerced_out_freq = coerced_vco_freq / rf_divider;
 
+    UHD_LOG_TRACE("ADF5356",
+        boost::format("ADF5356 Frequencies (MHz): Requested=%f "
+                      "Actual=%f TargetVCO=%f ActualVCO=%f")
+            % (target_freq / 1e6) % (coerced_out_freq / 1e6) % (target_vco_freq / 1e6)
+            % (coerced_vco_freq / 1e6));
+    UHD_LOG_TRACE("ADF5356",
+        boost::format("ADF5356 Settings: N=%f INT=%d FRAC1=%u MOD2=%d FRAC2=%u") % N % INT
+            % FRAC1 % MOD2 % FRAC2);
+
     /* Update registers */
+    if ((rf_divider == 1) or not _fb_after_divider) {
+        _regs.feedback_select = adf5356_regs_t::FEEDBACK_SELECT_FUNDAMENTAL;
+    }
+    else {
+        _regs.feedback_select = adf5356_regs_t::FEEDBACK_SELECT_DIVIDED;
+    }
     _regs.int_16_bit   = INT;
     _regs.frac1_24_bit = FRAC1;
-    _regs.frac2_msb    = FRAC2;
-    _regs.mod2_msb     = MOD2;
+    _regs.frac2_lsb    = narrow_cast<uint16_t>(FRAC2 & 0x3FFF);
+    _regs.mod2_lsb     = narrow_cast<uint16_t>(MOD2 & 0x3FFF);
+    _regs.frac2_msb    = narrow_cast<uint16_t>(FRAC2 >> 14);
+    _regs.mod2_msb     = narrow_cast<uint16_t>(MOD2 >> 14);
     _regs.phase_24_bit = 0;
+
+    _regs.negative_bleed =  FRAC1 != 0 or FRAC2 != 0 ?
+                            adf5356_regs_t::NEGATIVE_BLEED_ENABLED :
+                            adf5356_regs_t::NEGATIVE_BLEED_DISABLED;
 
     if (flush)
         commit();
@@ -585,11 +636,11 @@ inline void adf535x_impl<adf5356_regs_t>::_commit()
     } else {
         // Frequency update sequence from data sheet
         _write_fn(addr_vtr_t(ONE_REG, _regs.get_reg(13)));
+        _write_fn(addr_vtr_t(ONE_REG, _regs.get_reg(10)));
         _write_fn(addr_vtr_t(ONE_REG, _regs.get_reg(6)));
         _write_fn(addr_vtr_t(ONE_REG, _regs.get_reg(2)));
         _write_fn(addr_vtr_t(ONE_REG, _regs.get_reg(1)));
+        _wait_fn(_wait_time_us);
         _write_fn(addr_vtr_t(ONE_REG, _regs.get_reg(0)));
     }
 }
-
-#endif // INCLUDED_ADF535X_HPP

@@ -50,11 +50,12 @@
 #include <uhd/utils/log.hpp>
 #include <uhd/utils/safe_call.hpp>
 #include <uhd/utils/static.hpp>
+#include <uhdlib/utils/narrow.hpp>
 #include <boost/assign/list_of.hpp>
-#include <boost/bind.hpp>
 #include <boost/format.hpp>
-#include <boost/math/special_functions/round.hpp>
 #include <chrono>
+#include <cmath>
+#include <functional>
 #include <thread>
 #include <utility>
 
@@ -93,7 +94,7 @@ class xcvr2450 : public xcvr_dboard_base
 {
 public:
     xcvr2450(ctor_args_t args);
-    virtual ~xcvr2450(void);
+    ~xcvr2450(void) override;
 
 private:
     double _lo_freq;
@@ -226,14 +227,15 @@ xcvr2450::xcvr2450(ctor_args_t args) : xcvr_dboard_base(args)
     this->get_rx_subtree()->create<std::string>("name").set("XCVR2450 RX");
     this->get_rx_subtree()
         ->create<sensor_value_t>("sensors/lo_locked")
-        .set_publisher(boost::bind(&xcvr2450::get_locked, this));
+        .set_publisher(std::bind(&xcvr2450::get_locked, this));
     this->get_rx_subtree()
         ->create<sensor_value_t>("sensors/rssi")
-        .set_publisher(boost::bind(&xcvr2450::get_rssi, this));
+        .set_publisher(std::bind(&xcvr2450::get_rssi, this));
     for (const std::string& name : xcvr_rx_gain_ranges.keys()) {
         this->get_rx_subtree()
             ->create<double>("gains/" + name + "/value")
-            .set_coercer(boost::bind(&xcvr2450::set_rx_gain, this, _1, name))
+            .set_coercer(
+                std::bind(&xcvr2450::set_rx_gain, this, std::placeholders::_1, name))
             .set(xcvr_rx_gain_ranges[name].start());
         this->get_rx_subtree()
             ->create<meta_range_t>("gains/" + name + "/range")
@@ -241,12 +243,13 @@ xcvr2450::xcvr2450(ctor_args_t args) : xcvr_dboard_base(args)
     }
     this->get_rx_subtree()
         ->create<double>("freq/value")
-        .set_coercer(boost::bind(&xcvr2450::set_lo_freq, this, _1))
+        .set_coercer(std::bind(&xcvr2450::set_lo_freq, this, std::placeholders::_1))
         .set(double(2.45e9));
     this->get_rx_subtree()->create<meta_range_t>("freq/range").set(xcvr_freq_range);
     this->get_rx_subtree()
         ->create<std::string>("antenna/value")
-        .add_coerced_subscriber(boost::bind(&xcvr2450::set_rx_ant, this, _1))
+        .add_coerced_subscriber(
+            std::bind(&xcvr2450::set_rx_ant, this, std::placeholders::_1))
         .set(xcvr_antennas.at(0));
     this->get_rx_subtree()
         ->create<std::vector<std::string>>("antenna/options")
@@ -256,8 +259,9 @@ xcvr2450::xcvr2450(ctor_args_t args) : xcvr_dboard_base(args)
     this->get_rx_subtree()->create<bool>("use_lo_offset").set(false);
     this->get_rx_subtree()
         ->create<double>("bandwidth/value")
-        .set_coercer(boost::bind(
-            &xcvr2450::set_rx_bandwidth, this, _1)) // complex bandpass bandwidth
+        .set_coercer(std::bind(&xcvr2450::set_rx_bandwidth,
+            this,
+            std::placeholders::_1)) // complex bandpass bandwidth
         .set(2.0 * _rx_bandwidth); //_rx_bandwidth in lowpass, convert to complex bandpass
     this->get_rx_subtree()
         ->create<meta_range_t>("bandwidth/range")
@@ -269,11 +273,12 @@ xcvr2450::xcvr2450(ctor_args_t args) : xcvr_dboard_base(args)
     this->get_tx_subtree()->create<std::string>("name").set("XCVR2450 TX");
     this->get_tx_subtree()
         ->create<sensor_value_t>("sensors/lo_locked")
-        .set_publisher(boost::bind(&xcvr2450::get_locked, this));
+        .set_publisher(std::bind(&xcvr2450::get_locked, this));
     for (const std::string& name : xcvr_tx_gain_ranges.keys()) {
         this->get_tx_subtree()
             ->create<double>("gains/" + name + "/value")
-            .set_coercer(boost::bind(&xcvr2450::set_tx_gain, this, _1, name))
+            .set_coercer(
+                std::bind(&xcvr2450::set_tx_gain, this, std::placeholders::_1, name))
             .set(xcvr_tx_gain_ranges[name].start());
         this->get_tx_subtree()
             ->create<meta_range_t>("gains/" + name + "/range")
@@ -281,12 +286,13 @@ xcvr2450::xcvr2450(ctor_args_t args) : xcvr_dboard_base(args)
     }
     this->get_tx_subtree()
         ->create<double>("freq/value")
-        .set_coercer(boost::bind(&xcvr2450::set_lo_freq, this, _1))
+        .set_coercer(std::bind(&xcvr2450::set_lo_freq, this, std::placeholders::_1))
         .set(double(2.45e9));
     this->get_tx_subtree()->create<meta_range_t>("freq/range").set(xcvr_freq_range);
     this->get_tx_subtree()
         ->create<std::string>("antenna/value")
-        .add_coerced_subscriber(boost::bind(&xcvr2450::set_tx_ant, this, _1))
+        .add_coerced_subscriber(
+            std::bind(&xcvr2450::set_tx_ant, this, std::placeholders::_1))
         .set(xcvr_antennas.at(1));
     this->get_tx_subtree()
         ->create<std::vector<std::string>>("antenna/options")
@@ -296,8 +302,9 @@ xcvr2450::xcvr2450(ctor_args_t args) : xcvr_dboard_base(args)
     this->get_tx_subtree()->create<bool>("use_lo_offset").set(false);
     this->get_tx_subtree()
         ->create<double>("bandwidth/value")
-        .set_coercer(boost::bind(
-            &xcvr2450::set_tx_bandwidth, this, _1)) // complex bandpass bandwidth
+        .set_coercer(std::bind(&xcvr2450::set_tx_bandwidth,
+            this,
+            std::placeholders::_1)) // complex bandpass bandwidth
         .set(2.0 * _tx_bandwidth); //_tx_bandwidth in lowpass, convert to complex bandpass
     this->get_tx_subtree()
         ->create<meta_range_t>("bandwidth/range")
@@ -404,7 +411,7 @@ double xcvr2450::set_lo_freq_core(double target_freq)
         for (R = 1; R <= 7; R++) {
             double N = (target_freq * scaler * R * _ad9515div) / ref_freq;
             intdiv   = int(std::floor(N));
-            fracdiv  = boost::math::iround((N - intdiv) * double(1 << 16));
+            fracdiv  = uhd::narrow_cast<int>(std::lround((N - intdiv)) * double(1 << 16));
             // actual minimum is 128, but most chips seems to require higher to lock
             if (intdiv < 131 or intdiv > 255)
                 continue;
@@ -498,7 +505,7 @@ void xcvr2450::set_rx_ant(const std::string& ant)
 static int gain_to_tx_vga_reg(double& gain)
 {
     // calculate the register value
-    int reg = uhd::clip(boost::math::iround(gain * 60 / 30.0) + 3, 0, 63);
+    int reg = uhd::clip(uhd::narrow_cast<int>(std::lround(gain * 60 / 30.0) + 3), 0, 63);
 
     // calculate the actual gain value
     if (reg < 4)
@@ -520,7 +527,7 @@ static int gain_to_tx_vga_reg(double& gain)
  */
 static max2829_regs_t::tx_baseband_gain_t gain_to_tx_bb_reg(double& gain)
 {
-    int reg = uhd::clip(boost::math::iround(gain * 3 / 5.0), 0, 3);
+    int reg = uhd::clip(uhd::narrow_cast<int>(std::lround<int>(gain * 3 / 5.0)), 0, 3);
     switch (reg) {
         case 0:
             gain = 0;
@@ -546,7 +553,7 @@ static max2829_regs_t::tx_baseband_gain_t gain_to_tx_bb_reg(double& gain)
  */
 static int gain_to_rx_vga_reg(double& gain)
 {
-    int reg = uhd::clip(boost::math::iround(gain / 2.0), 0, 31);
+    int reg = uhd::clip(uhd::narrow_cast<int>(std::lround(gain / 2.0)), 0, 31);
     gain    = double(reg * 2);
     return reg;
 }
@@ -559,7 +566,7 @@ static int gain_to_rx_vga_reg(double& gain)
  */
 static int gain_to_rx_lna_reg(double& gain)
 {
-    int reg = uhd::clip(boost::math::iround(gain * 2 / 30.5) + 1, 0, 3);
+    int reg = uhd::clip(uhd::narrow_cast<int>(std::lround(gain * 2 / 30.5)) + 1, 0, 3);
     switch (reg) {
         case 0:
         case 1:
@@ -614,7 +621,7 @@ double xcvr2450::set_rx_gain(double gain, const std::string& name)
 static max2829_regs_t::tx_lpf_coarse_adj_t bandwidth_to_tx_lpf_coarse_reg(
     double& bandwidth)
 {
-    int reg = uhd::clip(boost::math::iround((bandwidth - 6.0e6) / 6.0e6), 1, 3);
+    int reg = uhd::clip(uhd::narrow_cast<int>(std::lround((bandwidth - 6.0e6)) / 6.0e6), 1, 3);
 
     switch (reg) {
         case 1: // bandwidth < 15MHz
@@ -633,8 +640,10 @@ static max2829_regs_t::tx_lpf_coarse_adj_t bandwidth_to_tx_lpf_coarse_reg(
 static max2829_regs_t::rx_lpf_fine_adj_t bandwidth_to_rx_lpf_fine_reg(
     double& bandwidth, double requested_bandwidth)
 {
-    int reg =
-        uhd::clip(boost::math::iround((requested_bandwidth / bandwidth) / 0.05), 18, 22);
+    int reg = uhd::clip(
+        uhd::narrow_cast<int>(std::lround((requested_bandwidth / bandwidth)) / 0.05),
+        18,
+        22);
 
     switch (reg) {
         case 18: // requested_bandwidth < 92.5%
@@ -659,7 +668,8 @@ static max2829_regs_t::rx_lpf_fine_adj_t bandwidth_to_rx_lpf_fine_reg(
 static max2829_regs_t::rx_lpf_coarse_adj_t bandwidth_to_rx_lpf_coarse_reg(
     double& bandwidth)
 {
-    int reg = uhd::clip(boost::math::iround((bandwidth - 7.0e6) / 1.0e6), 0, 11);
+    int reg =
+        uhd::clip(uhd::narrow_cast<int>(std::lround((bandwidth - 7.0e6)) / 1.0e6), 0, 11);
 
     switch (reg) {
         case 0: // bandwidth < 7.5MHz

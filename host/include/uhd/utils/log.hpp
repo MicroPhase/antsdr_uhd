@@ -5,8 +5,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 //
 
-#ifndef INCLUDED_UHD_UTILS_LOG_HPP
-#define INCLUDED_UHD_UTILS_LOG_HPP
+#pragma once
 
 #include <uhd/config.hpp>
 #include <boost/current_function.hpp>
@@ -48,18 +47,30 @@
  * Log levels can be specified using string or numeric values of
  * uhd::log::severity_level.
  *
- * The default log level is "info", but can be overridden:
- *  - at compile time by setting the pre-processor define `-DUHD_LOG_MIN_LEVEL`.
- *  - at runtime by setting the environment variable `UHD_LOG_LEVEL`.
- *  - for console logging by setting `(-D)UHD_LOG_CONSOLE_LEVEL` at
- *    run-/compiletime
- *  - for file logging by setting `(-D)UHD_LOG_FILE_LEVEL` at run-/compiletime
+ * The minimum log level is defined by `-DUHD_LOG_MIN_LEVEL` at compile time,
+ * and this value can be increased at runtime by specifying the `UHD_LOG_LEVEL`
+ * environment variable. This minimum logging level applies to any form of
+ * runtime logging. Thus for example if this minimum is set to 3 (`info`), then
+ * during runtime no logging at levels below 3 can be provided.
  *
- * UHD_LOG_LEVEL can be the name of a verbosity enum or integer value:
+ * The following set the minimum logging level to 3 (`info`):
  *   - Example pre-processor define: `-DUHD_LOG_MIN_LEVEL=3`
  *   - Example pre-processor define: `-DUHD_LOG_MIN_LEVEL=info`
  *   - Example environment variable: `export UHD_LOG_LEVEL=3`
  *   - Example environment variable: `export UHD_LOG_LEVEL=info`
+ *
+ * The actual log level for console and file logging can be configured by
+ * setting `UHD_LOG_CONSOLE_LEVEL` or `UHD_LOG_FILE_LEVEL`, respectively. The
+ * default values for these variables can be defined using the cmake flags
+ * `-DUHD_LOG_CONSOLE_LEVEL` and `-DUHD_LOG_FILE_LEVEL`, respectively.
+ *
+ * These variables can be the name of a verbosity enum or integer value:
+ *   - Example pre-processor define: `-DUHD_LOG_CONSOLE_LEVEL=3`
+ *   - Example pre-processor define: `-DUHD_LOG_CONSOLE_LEVEL=info`
+ *   - Example environment variable: `export UHD_LOG_CONSOLE_LEVEL=3`
+ *   - Example environment variable: `export UHD_LOG_CONSOLE_LEVEL=info`
+ *
+ * The `UHD_LOG_FILE_LEVEL` variable can be used in the same way.
  *
  * \subsection loghpp_formatting Log formatting
  *
@@ -222,6 +233,13 @@ UHD_API void set_logger_level(const std::string& logger, uhd::log::severity_leve
 #    define UHD_LOG_FATAL(component, message)
 #endif
 
+#define RFNOC_LOG_TRACE(message) UHD_LOG_TRACE(this->get_unique_id(), message)
+#define RFNOC_LOG_DEBUG(message) UHD_LOG_DEBUG(this->get_unique_id(), message)
+#define RFNOC_LOG_INFO(message) UHD_LOG_INFO(this->get_unique_id(), message)
+#define RFNOC_LOG_WARNING(message) UHD_LOG_WARNING(this->get_unique_id(), message)
+#define RFNOC_LOG_ERROR(message) UHD_LOG_ERROR(this->get_unique_id(), message)
+#define RFNOC_LOG_FATAL(message) UHD_LOG_FATAL(this->get_unique_id(), message)
+
 #ifndef UHD_LOG_FASTPATH_DISABLE
 //! Extra-fast logging macro for when speed matters.
 // No metadata is tracked. Only the message is displayed. This does not go
@@ -306,5 +324,3 @@ public:
 } // namespace _log
 //! \endcond
 } /* namespace uhd */
-
-#endif /* INCLUDED_UHD_UTILS_LOG_HPP */

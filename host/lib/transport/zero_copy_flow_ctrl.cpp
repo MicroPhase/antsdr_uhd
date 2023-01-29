@@ -10,11 +10,11 @@
 #include <uhd/transport/zero_copy_flow_ctrl.hpp>
 #include <uhd/utils/log.hpp>
 #include <uhd/utils/safe_call.hpp>
-#include <boost/bind.hpp>
 #include <boost/format.hpp>
-#include <boost/make_shared.hpp>
 #include <boost/thread/mutex.hpp>
 #include <boost/thread/thread.hpp>
+#include <functional>
+#include <memory>
 
 using namespace uhd;
 using namespace uhd::transport;
@@ -30,12 +30,12 @@ public:
         /* NOP */
     }
 
-    ~zero_copy_flow_ctrl_msb()
+    ~zero_copy_flow_ctrl_msb() override
     {
         /* NOP */
     }
 
-    void release()
+    void release() override
     {
         if (_mb) {
             _mb->commit(size());
@@ -64,12 +64,12 @@ public:
         /* NOP */
     }
 
-    ~zero_copy_flow_ctrl_mrb()
+    ~zero_copy_flow_ctrl_mrb() override
     {
         /* NOP */
     }
 
-    void release()
+    void release() override
     {
         if (_mb) {
             _mb.reset();
@@ -97,7 +97,7 @@ private:
 class zero_copy_flow_ctrl_impl : public zero_copy_flow_ctrl
 {
 public:
-    typedef boost::shared_ptr<zero_copy_flow_ctrl_impl> sptr;
+    typedef std::shared_ptr<zero_copy_flow_ctrl_impl> sptr;
 
     zero_copy_flow_ctrl_impl(zero_copy_if::sptr transport,
         flow_ctrl_func send_flow_ctrl,
@@ -113,27 +113,25 @@ public:
         UHD_LOG_TRACE("TRANSPORT", "Created zero_copy_flow_ctrl");
 
         for (size_t i = 0; i < transport->get_num_send_frames(); i++) {
-            _send_buffers[i] =
-                boost::make_shared<zero_copy_flow_ctrl_msb>(_send_flow_ctrl);
+            _send_buffers[i] = std::make_shared<zero_copy_flow_ctrl_msb>(_send_flow_ctrl);
         }
         for (size_t i = 0; i < transport->get_num_recv_frames(); i++) {
-            _recv_buffers[i] =
-                boost::make_shared<zero_copy_flow_ctrl_mrb>(_recv_flow_ctrl);
+            _recv_buffers[i] = std::make_shared<zero_copy_flow_ctrl_mrb>(_recv_flow_ctrl);
         }
     }
 
-    ~zero_copy_flow_ctrl_impl() {}
+    ~zero_copy_flow_ctrl_impl() override {}
 
     /*******************************************************************
      * Receive implementation:
      * Pop the receive buffer pointer from the underlying transport
      ******************************************************************/
-    UHD_INLINE managed_recv_buffer::sptr get_recv_buff(double timeout)
+    UHD_INLINE managed_recv_buffer::sptr get_recv_buff(double timeout) override
     {
         managed_recv_buffer::sptr ptr;
         managed_recv_buffer::sptr buff = _transport->get_recv_buff(timeout);
         if (buff) {
-            boost::shared_ptr<zero_copy_flow_ctrl_mrb> mb =
+            std::shared_ptr<zero_copy_flow_ctrl_mrb> mb =
                 _recv_buffers[_recv_buff_index++];
             _recv_buff_index %= _recv_buffers.size();
             ptr = mb->get(buff);
@@ -141,12 +139,12 @@ public:
         return ptr;
     }
 
-    UHD_INLINE size_t get_num_recv_frames() const
+    UHD_INLINE size_t get_num_recv_frames() const override
     {
         return _transport->get_num_recv_frames();
     }
 
-    UHD_INLINE size_t get_recv_frame_size() const
+    UHD_INLINE size_t get_recv_frame_size() const override
     {
         return _transport->get_recv_frame_size();
     }
@@ -155,12 +153,12 @@ public:
      * Send implementation:
      * Pass the send buffer pointer from the underlying transport
      ******************************************************************/
-    managed_send_buffer::sptr get_send_buff(double timeout)
+    managed_send_buffer::sptr get_send_buff(double timeout) override
     {
         managed_send_buffer::sptr ptr;
         managed_send_buffer::sptr buff = _transport->get_send_buff(timeout);
         if (buff) {
-            boost::shared_ptr<zero_copy_flow_ctrl_msb> mb =
+            std::shared_ptr<zero_copy_flow_ctrl_msb> mb =
                 _send_buffers[_send_buff_index++];
             _send_buff_index %= _send_buffers.size();
             ptr = mb->get(buff);
@@ -168,12 +166,12 @@ public:
         return ptr;
     }
 
-    UHD_INLINE size_t get_num_send_frames() const
+    UHD_INLINE size_t get_num_send_frames() const override
     {
         return _transport->get_num_send_frames();
     }
 
-    UHD_INLINE size_t get_send_frame_size() const
+    UHD_INLINE size_t get_send_frame_size() const override
     {
         return _transport->get_send_frame_size();
     }
@@ -183,8 +181,8 @@ private:
     zero_copy_if::sptr _transport;
 
     // buffers
-    std::vector<boost::shared_ptr<zero_copy_flow_ctrl_msb>> _send_buffers;
-    std::vector<boost::shared_ptr<zero_copy_flow_ctrl_mrb>> _recv_buffers;
+    std::vector<std::shared_ptr<zero_copy_flow_ctrl_msb>> _send_buffers;
+    std::vector<std::shared_ptr<zero_copy_flow_ctrl_mrb>> _recv_buffers;
     size_t _send_buff_index;
     size_t _recv_buff_index;
 

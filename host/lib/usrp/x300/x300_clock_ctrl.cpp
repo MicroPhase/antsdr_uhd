@@ -12,7 +12,6 @@
 #include <uhd/utils/safe_call.hpp>
 #include <stdint.h>
 #include <boost/format.hpp>
-#include <boost/math/special_functions/round.hpp>
 #include <cmath>
 #include <cstdlib>
 #include <stdexcept>
@@ -70,7 +69,7 @@ x300_clock_ctrl::~x300_clock_ctrl(void)
 class x300_clock_ctrl_impl : public x300_clock_ctrl
 {
 public:
-    ~x300_clock_ctrl_impl(void) {}
+    ~x300_clock_ctrl_impl(void) override {}
 
     x300_clock_ctrl_impl(uhd::spi_iface::sptr spiface,
         const size_t slaveno,
@@ -88,7 +87,7 @@ public:
         init();
     }
 
-    void reset_clocks()
+    void reset_clocks() override
     {
         _lmk04816_regs.RESET = lmk04816_regs_t::RESET_RESET;
         this->write_regs(0);
@@ -113,23 +112,23 @@ public:
         this->write_regs(11);
     }
 
-    double get_master_clock_rate(void)
+    double get_master_clock_rate(void) override
     {
         return _master_clock_rate;
     }
 
-    double get_sysref_clock_rate(void)
+    double get_sysref_clock_rate(void) override
     {
         return _system_ref_rate;
     }
 
-    double get_refout_clock_rate(void)
+    double get_refout_clock_rate(void) override
     {
         // We support only one reference output rate
         return X300_REF_CLK_OUT_RATE;
     }
 
-    void set_dboard_rate(const x300_clock_which_t which, double rate)
+    void set_dboard_rate(const x300_clock_which_t which, double rate) override
     {
         uint16_t div  = uint16_t(_vco_freq / rate);
         uint16_t* reg = NULL;
@@ -174,7 +173,7 @@ public:
         sync_clocks();
     }
 
-    double get_dboard_rate(const x300_clock_which_t which)
+    double get_dboard_rate(const x300_clock_which_t which) override
     {
         double rate = 0.0;
         switch (which) {
@@ -192,7 +191,7 @@ public:
         return rate;
     }
 
-    std::vector<double> get_dboard_rates(const x300_clock_which_t)
+    std::vector<double> get_dboard_rates(const x300_clock_which_t) override
     {
         std::vector<double> rates;
         for (size_t div = size_t(_vco_freq / _master_clock_rate);
@@ -202,7 +201,7 @@ public:
         return rates;
     }
 
-    void enable_dboard_clock(const x300_clock_which_t which, const bool enable)
+    void enable_dboard_clock(const x300_clock_which_t which, const bool enable) override
     {
         switch (which) {
             case X300_CLOCK_WHICH_DB0_RX:
@@ -250,7 +249,7 @@ public:
         }
     }
 
-    void set_ref_out(const bool enable)
+    void set_ref_out(const bool enable) override
     {
         // TODO  Implement divider configuration to allow for configurable output
         // rates
@@ -267,8 +266,9 @@ public:
         _spiface->write_spi(_slaveno, spi_config_t::EDGE_RISE, data, 32);
     }
 
-    double set_clock_delay(
-        const x300_clock_which_t which, const double delay_ns, const bool resync = true)
+    double set_clock_delay(const x300_clock_which_t which,
+        const double delay_ns,
+        const bool resync = true) override
     {
         // All dividers have are delayed by 5 taps by default. The delay
         // set by this function is relative to the 5 tap delay
@@ -314,14 +314,14 @@ public:
             // difference using analog delay. Do the best we can.
             adly_en    = true;
             adly_value = static_cast<uint8_t>(
-                boost::math::round((ADLY_MAX_NS - ADLY_MIN_NS) / ADLY_RES_NS));
+                std::lround((ADLY_MAX_NS - ADLY_MIN_NS) / ADLY_RES_NS));
             coerced_delay += ADLY_MAX_NS;
         } else if (leftover_delay >= ADLY_MIN_NS && leftover_delay <= ADLY_MAX_NS) {
             // The leftover delay can be compensated by the analog delay up to the analog
             // delay resolution
             adly_en    = true;
             adly_value = static_cast<uint8_t>(
-                boost::math::round((leftover_delay - ADLY_MIN_NS) / ADLY_RES_NS));
+                std::lround((leftover_delay - ADLY_MIN_NS) / ADLY_RES_NS));
             coerced_delay += ADLY_MIN_NS + (ADLY_RES_NS * adly_value);
         } else if (leftover_delay >= (ADLY_MIN_NS - half_vco_period_ns)
                    && leftover_delay < ADLY_MIN_NS) {
@@ -329,7 +329,7 @@ public:
             // we move the digital delay back by half a VCO cycle then it will be in the
             // range of the analog delay. So do that!
             adly_en       = true;
-            adly_value    = static_cast<uint8_t>(boost::math::round(
+            adly_value    = static_cast<uint8_t>(std::lround(
                 (leftover_delay + half_vco_period_ns - ADLY_MIN_NS) / ADLY_RES_NS));
             half_shift_en = 1;
             coerced_delay +=
@@ -461,7 +461,7 @@ public:
         return coerced_delay;
     }
 
-    double get_clock_delay(const x300_clock_which_t which)
+    double get_clock_delay(const x300_clock_which_t which) override
     {
         switch (which) {
             case X300_CLOCK_WHICH_FPGA:
@@ -512,7 +512,7 @@ private:
                 // better spur performance by balancing the predivider and the
                 // divider.
                 const int n = static_cast<int>(
-                    boost::math::round((r * try_vco_freq) / (VCXO_PLL2_N * ref)));
+                    std::lround((r * try_vco_freq) / (VCXO_PLL2_N * ref)));
 
                 const double actual_mcr = (ref * VCXO_PLL2_N * n) / (vcodiv * r);
                 const double error      = std::abs(actual_mcr - output_freq);
@@ -699,13 +699,16 @@ private:
                 // PLL1 - 2 MHz compare frequency
                 _lmk04816_regs.PLL1_N_28       = 48;
                 _lmk04816_regs.PLL1_R_27       = 5;
-                _lmk04816_regs.PLL1_CP_GAIN_27 = lmk04816_regs_t::PLL1_CP_GAIN_27_1600UA;
+                // Since this is not a zero-dealy mode, it is not intended for phase
+                // synchronization.  The charge pump current for PLL1 is lowered to
+                // reduce phase noise.
+                _lmk04816_regs.PLL1_CP_GAIN_27 = lmk04816_regs_t::PLL1_CP_GAIN_27_100UA;
 
                 // PLL2 - 7.68 MHz compare frequency
                 _lmk04816_regs.PLL2_N_30       = 168;
                 _lmk04816_regs.PLL2_P_30       = lmk04816_regs_t::PLL2_P_30_DIV_2A;
                 _lmk04816_regs.PLL2_R_28       = 25;
-                _lmk04816_regs.PLL2_CP_GAIN_26 = lmk04816_regs_t::PLL2_CP_GAIN_26_100UA;
+                _lmk04816_regs.PLL2_CP_GAIN_26 = lmk04816_regs_t::PLL2_CP_GAIN_26_3200UA;
 
                 _lmk04816_regs.PLL2_R3_LF = lmk04816_regs_t::PLL2_R3_LF_4KILO_OHM;
                 _lmk04816_regs.PLL2_C3_LF = lmk04816_regs_t::PLL2_C3_LF_39PF;

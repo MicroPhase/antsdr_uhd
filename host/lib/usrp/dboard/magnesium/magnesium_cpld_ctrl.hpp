@@ -1,5 +1,6 @@
 //
 // Copyright 2017 Ettus Research, a National Instruments Company
+// Copyright 2019 Ettus Research, a National Instruments Brand
 //
 // SPDX-License-Identifier: GPL-3.0-or-later
 //
@@ -10,6 +11,7 @@
 #include "adf4351_regs.hpp"
 #include "magnesium_cpld_regs.hpp"
 #include <uhd/types/serial.hpp>
+#include <functional>
 #include <memory>
 #include <mutex>
 

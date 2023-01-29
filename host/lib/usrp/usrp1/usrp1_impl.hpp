@@ -11,9 +11,7 @@
 #include <uhd/device.hpp>
 #include <uhd/property_tree.hpp>
 #include <uhd/transport/usb_zero_copy.hpp>
-#include <uhd/types/clock_config.hpp>
 #include <uhd/types/dict.hpp>
-#include <uhd/types/otw_type.hpp>
 #include <uhd/types/stream_cmd.hpp>
 #include <uhd/usrp/dboard_eeprom.hpp>
 #include <uhd/usrp/dboard_id.hpp>
@@ -21,9 +19,9 @@
 #include <uhd/usrp/mboard_eeprom.hpp>
 #include <uhd/usrp/subdev_spec.hpp>
 #include <uhd/utils/pimpl.hpp>
-#include <boost/weak_ptr.hpp>
 #include <atomic>
 #include <complex>
+#include <memory>
 
 #ifndef INCLUDED_USRP1_IMPL_HPP
 #    define INCLUDED_USRP1_IMPL_HPP
@@ -65,12 +63,12 @@ public:
 
     // structors
     usrp1_impl(const uhd::device_addr_t&);
-    ~usrp1_impl(void);
+    ~usrp1_impl(void) override;
 
     // the io interface
-    uhd::rx_streamer::sptr get_rx_stream(const uhd::stream_args_t& args);
-    uhd::tx_streamer::sptr get_tx_stream(const uhd::stream_args_t& args);
-    bool recv_async_msg(uhd::async_metadata_t&, double);
+    uhd::rx_streamer::sptr get_rx_stream(const uhd::stream_args_t& args) override;
+    uhd::tx_streamer::sptr get_tx_stream(const uhd::stream_args_t& args) override;
+    bool recv_async_msg(uhd::async_metadata_t&, double) override;
 
     static uhd::usrp::mboard_eeprom_t get_mb_eeprom(uhd::i2c_iface::sptr);
 
@@ -90,8 +88,8 @@ private:
     double _master_clock_rate; // clock rate shadow
 
     // weak pointers to streamers for update purposes
-    boost::weak_ptr<uhd::rx_streamer> _rx_streamer;
-    boost::weak_ptr<uhd::tx_streamer> _tx_streamer;
+    std::weak_ptr<uhd::rx_streamer> _rx_streamer;
+    std::weak_ptr<uhd::tx_streamer> _tx_streamer;
 
     void set_mb_eeprom(const uhd::usrp::mboard_eeprom_t&);
     void set_db_eeprom(

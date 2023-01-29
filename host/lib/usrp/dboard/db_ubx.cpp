@@ -7,6 +7,7 @@
 /***********************************************************************
  * Included Files and Libraries
  **********************************************************************/
+#include "db_ubx.hpp"
 #include <uhd/types/device_addr.hpp>
 #include <uhd/types/dict.hpp>
 #include <uhd/types/direction.hpp>
@@ -20,16 +21,17 @@
 #include <uhd/utils/static.hpp>
 #include <uhdlib/usrp/common/max287x.hpp>
 #include <boost/algorithm/string.hpp>
-#include <boost/bind.hpp>
 #include <boost/math/special_functions/round.hpp>
-#include <boost/shared_ptr.hpp>
 #include <boost/thread/mutex.hpp>
 #include <chrono>
+#include <functional>
 #include <map>
+#include <memory>
 #include <thread>
 
 using namespace uhd;
 using namespace uhd::usrp;
+using namespace uhd::usrp::dboard::ubx;
 
 /***********************************************************************
  * UBX Data Structures
@@ -134,22 +136,6 @@ enum spi_dest_t {
  * UBX Constants
  **********************************************************************/
 #define fMHz (1000000.0)
-static const dboard_id_t UBX_PROTO_V3_TX_ID(0x73);
-static const dboard_id_t UBX_PROTO_V3_RX_ID(0x74);
-static const dboard_id_t UBX_PROTO_V4_TX_ID(0x75);
-static const dboard_id_t UBX_PROTO_V4_RX_ID(0x76);
-static const dboard_id_t UBX_V1_40MHZ_TX_ID(0x77);
-static const dboard_id_t UBX_V1_40MHZ_RX_ID(0x78);
-static const dboard_id_t UBX_V1_160MHZ_TX_ID(0x79);
-static const dboard_id_t UBX_V1_160MHZ_RX_ID(0x7A);
-static const dboard_id_t UBX_V2_40MHZ_TX_ID(0x7B);
-static const dboard_id_t UBX_V2_40MHZ_RX_ID(0x7C);
-static const dboard_id_t UBX_V2_160MHZ_TX_ID(0x7D);
-static const dboard_id_t UBX_V2_160MHZ_RX_ID(0x7E);
-static const dboard_id_t UBX_LP_160MHZ_TX_ID(0x0200);
-static const dboard_id_t UBX_LP_160MHZ_RX_ID(0x0201);
-static const dboard_id_t UBX_TDD_160MHZ_TX_ID(0x0202);
-static const dboard_id_t UBX_TDD_160MHZ_RX_ID(0x0203);
 static const freq_range_t ubx_freq_range(10e6, 6.0e9);
 static const gain_range_t ubx_tx_gain_range(0, 31.5, double(0.5));
 static const gain_range_t ubx_rx_gain_range(0, 31.5, double(0.5));
@@ -394,13 +380,13 @@ public:
         // Initialize LOs
         if (_rev == 0) {
             _txlo1 = max287x_iface::make<max2870>(
-                boost::bind(&ubx_xcvr::write_spi_regs, this, TXLO1, _1));
+                std::bind(&ubx_xcvr::write_spi_regs, this, TXLO1, std::placeholders::_1));
             _txlo2 = max287x_iface::make<max2870>(
-                boost::bind(&ubx_xcvr::write_spi_regs, this, TXLO2, _1));
+                std::bind(&ubx_xcvr::write_spi_regs, this, TXLO2, std::placeholders::_1));
             _rxlo1 = max287x_iface::make<max2870>(
-                boost::bind(&ubx_xcvr::write_spi_regs, this, RXLO1, _1));
+                std::bind(&ubx_xcvr::write_spi_regs, this, RXLO1, std::placeholders::_1));
             _rxlo2 = max287x_iface::make<max2870>(
-                boost::bind(&ubx_xcvr::write_spi_regs, this, RXLO2, _1));
+                std::bind(&ubx_xcvr::write_spi_regs, this, RXLO2, std::placeholders::_1));
             std::vector<max287x_iface::sptr> los{_txlo1, _txlo2, _rxlo1, _rxlo2};
             for (max287x_iface::sptr lo : los) {
                 lo->set_auto_retune(false);
@@ -409,13 +395,13 @@ public:
             }
         } else if (_rev == 1 or _rev == 2) {
             _txlo1 = max287x_iface::make<max2871>(
-                boost::bind(&ubx_xcvr::write_spi_regs, this, TXLO1, _1));
+                std::bind(&ubx_xcvr::write_spi_regs, this, TXLO1, std::placeholders::_1));
             _txlo2 = max287x_iface::make<max2871>(
-                boost::bind(&ubx_xcvr::write_spi_regs, this, TXLO2, _1));
+                std::bind(&ubx_xcvr::write_spi_regs, this, TXLO2, std::placeholders::_1));
             _rxlo1 = max287x_iface::make<max2871>(
-                boost::bind(&ubx_xcvr::write_spi_regs, this, RXLO1, _1));
+                std::bind(&ubx_xcvr::write_spi_regs, this, RXLO1, std::placeholders::_1));
             _rxlo2 = max287x_iface::make<max2871>(
-                boost::bind(&ubx_xcvr::write_spi_regs, this, RXLO2, _1));
+                std::bind(&ubx_xcvr::write_spi_regs, this, RXLO2, std::placeholders::_1));
             std::vector<max287x_iface::sptr> los{_txlo1, _txlo2, _rxlo1, _rxlo2};
             for (max287x_iface::sptr lo : los) {
                 lo->set_auto_retune(false);
@@ -441,14 +427,16 @@ public:
             .set(ubx_power_modes);
         get_rx_subtree()
             ->create<std::string>("power_mode/value")
-            .add_coerced_subscriber(boost::bind(&ubx_xcvr::set_power_mode, this, _1))
+            .add_coerced_subscriber(
+                std::bind(&ubx_xcvr::set_power_mode, this, std::placeholders::_1))
             .set("performance");
         get_rx_subtree()
             ->create<std::vector<std::string>>("xcvr_mode/options")
             .set(ubx_xcvr_modes);
         get_rx_subtree()
             ->create<std::string>("xcvr_mode/value")
-            .add_coerced_subscriber(boost::bind(&ubx_xcvr::set_xcvr_mode, this, _1))
+            .add_coerced_subscriber(
+                std::bind(&ubx_xcvr::set_xcvr_mode, this, std::placeholders::_1))
             .set("FDX");
         get_rx_subtree()
             ->create<std::vector<std::string>>("temp_comp_mode/options")
@@ -463,20 +451,20 @@ public:
             .set(ubx_power_modes);
         get_tx_subtree()
             ->create<std::string>("power_mode/value")
-            .add_coerced_subscriber(boost::bind(&uhd::property<std::string>::set,
+            .add_coerced_subscriber(std::bind(&uhd::property<std::string>::set,
                 &get_rx_subtree()->access<std::string>("power_mode/value"),
-                _1))
-            .set_publisher(boost::bind(&uhd::property<std::string>::get,
+                std::placeholders::_1))
+            .set_publisher(std::bind(&uhd::property<std::string>::get,
                 &get_rx_subtree()->access<std::string>("power_mode/value")));
         get_tx_subtree()
             ->create<std::vector<std::string>>("xcvr_mode/options")
             .set(ubx_xcvr_modes);
         get_tx_subtree()
             ->create<std::string>("xcvr_mode/value")
-            .add_coerced_subscriber(boost::bind(&uhd::property<std::string>::set,
+            .add_coerced_subscriber(std::bind(&uhd::property<std::string>::set,
                 &get_rx_subtree()->access<std::string>("xcvr_mode/value"),
-                _1))
-            .set_publisher(boost::bind(&uhd::property<std::string>::get,
+                std::placeholders::_1))
+            .set_publisher(std::bind(&uhd::property<std::string>::get,
                 &get_rx_subtree()->access<std::string>("xcvr_mode/value")));
         get_tx_subtree()
             ->create<std::vector<std::string>>("temp_comp_mode/options")
@@ -502,15 +490,15 @@ public:
         get_tx_subtree()->create<device_addr_t>("tune_args").set(device_addr_t());
         get_tx_subtree()
             ->create<sensor_value_t>("sensors/lo_locked")
-            .set_publisher(boost::bind(&ubx_xcvr::get_locked, this, "TXLO"));
+            .set_publisher(std::bind(&ubx_xcvr::get_locked, this, "TXLO"));
         get_tx_subtree()
             ->create<double>("gains/PGA0/value")
-            .set_coercer(boost::bind(&ubx_xcvr::set_tx_gain, this, _1))
+            .set_coercer(std::bind(&ubx_xcvr::set_tx_gain, this, std::placeholders::_1))
             .set(0);
         get_tx_subtree()->create<meta_range_t>("gains/PGA0/range").set(ubx_tx_gain_range);
         get_tx_subtree()
             ->create<double>("freq/value")
-            .set_coercer(boost::bind(&ubx_xcvr::set_tx_freq, this, _1))
+            .set_coercer(std::bind(&ubx_xcvr::set_tx_freq, this, std::placeholders::_1))
             .set(ubx_freq_range.start());
         get_tx_subtree()->create<meta_range_t>("freq/range").set(ubx_freq_range);
         get_tx_subtree()
@@ -518,7 +506,7 @@ public:
             .set(ubx_tx_antennas);
         get_tx_subtree()
             ->create<std::string>("antenna/value")
-            .set_coercer(boost::bind(&ubx_xcvr::set_tx_ant, this, _1))
+            .set_coercer(std::bind(&ubx_xcvr::set_tx_ant, this, std::placeholders::_1))
             .set(ubx_tx_antennas.at(0));
         get_tx_subtree()->create<std::string>("connection").set("QI");
         get_tx_subtree()->create<bool>("enabled").set(true); // always enabled
@@ -530,7 +518,7 @@ public:
         get_tx_subtree()
             ->create<int64_t>("sync_delay")
             .add_coerced_subscriber(
-                boost::bind(&ubx_xcvr::set_sync_delay, this, true, _1))
+                std::bind(&ubx_xcvr::set_sync_delay, this, true, std::placeholders::_1))
             .set(0);
 
         ////////////////////////////////////////////////////////////////////
@@ -540,15 +528,15 @@ public:
         get_rx_subtree()->create<device_addr_t>("tune_args").set(device_addr_t());
         get_rx_subtree()
             ->create<sensor_value_t>("sensors/lo_locked")
-            .set_publisher(boost::bind(&ubx_xcvr::get_locked, this, "RXLO"));
+            .set_publisher(std::bind(&ubx_xcvr::get_locked, this, "RXLO"));
         get_rx_subtree()
             ->create<double>("gains/PGA0/value")
-            .set_coercer(boost::bind(&ubx_xcvr::set_rx_gain, this, _1))
+            .set_coercer(std::bind(&ubx_xcvr::set_rx_gain, this, std::placeholders::_1))
             .set(0);
         get_rx_subtree()->create<meta_range_t>("gains/PGA0/range").set(ubx_rx_gain_range);
         get_rx_subtree()
             ->create<double>("freq/value")
-            .set_coercer(boost::bind(&ubx_xcvr::set_rx_freq, this, _1))
+            .set_coercer(std::bind(&ubx_xcvr::set_rx_freq, this, std::placeholders::_1))
             .set(ubx_freq_range.start());
         get_rx_subtree()->create<meta_range_t>("freq/range").set(ubx_freq_range);
         get_rx_subtree()
@@ -556,7 +544,7 @@ public:
             .set(ubx_rx_antennas);
         get_rx_subtree()
             ->create<std::string>("antenna/value")
-            .set_coercer(boost::bind(&ubx_xcvr::set_rx_ant, this, _1))
+            .set_coercer(std::bind(&ubx_xcvr::set_rx_ant, this, std::placeholders::_1))
             .set("RX2");
         get_rx_subtree()->create<std::string>("connection").set("IQ");
         get_rx_subtree()->create<bool>("enabled").set(true); // always enabled
@@ -568,11 +556,11 @@ public:
         get_rx_subtree()
             ->create<int64_t>("sync_delay")
             .add_coerced_subscriber(
-                boost::bind(&ubx_xcvr::set_sync_delay, this, false, _1))
+                std::bind(&ubx_xcvr::set_sync_delay, this, false, std::placeholders::_1))
             .set(0);
     }
 
-    virtual ~ubx_xcvr(void)
+    ~ubx_xcvr(void) override
     {
         UHD_SAFE_CALL(
             // Shutdown synthesizers
@@ -1319,10 +1307,10 @@ private:
     ubx_cpld_reg_t _cpld_reg;
     uint32_t _prev_cpld_value;
     std::map<ubx_gpio_field_id_t, ubx_gpio_field_info_t> _gpio_map;
-    boost::shared_ptr<max287x_iface> _txlo1;
-    boost::shared_ptr<max287x_iface> _txlo2;
-    boost::shared_ptr<max287x_iface> _rxlo1;
-    boost::shared_ptr<max287x_iface> _rxlo2;
+    std::shared_ptr<max287x_iface> _txlo1;
+    std::shared_ptr<max287x_iface> _txlo2;
+    std::shared_ptr<max287x_iface> _rxlo1;
+    std::shared_ptr<max287x_iface> _rxlo2;
     double _tx_target_pfd_freq;
     double _rx_target_pfd_freq;
     double _tx_gain;

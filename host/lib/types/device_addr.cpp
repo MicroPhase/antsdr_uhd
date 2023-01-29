@@ -8,8 +8,8 @@
 #include <uhd/types/device_addr.hpp>
 #include <boost/algorithm/string.hpp>
 #include <boost/format.hpp>
-#include <boost/regex.hpp>
 #include <boost/tokenizer.hpp>
+#include <regex>
 #include <sstream>
 #include <stdexcept>
 
@@ -29,7 +29,7 @@ static std::string trim(const std::string& in)
 device_addr_t::device_addr_t(const std::string& args)
 {
     for (const std::string& pair : tokenizer(args, arg_delim)) {
-        if (trim(pair) == "")
+        if (trim(pair).empty())
             continue;
         std::vector<std::string> toks;
         for (const std::string& tok : tokenizer(pair, pair_delim)) {
@@ -101,9 +101,12 @@ device_addrs_t uhd::separate_device_addr(const device_addr_t& dev_addr)
     device_addrs_t dev_addrs(1); // must be at least one (obviously)
     std::vector<std::string> global_keys; // keys that apply to all (no numerical suffix)
     for (const std::string& key : dev_addr.keys()) {
-        boost::cmatch matches;
-        if (not boost::regex_match(
-                key.c_str(), matches, boost::regex("^(\\D+)(\\d*)$"))) {
+        std::cmatch matches;
+        // Key must start with a non-digit, and may optionally end with a digit
+        // that indicates the mb index. Also allow keys that have integers within
+        // the name, such as recv_offload_thread_0_cpu.
+        if (not std::regex_match(
+                key.c_str(), matches, std::regex("^(\\D+\\d*\\D+)(\\d*)$"))) {
             throw std::runtime_error("unknown key format: " + key);
         }
         std::string key_part(matches[1].first, matches[1].second);

@@ -13,8 +13,8 @@
 #include <uhd/types/serial.hpp>
 #include <uhd/types/time_spec.hpp>
 #include <uhd/types/wb_iface.hpp>
-#include <boost/shared_ptr.hpp>
 #include <boost/utility.hpp>
+#include <memory>
 #include <string>
 
 
@@ -33,7 +33,7 @@ struct fifo_ctrl_excelsior_config
 class fifo_ctrl_excelsior : public uhd::timed_wb_iface, public uhd::spi_iface
 {
 public:
-    typedef boost::shared_ptr<fifo_ctrl_excelsior> sptr;
+    typedef std::shared_ptr<fifo_ctrl_excelsior> sptr;
 
     //! Make a new control object
     static sptr make(uhd::transport::zero_copy_if::sptr xport,
