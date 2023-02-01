@@ -325,11 +325,8 @@ module antsdr_e200 (
     //
     /////////////////////////////////////////////////////////////////////
     wire clk_int40;
-    wire pps_refclk;
     wire [1:0] pps_select;
     wire pps_fpga_int;
-    wire ref_select;
-    wire refclk_locked_busclk;
 
     assign clk40   = FCLK_CLK0;   // 40 MHz
     assign reg_clk = clk40;
@@ -354,12 +351,13 @@ module antsdr_e200 (
     wire   radio_rst;
     reset_sync radio_sync(.clk(radio_clk), .reset_in(!clocks_ready), .reset_out(radio_rst));
 
-    wire [1:0] refsel;
+    wire [1:0] pps_loop_refsel;
     wire ref_sel;
     wire ext_ref;
-    wire ext_ref_is_pps;
     wire ext_ref_locked;
     wire lpps;
+    wire is10meg;
+    wire ispps;
     
     // pps_select == 2'b00 ----> onboard gps module pps
     // pps_select == 2'b01 ----> external pps/10M
@@ -368,10 +366,9 @@ module antsdr_e200 (
     assign ext_ref =    (pps_select == 2'b01)? PPS_IN_EXT :
                         (pps_select == 2'b10 && ref_sel == 1'b0)? PPS_IN_EXT : // ref_sel selects the external or gpsdo clock source
                         (pps_select == 2'b10)? pps_fpga_int: 1'b0;
-    wire is10meg;
-    wire ispps;
+    
 
-    assign refsel = (pps_select == 2'b01 || pps_select == 2'b10) ? 2'b11 : 
+    assign pps_loop_refsel = (pps_select == 2'b01 || pps_select == 2'b10) ? 2'b11 : 
                     (pps_select == 2'b00)? 2'b00: 2'b01;
     assign CLKIN_10MHz_REQ = 1'b1;
 
@@ -392,7 +389,7 @@ module antsdr_e200 (
         .xoclk   ( CLK_40MHz_FPGA   ),
         .ppsgps  ( 1'b0     ),
         .ppsext  ( ext_ref  ),
-        .refsel  ( refsel  ),
+        .refsel  ( pps_loop_refsel  ),
         .lpps    ( lpps    ),
         .is10meg ( is10meg ),
         .ispps   ( ispps   ),
@@ -402,10 +399,18 @@ module antsdr_e200 (
         .sclk    ( CLK_40M_DAC_SCLK    ),
         .mosi    ( CLK_40M_DAC_DIN    ),
         .sync_n  ( CLK_40M_DAC_nSYNC  ),
-        .dac_dflt  ( 16'h7fff  )
+        .dac_dflt  ( 16'hBfff  )
     );
 
-
+    vio_0 your_instance_name (
+        .clk(bus_clk),              // input wire clk
+        .probe_in0(pps_select),  // input wire [1 : 0] probe_in0
+        .probe_in1(is10meg),  // input wire [0 : 0] probe_in1
+        .probe_in2(ispps),  // input wire [0 : 0] probe_in2
+        .probe_in3(ext_ref_locked),  // input wire [0 : 0] probe_in3
+        .probe_in4(ref_sel),  // input wire [0 : 0] probe_in4
+        .probe_in5(lpps)  // input wire [0 : 0] probe_in5
+      );
     ///////////////////////////////////////////////////////////////////////
     // AD936x I/O
     ///////////////////////////////////////////////////////////////////////

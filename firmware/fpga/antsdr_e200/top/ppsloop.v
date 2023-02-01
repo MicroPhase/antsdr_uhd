@@ -384,6 +384,9 @@ module ppsloop#(
    */
 
   always @(posedge clk) begin
+    if (plllck == 1'b0 ) begin
+      daco <= dac_dflt;
+    end
     if (no_pps) begin
      daco <= dac_dflt;
     end
