@@ -84,18 +84,20 @@ module antsdr_e310v2 (
         output wire             CLK_40M_DAC_nSYNC,
         output wire             CLK_40M_DAC_SCLK ,
         output wire             CLK_40M_DAC_DIN ,
+        output wire             PPS_LED         ,
+        output wire             REF_LOCKED      ,
+        output wire             PPS_GPS         ,
 
         // RF Hardware Control
-        output wire             FE_TXRX2_SEL2 ,
-        output wire             FE_TXRX2_SEL1 ,
-        output wire             FE_TXRX1_SEL2 ,
         output wire             FE_TXRX1_SEL1 ,
-        output wire             FE_RX2_SEL2 ,
-        output wire             FE_RX2_SEL1 ,
-        output wire             FE_RX1_SEL2 ,
+        output wire             FE_TXRX2_SEL1 ,
         output wire             FE_RX1_SEL1 ,
+        output wire             FE_RX2_SEL1 ,
         output wire             tx_amp_en1,
         output wire             tx_amp_en2,
+
+        output wire             GPS_NRST,
+        output wire             GPS_PWEN,
 
         // rgmii interface
         output  wire          	mdc 			,
@@ -333,11 +335,8 @@ module antsdr_e310v2 (
     //
     /////////////////////////////////////////////////////////////////////
     wire clk_int40;
-    wire pps_refclk;
     wire [1:0] pps_select;
     wire pps_fpga_int;
-    wire ref_select;
-    wire refclk_locked_busclk;
 
     assign clk40   = FCLK_CLK0;   // 40 MHz
     assign reg_clk = clk40;
@@ -362,12 +361,20 @@ module antsdr_e310v2 (
     wire   radio_rst;
     reset_sync radio_sync(.clk(radio_clk), .reset_in(!clocks_ready), .reset_out(radio_rst));
 
-    wire [1:0] refsel;
+    wire [1:0] pps_loop_refsel;
     wire ref_sel;
     wire ext_ref;
-    wire ext_ref_is_pps;
     wire ext_ref_locked;
     wire lpps;
+    wire is10meg;
+    wire ispps;
+
+    assign GPS_NRST = 1'b1;
+    assign GPS_PWEN = 1'b1;
+
+    assign PPS_LED = lpps;
+    assign REF_LOCKED = ext_ref_locked;
+    assign PPS_GPS = PPS_IN_INT;
     
     // pps_select == 2'b00 ----> onboard gps module pps
     // pps_select == 2'b01 ----> external pps/10M
@@ -375,12 +382,11 @@ module antsdr_e310v2 (
 
     assign ext_ref =    (pps_select == 2'b00)? PPS_IN_INT :
                         (pps_select == 2'b01)? PPS_IN_EXT :
-                        (pps_select == 2'b10 && ref_sel == 1'b0)? PPS_IN_EXT : // ref_sel selects the external or gpsdo clock source
-                        (pps_select == 2'b10)? PPS_IN_EXT : 1'b0;
-    wire is10meg;
-    wire ispps;
+                        (pps_select == 2'b10 && ref_sel == 1'b0)? CLKIN_10MHz : // ref_sel selects the external or gpsdo clock source
+                        (pps_select == 2'b10)? pps_fpga_int: 1'b0;
 
-    assign refsel = (pps_select == 2'b01 || pps_select == 2'b10) ? 2'b11 : 
+
+    assign pps_loop_refsel = (pps_select == 2'b01 || pps_select == 2'b10) ? 2'b11 : 
                     (pps_select == 2'b00)? 2'b00: 2'b01;
 
     gen_clks u_gen_clocks_main(
@@ -398,9 +404,9 @@ module antsdr_e310v2 (
     )u_ppsloop(
         .reset   ( 1'b0   ),
         .xoclk   ( CLK_40MHz_FPGA   ),
-        .ppsgps  ( PPS_IN_INT  ),
+        .ppsgps  ( 1'b0     ),
         .ppsext  ( ext_ref  ),
-        .refsel  ( refsel  ),
+        .refsel  ( pps_loop_refsel  ),
         .lpps    ( lpps    ),
         .is10meg ( is10meg ),
         .ispps   ( ispps   ),
@@ -410,10 +416,18 @@ module antsdr_e310v2 (
         .sclk    ( CLK_40M_DAC_SCLK    ),
         .mosi    ( CLK_40M_DAC_DIN    ),
         .sync_n  ( CLK_40M_DAC_nSYNC  ),
-        .dac_dflt  ( 16'h7fff  )
+        .dac_dflt  ( 16'hBfff  )
     );
 
-
+    vio_0 your_instance_name (
+        .clk(bus_clk),              // input wire clk
+        .probe_in0(pps_select),  // input wire [1 : 0] probe_in0
+        .probe_in1(is10meg),  // input wire [0 : 0] probe_in1
+        .probe_in2(ispps),  // input wire [0 : 0] probe_in2
+        .probe_in3(ext_ref_locked),  // input wire [0 : 0] probe_in3
+        .probe_in4(ref_sel),  // input wire [0 : 0] probe_in4
+        .probe_in5(lpps)  // input wire [0 : 0] probe_in5
+      );
     ///////////////////////////////////////////////////////////////////////
     // AD936x I/O
     ///////////////////////////////////////////////////////////////////////
@@ -472,7 +486,8 @@ module antsdr_e310v2 (
 
     ///////////////////////////////////////////////////////////////////////
     // frontend assignments
-    //////////////////////////////////////////////////////////////////////
+    ///////////////////////////////////////////////////////////////////////
+
 
     
     wire swap_atr_n;
@@ -483,12 +498,18 @@ module antsdr_e310v2 (
        fe0_gpio <= swap_atr_n ? radio1_gpio : radio0_gpio;
        fe1_gpio <= swap_atr_n ? radio0_gpio : radio1_gpio;
     end
- 
-    // assign {tx_amp_en1, SFDX1_RX, SFDX1_TX, SRX1_RX, SRX1_TX, LED_RX1, LED_TXRX1_RX, LED_TXRX1_TX} = fe0_gpio;
-    // assign {tx_amp_en2, SFDX2_RX, SFDX2_TX, SRX2_RX, SRX2_TX, LED_RX2, LED_TXRX2_RX, LED_TXRX2_TX} = fe1_gpio;
 
-    assign {tx_amp_en1, FE_RX1_SEL2, FE_TXRX1_SEL2, FE_TXRX1_SEL1, FE_RX1_SEL1} = fe0_gpio[7:3];
-    assign {tx_amp_en2, FE_RX2_SEL1, FE_TXRX2_SEL1, FE_RX2_SEL2, FE_TXRX2_SEL2} = fe1_gpio[7:3];
+    wire SFDX1_RX, SFDX1_TX, SRX1_RX, SRX1_TX;
+    wire SFDX2_RX, SFDX2_TX, SRX2_RX, SRX2_TX;
+    assign {tx_amp_en1, SFDX1_RX, SFDX1_TX, SRX1_RX, SRX1_TX} = fe0_gpio[7:3];
+    assign {tx_amp_en2, SFDX2_RX, SFDX2_TX, SRX2_RX, SRX2_TX} = fe1_gpio[7:3];
+    // assign {tx_amp_en1, FE_RX1_SEL2, FE_TXRX1_SEL2, FE_RX1_SEL1, FE_TXRX1_SEL1} = fe0_gpio[7:3];
+    // assign {tx_amp_en2, FE_RX2_SEL1, FE_TXRX2_SEL1, FE_RX2_SEL2, FE_TXRX2_SEL2} = fe1_gpio[7:3];
+    assign FE_TXRX1_SEL1 = (SFDX1_TX==1'b0 && SRX1_TX==1'b1) ? 1'b0 : 1'b1;
+    assign FE_RX1_SEL1 = (SFDX1_RX==1'b0 && SRX1_RX==1'b1) ? 1'b0 : 1'b1;
+    assign FE_TXRX2_SEL1 = (SFDX2_TX==1'b0 && SRX2_TX==1'b1) ? 1'b1 : 1'b0 ;
+    assign FE_RX2_SEL1 = (SFDX2_RX==1'b0 && SRX2_RX==1'b1) ? 1'b1 : 1'b0; 
+   
  
     wire [31:0] misc_outs; reg [31:0] misc_outs_r;
  
@@ -913,15 +934,17 @@ module antsdr_e310v2 (
         .m_axi_net_wstrb            ( m_axi_net_wstrb            ),
         .m_axi_net_wvalid           ( m_axi_net_wvalid           ),
 
-        .m_axis_dma_tdata           ( m_axis_dma_tdata           ),
-        .m_axis_dma_tlast           ( m_axis_dma_tlast           ),
-        .m_axis_dma_tready          ( m_axis_dma_tready          ),
-        .m_axis_dma_tvalid          ( m_axis_dma_tvalid          ),
+        .m_axis_dma_tdata           ( h2e_tdata           ),
+        .m_axis_dma_tkeep           ( h2e_tkeep           ),
+        .m_axis_dma_tlast           ( h2e_tlast           ),
+        .m_axis_dma_tready          ( h2e_tready          ),
+        .m_axis_dma_tvalid          ( h2e_tvalid          ),
 
-        .s_axis_dma_tdata           ( s_axis_dma_tdata           ),
-        .s_axis_dma_tlast           ( s_axis_dma_tlast           ),
-        .s_axis_dma_tready          ( s_axis_dma_tready          ),
-        .s_axis_dma_tvalid          ( s_axis_dma_tvalid          )
+        .s_axis_dma_tdata           ( e2h_tdata           ),
+        .s_axis_dma_tkeep           ( e2h_tkeep           ),
+        .s_axis_dma_tlast           ( e2h_tlast           ),
+        .s_axis_dma_tready          ( e2h_tready          ),
+        .s_axis_dma_tvalid          ( e2h_tvalid          )
     );
 
 
