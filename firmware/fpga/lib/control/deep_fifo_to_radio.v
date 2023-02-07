@@ -115,13 +115,13 @@ module deep_fifo_to_radio(
     assign pkt_length_in_bytes =  h2c_fifo_post_tdata[47:32];
     assign pkt_sid = h2c_fifo_post_tdata[31:0];
     assign pkt_is_data_samp_packet = (packet_type == PKT_TYPE_DATA) && 
-                                (((pkt_sid&DEMUX_SID_MASK) == R0_DATA_SID) || ((pkt_sid&DEMUX_SID_MASK) == R1_DATA_SID)) && (pkt_length_in_bytes <= 1472);
+                                ((pkt_sid == R0_DATA_SID) || (pkt_sid == R1_DATA_SID)) ;
     
     assign pkt_is_data_eob_packet = (packet_type == PKT_TYPE_DATA_EOB) && 
-                                (((pkt_sid&DEMUX_SID_MASK) == R0_DATA_SID) || ((pkt_sid&DEMUX_SID_MASK) == R1_DATA_SID)) && (pkt_length_in_bytes <= 1472);
+                                ((pkt_sid == R0_DATA_SID) || (pkt_sid == R1_DATA_SID)) ;
 
     assign pkt_is_data_fc_packet = (packet_type == PKT_TYPE_DATA_FC) && 
-                                (((pkt_sid&DEMUX_SID_MASK) == R0_DATA_SID) || ((pkt_sid&DEMUX_SID_MASK) == R1_DATA_SID)) && (pkt_length_in_bytes <= 1472);
+                                ((pkt_sid == R0_DATA_SID) || (pkt_sid == R1_DATA_SID)) ;
 
   
     assign pkt_is_data_packet = pkt_is_data_eob_packet | pkt_is_data_samp_packet | pkt_is_data_fc_packet;           

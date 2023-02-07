@@ -65,11 +65,13 @@ module eth_internal #(
 
   // RFNoC interface
   output wire [63:0]  e2v_tdata,
+  output wire [15:0]  e2v_tuser,
   output wire         e2v_tlast,
   output wire         e2v_tvalid,
   input  wire         e2v_tready,
 
   input  wire [63:0]  v2e_tdata,
+  input  wire [15:0]  v2e_tuser,
   input  wire         v2e_tlast,
   input  wire         v2e_tvalid,
   output wire         v2e_tready,
@@ -183,6 +185,34 @@ module eth_internal #(
   wire        e2h_chdr_tlast;
   wire        e2h_chdr_tvalid;
   wire        e2h_chdr_tready;
+
+  // wire [255:0] probe0;
+
+  // assign probe0 = {
+  //   h2e_tdata,
+  //   h2e_tkeep,
+  //   h2e_tlast,
+  //   h2e_tvalid,
+  //   h2e_tready,
+    
+  //   e2c_tdata,
+  //   e2c_tuser,
+  //   e2c_tlast,
+  //   e2c_tvalid,
+  //   e2c_tready,
+
+  //   c2e_tdata,
+  //   c2e_tkeep,
+  //   c2e_tlast,
+  //   c2e_tvalid,
+  //   c2e_tready
+  // };
+  // ila_0 u_ila (
+  //     .clk(bus_clk), // input wire clk
+    
+    
+  //     .probe0(probe0) // input wire [255:0] probe0
+  // );
 
 
   // In AXI Stream, tkeep is the byte qualifier that indicates
@@ -304,10 +334,12 @@ module eth_internal #(
     .eth_rx_tvalid (h2e_chdr_tvalid),
     .eth_rx_tready (h2e_chdr_tready),
     .e2v_tdata     (e2v_tdata),
+    .e2v_tuser     (e2v_tuser),
     .e2v_tlast     (e2v_tlast),
     .e2v_tvalid    (e2v_tvalid),
     .e2v_tready    (e2v_tready),
     .v2e_tdata     (v2e_tdata),
+    .v2e_tuser     (v2e_tuser),
     .v2e_tlast     (v2e_tlast),
     .v2e_tvalid    (v2e_tvalid),
     .v2e_tready    (v2e_tready),
