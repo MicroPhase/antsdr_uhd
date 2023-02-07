@@ -21,6 +21,7 @@ add_files {
     ./ip/fifo_short_2clk/fifo_short_2clk.xci
     ./ip/axi64_8k_2clk_fifo/axi64_8k_2clk_fifo.xci
     ./ip/gen_clks/gen_clks.xci
+    ./ip/vio_0/vio_0.xci
 
     ./top/b200_core.v
     ./top/e200_eth_if_core.v
