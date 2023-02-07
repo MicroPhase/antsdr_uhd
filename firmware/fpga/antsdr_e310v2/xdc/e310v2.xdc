@@ -13,8 +13,9 @@ set_property  -dict {PACKAGE_PIN  U9   IOSTANDARD  LVCMOS33} [get_ports  PPS_IN_
 set_property  -dict {PACKAGE_PIN  L16  IOSTANDARD  LVCMOS18} [get_ports  CLK_40MHz_FPGA]  ;
 set_property  -dict {PACKAGE_PIN  J18  IOSTANDARD  LVCMOS18} [get_ports  CLKIN_10MHz]  ;
 
-
-
+set_property  -dict {PACKAGE_PIN  Y8   IOSTANDARD  LVCMOS33} [get_ports  PPS_LED]  ;
+set_property  -dict {PACKAGE_PIN  Y6   IOSTANDARD  LVCMOS33} [get_ports  REF_LOCKED]  ;
+set_property  -dict {PACKAGE_PIN  Y9   IOSTANDARD  LVCMOS33} [get_ports  PPS_GPS]  ;
 #################################################################################################################
 #
 # RF switch and PA

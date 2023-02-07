@@ -84,6 +84,9 @@ module antsdr_e310v2 (
         output wire             CLK_40M_DAC_nSYNC,
         output wire             CLK_40M_DAC_SCLK ,
         output wire             CLK_40M_DAC_DIN ,
+        output wire             PPS_LED         ,
+        output wire             REF_LOCKED      ,
+        output wire             PPS_GPS         ,
 
         // RF Hardware Control
         output wire             FE_TXRX1_SEL1 ,
@@ -368,6 +371,10 @@ module antsdr_e310v2 (
 
     assign GPS_NRST = 1'b1;
     assign GPS_PWEN = 1'b1;
+
+    assign PPS_LED = lpps;
+    assign REF_LOCKED = ext_ref_locked;
+    assign PPS_GPS = PPS_IN_INT;
     
     // pps_select == 2'b00 ----> onboard gps module pps
     // pps_select == 2'b01 ----> external pps/10M
@@ -375,7 +382,7 @@ module antsdr_e310v2 (
 
     assign ext_ref =    (pps_select == 2'b00)? PPS_IN_INT :
                         (pps_select == 2'b01)? PPS_IN_EXT :
-                        (pps_select == 2'b10 && ref_sel == 1'b0)? PPS_IN_EXT : // ref_sel selects the external or gpsdo clock source
+                        (pps_select == 2'b10 && ref_sel == 1'b0)? CLKIN_10MHz : // ref_sel selects the external or gpsdo clock source
                         (pps_select == 2'b10)? pps_fpga_int: 1'b0;
 
 
