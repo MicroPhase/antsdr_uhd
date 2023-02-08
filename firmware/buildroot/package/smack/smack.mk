@@ -14,10 +14,4 @@ SMACK_DEPENDENCIES = host-pkgconf
 # Sources from GitHub, no configure script included.
 SMACK_AUTORECONF = YES
 
-define SMACK_LINUX_CONFIG_FIXUPS
-	$(call KCONFIG_ENABLE_OPT,CONFIG_SECURITY)
-	$(call KCONFIG_ENABLE_OPT,CONFIG_SECURITY_SMACK)
-	$(call KCONFIG_ENABLE_OPT,CONFIG_SECURITY_NETWORK)
-endef
-
 $(eval $(autotools-package))

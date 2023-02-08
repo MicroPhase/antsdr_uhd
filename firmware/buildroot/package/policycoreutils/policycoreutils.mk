@@ -4,11 +4,10 @@
 #
 ################################################################################
 
-POLICYCOREUTILS_VERSION = 3.2
-POLICYCOREUTILS_SITE = https://github.com/SELinuxProject/selinux/releases/download/$(POLICYCOREUTILS_VERSION)
+POLICYCOREUTILS_VERSION = 2.9
+POLICYCOREUTILS_SITE = https://github.com/SELinuxProject/selinux/releases/download/20190315
 POLICYCOREUTILS_LICENSE = GPL-2.0
 POLICYCOREUTILS_LICENSE_FILES = COPYING
-POLICYCOREUTILS_CPE_ID_VENDOR = selinuxproject
 
 POLICYCOREUTILS_DEPENDENCIES = libsemanage libcap-ng $(TARGET_NLS_DEPENDENCIES)
 POLICYCOREUTILS_MAKE_OPTS = LDLIBS=$(TARGET_NLS_LIBS)
@@ -24,7 +23,7 @@ endif
 
 ifeq ($(BR2_PACKAGE_AUDIT),y)
 POLICYCOREUTILS_DEPENDENCIES += audit
-POLICYCOREUTILS_MAKE_OPTS += AUDIT_LOG_PRIV=y USE_AUDIT=y
+POLICYCOREUTILS_MAKE_OPTS += AUDIT_LOG_PRIV=y
 endif
 
 # Enable LSPP_PRIV if both audit and linux pam are enabled
@@ -43,7 +42,7 @@ POLICYCOREUTILS_MAKE_OPTS += \
 POLICYCOREUTILS_MAKE_DIRS = \
 	load_policy newrole run_init \
 	secon semodule sestatus setfiles \
-	setsebool scripts
+	setsebool
 
 # We need to pass DESTDIR at build time because it's used by
 # policycoreutils build system to find headers and libraries.

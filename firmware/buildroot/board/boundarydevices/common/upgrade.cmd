@@ -9,24 +9,15 @@ qspi_offset=0x0
 a_base=0x12000000
 block_size=0x200
 
-#grab 1st 2/3 characters of string
-setexpr cpu2 sub "^(..?).*" "\\1" "${imx_cpu}"
-setexpr cpu3 sub "^(..?.?).*" "\\1" "${imx_cpu}"
-if itest.s x51 == "x${cpu2}"; then
+if itest.s x51 == "x${imx_cpu}"; then
 	a_base=0x92000000
-elif itest.s x53 == "x${cpu2}"; then
+elif itest.s x53 == "x${imx_cpu}"; then
 	a_base=0x72000000
-elif itest.s x6SX == "x${cpu3}" || itest.s x6U == "x${cpu2}" || itest.s x7D == "x${cpu2}"; then
+elif itest.s x6SX == "x${imx_cpu}" || itest.s x7D == "x${imx_cpu}"; then
 	a_base=0x82000000
-elif itest.s x8M == "x${cpu2}"; then
+elif itest.s x8MQ == "x${imx_cpu}"; then
 	a_base=0x42000000
 	offset=0x8400
-	if itest.s x8MN == "x${cpu3}" || itest.s x8MP == "x${cpu3}"; then
-		offset=0x8000
-		if itest ${env_part} != 0 ; then
-			offset=0x0
-		fi
-	fi
 fi
 
 qspi_match=1
@@ -36,10 +27,7 @@ setexpr a_uImage1 ${a_qspi1} + 0x400
 setexpr a_uImage2 ${a_qspi2} + 0x400
 setexpr a_script ${a_base}
 
-if itest.s "x${vidconsole}" == "x" ; then
-	vidconsole=vga
-fi
-setenv stdout serial,${vidconsole}
+setenv stdout serial,vga
 
 if itest.s "x${sfname}" == "x" ; then
 # U-Boot resides in (e)MMC
@@ -68,7 +56,6 @@ mmc dev ${env_dev} ${env_part}
 mmc read ${a_uImage2} ${cntoffset} ${cntfile}
 if cmp.b ${a_uImage1} ${a_uImage2} ${filesize} ; then
 	echo "------- U-Boot versions match" ;
-	echo "------- U-Boot upgrade NOT needed" ;
 	exit ;
 fi
 
@@ -147,7 +134,7 @@ fi
 if cmp.b ${a_uImage1} ${a_uImage2} $filesize ; then
 	echo "------- U-Boot versions match" ;
 	if itest.s "${qspi_match}" == "1" ; then
-		echo "------- U-Boot upgrade NOT needed" ;
+		echo "------- upgrade not needed" ;
 		if itest.s "x" != "x${next}" ; then
 			if ${fs}load ${devtype} ${devnum}:${distro_bootpart} ${a_script} ${next} ; then
 				source ${a_script}
@@ -219,12 +206,6 @@ if itest.s "x" != "x${next}" ; then
 fi
 fi
 
-if itest.s "xno" == "x${reset}" ; then
-	while echo "---- U-Boot upgraded. Please reset the board" ; do
-		sleep 120
-	done
-fi
-echo "---- U-Boot upgraded. The board will now reset."
-sleep 1
-reset
+while echo "---- U-Boot upgraded. Please reset the board" ; do
+	sleep 120
 done

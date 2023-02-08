@@ -2,9 +2,6 @@
 # vi: set sw=4 ts=4:
 
 export LC_ALL=C
-TAB="$(printf '\t')"
-NL="
-"
 
 # Verify that grep works
 echo "WORKS" | grep "WORKS" >/dev/null 2>&1
@@ -38,13 +35,22 @@ case ":${PATH:-unset}:" in
 	echo "PATH environment variable. This doesn't work."
 	exit 1
 	;;
-(*" "*|*"${TAB}"*|*"${NL}"*)
-	printf "\n"
-	printf "Your PATH contains spaces, TABs, and/or newline (\\\n) characters.\n"
+(*"
+"*)	printf "\n"
+	printf "Your PATH contains a newline (\\\n) character.\n"
 	printf "This doesn't work. Fix you PATH.\n"
 	exit 1
 	;;
 esac
+
+if test -n "$PERL_MM_OPT" ; then
+	echo
+	echo "You have PERL_MM_OPT defined because Perl local::lib"
+	echo "is installed on your system. Please unset this variable"
+	echo "before starting Buildroot, otherwise the compilation of"
+	echo "Perl related packages will fail"
+	exit 1
+fi
 
 check_prog_host()
 {
@@ -154,7 +160,7 @@ fi
 
 # Check that a few mandatory programs are installed
 missing_progs="no"
-for prog in perl tar wget cpio unzip rsync bc cmp find xargs ${DL_TOOLS} ; do
+for prog in patch perl tar wget cpio unzip rsync bc ${DL_TOOLS} ; do
 	if ! which $prog > /dev/null ; then
 		echo "You must install '$prog' on your build machine";
 		missing_progs="yes"
@@ -166,12 +172,6 @@ for prog in perl tar wget cpio unzip rsync bc cmp find xargs ${DL_TOOLS} ; do
 			echo "  zcat is usually part of the gzip package in your distribution"
 		elif test $prog = "bzcat" ; then
 			echo "  bzcat is usually part of the bzip2 package in your distribution"
-		elif test $prog = "cmp" ; then
-			echo "  cmp is usually part of the diffutils package in your distribution"
-		elif test $prog = "find" ; then
-			echo "  find is usually part of the findutils package in your distribution"
-		elif test $prog = "xargs" ; then
-			echo "  xargs is usually part of the findutils package in your distribution"
 		fi
 	fi
 done
@@ -180,18 +180,10 @@ if test "${missing_progs}" = "yes" ; then
 	exit 1
 fi
 
-PATCH_VERSION="$(patch -v 2>/dev/null | sed -n 's/^GNU patch \(.*\)/\1/p')"
-if [ -z "${PATCH_VERSION}" ] ; then
-	echo
-	echo "You must install GNU patch"
+# apply-patches.sh needs patch with --no-backup-if-mismatch support (GNU, busybox w/DESKTOP)
+if ! patch --no-backup-if-mismatch </dev/null 2>/dev/null; then
+	echo "Your patch program does not support the --no-backup-if-mismatch option. Install GNU patch"
 	exit 1
-fi
-PATCH_MAJOR="$(echo "${PATCH_VERSION}" | cut -d . -f 1)"
-PATCH_MINOR="$(echo "${PATCH_VERSION}" | cut -d . -f 2)"
-if [ "${PATCH_MAJOR}" -lt 2 ] || [ "${PATCH_MAJOR}" -eq 2 -a "${PATCH_MINOR}" -lt 7 ] ; then
-	echo
-	echo "You have GNU patch '${PATCH_VERSION}' installed.  GNU patch >= 2.7 is required"
-	exit 1;
 fi
 
 if grep ^BR2_NEEDS_HOST_UTF8_LOCALE=y $BR2_CONFIG > /dev/null; then
@@ -251,16 +243,6 @@ if grep -q ^BR2_HOSTARCH_NEEDS_IA32_COMPILER=y $BR2_CONFIG ; then
 		echo "If you're running a Debian/Ubuntu distribution, install the g++-multilib package."
 		echo "For other distributions, refer to their documentation."
 		exit 1
-	fi
-fi
-
-if grep ^BR2_NEEDS_HOST_GCC_PLUGIN_SUPPORT=y $BR2_CONFIG ; then
-	if ! echo "#include <gcc-plugin.h>" | $HOSTCXX_NOCCACHE -I$($HOSTCXX_NOCCACHE -print-file-name=plugin)/include -x c++ -c - -o /dev/null ; then
-		echo
-		echo "Your Buildroot configuration needs a host compiler capable of building gcc plugins."
-		echo "If you're running a Debian/Ubuntu distribution, install gcc-X-plugin-dev package."
-		echo "For other distributions, refer to their documentation."
-		exit 1 ;
 	fi
 fi
 

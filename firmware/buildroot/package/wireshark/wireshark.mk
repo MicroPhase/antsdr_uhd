@@ -4,38 +4,36 @@
 #
 ################################################################################
 
-WIRESHARK_VERSION = 3.4.12
+WIRESHARK_VERSION = 3.2.8
 WIRESHARK_SOURCE = wireshark-$(WIRESHARK_VERSION).tar.xz
 WIRESHARK_SITE = https://www.wireshark.org/download/src/all-versions
 WIRESHARK_LICENSE = wireshark license
 WIRESHARK_LICENSE_FILES = COPYING
-WIRESHARK_CPE_ID_VENDOR = wireshark
-WIRESHARK_SELINUX_MODULES = wireshark
-WIRESHARK_DEPENDENCIES = \
-	c-ares \
-	host-pkgconf \
-	host-python3 \
-	libgcrypt \
-	libglib2 \
-	libpcap \
+WIRESHARK_DEPENDENCIES = host-pkgconf host-python3 libgcrypt libpcap libglib2 \
 	speexdsp
+
+WIRESHARK_MAKE_ENV = \
+	$(TARGET_MAKE_ENV) \
+	PATH="$(@D)/bin:$(BR_PATH)"
 
 WIRESHARK_CONF_OPTS = \
 	-DDISABLE_WERROR=ON \
-	-DENABLE_ILBC=OFF \
 	-DENABLE_PCAP=ON \
-	-DENABLE_SMI=OFF \
-	-DLEMON_C_COMPILER=$(HOSTCC_NOCCACHE)
+	-DENABLE_SMI=OFF
 
-ifeq ($(BR2_TOOLCHAIN_HAS_LIBATOMIC),y)
-WIRESHARK_CONF_OPTS += -DCMAKE_EXE_LINKER_FLAGS=-latomic
-endif
+# wireshark needs the host version of lemon during compilation.
+# This binrary is provided by sqlite-src (which is different from
+# sqlite-autotools that is currently packaged in buildroot) moreover wireshark
+# adds several patches.
+# So, instead of creating a separate host package and installing lemon to
+# $(HOST_DIR), this binary is compiled on-the-fly
+define WIRESHARK_BUILD_LEMON_TOOL
+	cd $(@D); \
+	mkdir -p $(@D)/bin; \
+	$(HOSTCC) $(HOST_CFLAGS) -o $(@D)/bin/lemon tools/lemon/lemon.c
+endef
 
-ifeq ($(BR2_ENABLE_LTO),y)
-WIRESHARK_CONF_OPTS += -DENABLE_LTO=ON
-else
-WIRESHARK_CONF_OPTS += -DENABLE_LTO=OFF
-endif
+WIRESHARK_PRE_BUILD_HOOKS += WIRESHARK_BUILD_LEMON_TOOL
 
 ifeq ($(BR2_PACKAGE_WIRESHARK_GUI),y)
 WIRESHARK_CONF_OPTS += -DBUILD_wireshark=ON
@@ -56,6 +54,13 @@ WIRESHARK_CONF_OPTS += -DENABLE_BROTLI=ON
 WIRESHARK_DEPENDENCIES += brotli
 else
 WIRESHARK_CONF_OPTS += -DENABLE_BROTLI=OFF
+endif
+
+ifeq ($(BR2_PACKAGE_C_ARES),y)
+WIRESHARK_CONF_OPTS += -DENABLE_CARES=ON
+WIRESHARK_DEPENDENCIES += c-ares
+else
+WIRESHARK_CONF_OPTS += -DENABLE_CARES=OFF
 endif
 
 ifeq ($(BR2_PACKAGE_GNUTLS),y)
@@ -120,13 +125,6 @@ WIRESHARK_CONF_OPTS += -DENABLE_NGHTTP2=ON
 WIRESHARK_DEPENDENCIES += nghttp2
 else
 WIRESHARK_CONF_OPTS += -DENABLE_NGHTTP2=OFF
-endif
-
-ifeq ($(BR2_PACKAGE_OPUS),y)
-WIRESHARK_CONF_OPTS += -DENABLE_OPUS=ON
-WIRESHARK_DEPENDENCIES += opus
-else
-WIRESHARK_CONF_OPTS += -DENABLE_OPUS=OFF
 endif
 
 ifeq ($(BR2_PACKAGE_SBC),y)

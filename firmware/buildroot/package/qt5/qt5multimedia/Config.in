@@ -1,5 +1,6 @@
 config BR2_PACKAGE_QT5MULTIMEDIA
 	bool "qt5multimedia"
+	select BR2_PACKAGE_QT5BASE
 	select BR2_PACKAGE_QT5BASE_GUI
 	select BR2_PACKAGE_QT5BASE_NETWORK
 	select BR2_PACKAGE_QT5BASE_OPENGL_LIB if BR2_PACKAGE_QT5BASE_OPENGL
@@ -12,4 +13,4 @@ config BR2_PACKAGE_QT5MULTIMEDIA
 	  multimedia capabilities such as media playback and the use
 	  of camera and radio devices.
 
-	  https://doc.qt.io/qt-5/multimediaoverview.html
+	  http://doc.qt.io/qt-5/multimediaoverview.html

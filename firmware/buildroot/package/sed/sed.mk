@@ -4,12 +4,11 @@
 #
 ################################################################################
 
-SED_VERSION = 4.9
+SED_VERSION = 4.7
 SED_SOURCE = sed-$(SED_VERSION).tar.xz
 SED_SITE = $(BR2_GNU_MIRROR)/sed
 SED_LICENSE = GPL-3.0
 SED_LICENSE_FILES = COPYING
-SED_CPE_ID_VENDOR = gnu
 
 SED_CONF_OPTS = \
 	--bindir=/bin \

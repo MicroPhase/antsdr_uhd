@@ -4,15 +4,12 @@
 #
 ################################################################################
 
-ELF2FLT_VERSION = 2021.08
-ELF2FLT_SITE = $(call github,uclinux-dev,elf2flt,v$(ELF2FLT_VERSION))
+ELF2FLT_VERSION = 7e33f28df198c46764021ed14408bd262751e148
+ELF2FLT_SITE = $(call github,uclinux-dev,elf2flt,$(ELF2FLT_VERSION))
 ELF2FLT_LICENSE = GPL-2.0+
 ELF2FLT_LICENSE_FILES = LICENSE.TXT
 
 HOST_ELF2FLT_DEPENDENCIES = host-binutils host-zlib
-
-# 0001-elf2flt-handle-binutils-2.34.patch
-HOST_ELF2FLT_AUTORECONF = YES
 
 # It is not exactly a host variant, but more a cross variant, which is
 # why we pass a special --target option.
@@ -24,7 +21,11 @@ HOST_ELF2FLT_CONF_OPTS = \
 	--target=$(GNU_TARGET_NAME) \
 	--disable-werror
 
-HOST_ELF2FLT_LIBS = -lz -ldl
+HOST_ELF2FLT_LIBS = -lz
+
+ifeq ($(BR2_GCC_ENABLE_LTO),y)
+HOST_ELF2FLT_LIBS += -ldl
+endif
 
 HOST_ELF2FLT_CONF_ENV = LIBS="$(HOST_ELF2FLT_LIBS)"
 

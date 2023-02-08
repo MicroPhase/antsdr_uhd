@@ -4,7 +4,7 @@
 #
 ################################################################################
 
-NETSNIFF_NG_VERSION = 0.6.8
+NETSNIFF_NG_VERSION = 0.6.6
 NETSNIFF_NG_SITE = http://pub.netsniff-ng.org/netsniff-ng
 NETSNIFF_NG_SOURCE = netsniff-ng-$(NETSNIFF_NG_VERSION).tar.xz
 NETSNIFF_NG_LICENSE = GPL-2.0
@@ -13,8 +13,7 @@ NETSNIFF_NG_LICENSE_FILES = README COPYING
 NETSNIFF_NG_CONF_ENV = \
 	NACL_INC_DIR=/dev/null \
 	NACL_LIB_DIR=/dev/null
-NETSNIFF_NG_DEPENDENCIES = host-pkgconf libpcap libnetfilter_conntrack liburcu
-NETSNIFF_NG_CONF_OPTS = --prefix=$(TARGET_DIR)/usr
+NETSNIFF_NG_DEPENDENCIES = libnl libpcap libnetfilter_conntrack liburcu
 
 ifeq ($(BR2_PACKAGE_NETSNIFF_NG_MAUSEZAHN),y)
 NETSNIFF_NG_DEPENDENCIES += libcli libnet
@@ -27,14 +26,6 @@ endif
 
 ifeq ($(BR2_PACKAGE_GEOIP),y)
 NETSNIFF_NG_DEPENDENCIES += geoip
-else
-NETSNIFF_NG_CONF_OPTS += --disable-geoip
-endif
-
-ifeq ($(BR2_PACKAGE_LIBNL),y)
-NETSNIFF_NG_DEPENDENCIES += libnl
-else
-NETSNIFF_NG_CONF_OPTS += --disable-libnl
 endif
 
 ifeq ($(BR2_PACKAGE_NCURSES),y)
@@ -43,8 +34,6 @@ endif
 
 ifeq ($(BR2_PACKAGE_ZLIB),y)
 NETSNIFF_NG_DEPENDENCIES += zlib
-else
-NETSNIFF_NG_CONF_OPTS += --disable-zlib
 endif
 
 # hand-written configure script and makefile
@@ -54,7 +43,7 @@ define NETSNIFF_NG_CONFIGURE_CMDS
 		$(TARGET_CONFIGURE_ARGS) \
 		$(TARGET_CONFIGURE_OPTS) \
 		./configure \
-		$(NETSNIFF_NG_CONF_OPTS) \
+		--prefix=$(TARGET_DIR)/usr \
 	)
 endef
 

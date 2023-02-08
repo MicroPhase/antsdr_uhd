@@ -1,9 +1,8 @@
 config BR2_PACKAGE_XENOMAI_COBALT_ARCH_SUPPORTS
 	bool
-	default y if BR2_i386
-	default y if BR2_x86_64
-	default y if BR2_powerpc
-	default y if BR2_arm && !BR2_ARM_CPU_ARMV7M && !BR2_ARM_CPU_ARMV8A
+	default y
+	depends on BR2_i386 || BR2_x86_64 || (BR2_arm && !BR2_ARM_CPU_ARMV7M) || \
+		BR2_powerpc
 
 comment "xenomai needs a glibc or uClibc toolchain w/ threads"
 	depends on BR2_USE_MMU
@@ -42,55 +41,17 @@ config BR2_PACKAGE_XENOMAI
 
 if BR2_PACKAGE_XENOMAI
 
-choice
-	bool "Xenomai version"
-	help
-	  Make sure that the selected version has a patch for your
-	  selected Linux kernel. If it does not, download and select a
-	  patch manually with BR2_LINUX_KERNEL_EXT_XENOMAI_ADEOS_PATCH,
-	  in the Linux Kernel -> Linux Kernel Extensions menu.
-
-config BR2_PACKAGE_XENOMAI_LATEST_VERSION
-	bool "Latest version (3.0.10)"
-
-config BR2_PACKAGE_XENOMAI_CUSTOM_VERSION
-	bool "Custom version"
-
-config BR2_PACKAGE_XENOMAI_CUSTOM_TARBALL
-	bool "Custom tarball"
-
-config BR2_PACKAGE_XENOMAI_CUSTOM_GIT
-	bool "Custom Git repository"
-
-endchoice
-
-config BR2_PACKAGE_XENOMAI_CUSTOM_VERSION_VALUE
-	string "Xenomai version"
-	depends on BR2_PACKAGE_XENOMAI_CUSTOM_VERSION
-
-config BR2_PACKAGE_XENOMAI_REPOSITORY
-	string "URL of custom repository"
-	depends on BR2_PACKAGE_XENOMAI_CUSTOM_GIT
-
-config BR2_PACKAGE_XENOMAI_REPOSITORY_VERSION
-	string "Custom repository version"
-	depends on BR2_PACKAGE_XENOMAI_CUSTOM_GIT
-	help
-	  Revision to use in the typical format used by Git, i.e a
-	  SHA1 or a tag.
-
 config BR2_PACKAGE_XENOMAI_VERSION
-	string
-	default "3.0.10" if BR2_PACKAGE_XENOMAI_LATEST_VERSION
-	default BR2_PACKAGE_XENOMAI_CUSTOM_VERSION_VALUE \
-		if BR2_PACKAGE_XENOMAI_CUSTOM_VERSION
-	default "custom" if BR2_PACKAGE_XENOMAI_CUSTOM_TARBALL
-	default BR2_PACKAGE_XENOMAI_REPOSITORY_VERSION \
-		if BR2_PACKAGE_XENOMAI_CUSTOM_GIT
+	string "Custom Xenomai version"
+	help
+	  Manually select Xenomai version. If left empty, the default
+	  version will be used.
 
-config BR2_PACKAGE_XENOMAI_CUSTOM_TARBALL_URL
-	string "URL of custom tarball"
-	depends on BR2_PACKAGE_XENOMAI_CUSTOM_TARBALL
+	  Make sure that the selected version has a patch for your
+	  selected Linux kernel. If it does not, download and select
+	  a patch manually with
+	  BR2_LINUX_KERNEL_EXT_XENOMAI_ADEOS_PATCH, in the Linux
+	  Kernel -> Linux Kernel Extensions menu.
 
 choice
 	prompt "Xenomai core"
@@ -123,8 +84,6 @@ endchoice
 config BR2_PACKAGE_XENOMAI_ENABLE_SMP
 	bool "Enable SMP support"
 	default y
-	# SMP not supported below armv6
-	depends on !BR2_ARM_CPU_ARMV4 && !BR2_ARM_CPU_ARMV5
 	help
 	  This option enables SMP support in Xenomai userspace.
 

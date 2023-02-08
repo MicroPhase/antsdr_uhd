@@ -4,20 +4,12 @@
 #
 ################################################################################
 
-EXIM_VERSION = 4.96
+EXIM_VERSION = 4.93.0.4
 EXIM_SOURCE = exim-$(EXIM_VERSION).tar.xz
-EXIM_SITE = https://ftp.exim.org/pub/exim/exim4
+EXIM_SITE = https://ftp.exim.org/pub/exim/exim4/fixes
 EXIM_LICENSE = GPL-2.0+
 EXIM_LICENSE_FILES = LICENCE
-EXIM_CPE_ID_VENDOR = exim
-EXIM_SELINUX_MODULES = exim mta
-EXIM_DEPENDENCIES = host-berkeleydb host-pcre2 pcre2 berkeleydb host-pkgconf
-
-# 0006-Fix-regex-n-use-after-free.-Bug-2915.patch
-EXIM_IGNORE_CVES += CVE-2022-3559
-
-# built without dmarc support
-EXIM_IGNORE_CVES += CVE-2022-3620
+EXIM_DEPENDENCIES = host-berkeleydb host-pcre pcre berkeleydb host-pkgconf
 
 # Modify a variable value. It must already exist in the file, either
 # commented or not.
@@ -26,7 +18,7 @@ define exim-config-change # variable-name, variable-value
 		$(@D)/Local/Makefile
 endef
 
-# Comment-out a variable. Has no effect if it does not exist.
+# Comment-out a variable. Has no effect if it does not exits.
 define exim-config-unset # variable-name
 	$(SED) 's,^\([[:space:]]*$1[[:space:]]*=.*$$\),# \1,' \
 		$(@D)/Local/Makefile
@@ -52,8 +44,8 @@ define EXIM_USE_DEFAULT_CONFIG_FILE
 	$(call exim-config-change,EXIM_USER,ref:exim)
 	$(call exim-config-change,EXIM_GROUP,mail)
 	$(call exim-config-change,TRANSPORT_LMTP,yes)
-	$(call exim-config-change,PCRE_LIBS,-lpcre2-8)
-	$(call exim-config-change,PCRE2_CONFIG,no)
+	$(call exim-config-change,PCRE_LIBS,-lpcre)
+	$(call exim-config-change,PCRE_CONFIG,no)
 	$(call exim-config-change,HAVE_ICONV,no)
 	$(call exim-config-unset,EXIM_MONITOR)
 	$(call exim-config-change,AUTH_PLAINTEXT,yes)

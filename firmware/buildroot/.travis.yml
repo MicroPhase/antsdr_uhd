@@ -1,0 +1,26 @@
+language: c
+
+branches:
+  except:
+  - adi-2019.02.2 # current rebased versions of master; change this when updating kernel ver
+
+os: linux
+
+notifications:
+  email:
+    on_success: change
+    on_failure: always
+
+matrix:
+  include:
+    - env: BUILD_TYPE=ensure_defconfigs_uptodate
+           VIVADO_ARCH=zynq
+           VIVADO_DEFCONFIGS="zynq_m2k zynq_pluto zynq_sidekiqz2"
+           VIVADO_VERSIONS="2018_3 2019_1"
+    - env: BUILD_TYPE=ensure_defconfigs_uptodate
+           VIVADO_ARCH=microblaze
+           VIVADO_DEFCONFIGS="microblaze_adi microblaze_adi_rootfs"
+           VIVADO_VERSIONS="2018_3 2019_1"
+
+script:
+  - ./ci/run-build.sh

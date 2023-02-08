@@ -4,9 +4,9 @@
 #
 ################################################################################
 
-GSTREAMER1_EDITING_SERVICES_VERSION = 1.20.4
-GSTREAMER1_EDITING_SERVICES_SOURCE = gst-editing-services-$(GSTREAMER1_EDITING_SERVICES_VERSION).tar.xz
-GSTREAMER1_EDITING_SERVICES_SITE = https://gstreamer.freedesktop.org/src/gstreamer-editing-services
+GSTREAMER1_EDITING_SERVICES_VERSION = 1.16.2
+GSTREAMER1_EDITING_SERVICES_SOURCE = gstreamer-editing-services-$(GSTREAMER1_EDITING_SERVICES_VERSION).tar.xz
+GSTREAMER1_EDITING_SERVICES_SITE = http://gstreamer.freedesktop.org/src/gstreamer-editing-services
 GSTREAMER1_EDITING_SERVICES_LICENSE = LGPL-2.0+
 GSTREAMER1_EDITING_SERVICES_LICENSE_FILES = COPYING COPYING.LIB
 GSTREAMER1_EDITING_SERVICES_INSTALL_STAGING = YES
@@ -15,23 +15,25 @@ GSTREAMER1_EDITING_SERVICES_DEPENDENCIES = \
 	gstreamer1 \
 	gst1-plugins-base \
 	gst1-plugins-good \
+	$(if $(BR2_PACKAGE_GST1_VALIDATE),gst1-validate) \
 	libxml2
 
-GSTREAMER1_EDITING_SERVICES_CONF_OPTS = \
-	-Ddoc=disabled \
-	-Dexamples=disabled \
-	-Dintrospection=disabled \
-	-Dtests=disabled \
-	-Dtools=enabled \
-	-Dbash-completion=disabled \
-	-Dxptv=disabled \
-	-Dpython=disabled
+GSTREAMER1_EDITING_SERVICES_CONF_OPTS = --disable-benchmarks
 
-ifeq ($(BR2_PACKAGE_GST1_DEVTOOLS),y)
-GSTREAMER1_EDITING_SERVICES_DEPENDENCIES += gst1-devtools
-GSTREAMER1_EDITING_SERVICES_CONF_OPTS += -Dvalidate=enabled
+# examples need GTK2/3 with X11 backend
+ifneq ($(BR2_PACKAGE_LIBGTK2)$(BR2_PACKAGE_LIBGTK3_X11),)
+GSTREAMER1_EDITING_SERVICES_CONF_OPTS += --enable-examples
+
+ifeq ($(BR2_PACKAGE_LIBGTK2),y)
+GSTREAMER1_EDITING_SERVICES_CONF_OPTS += --with-gtk=2.0
+GSTREAMER1_EDITING_SERVICES_DEPENDENCIES += libgtk2
 else
-GSTREAMER1_EDITING_SERVICES_CONF_OPTS += -Dvalidate=disabled
+GSTREAMER1_EDITING_SERVICES_CONF_OPTS += --with-gtk=3.0
+GSTREAMER1_EDITING_SERVICES_DEPENDENCIES += libgtk3
 endif
 
-$(eval $(meson-package))
+else
+GSTREAMER1_EDITING_SERVICES_CONF_OPTS += --disable-examples
+endif
+
+$(eval $(autotools-package))

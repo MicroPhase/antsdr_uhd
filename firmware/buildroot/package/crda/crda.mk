@@ -4,12 +4,11 @@
 #
 ################################################################################
 
-CRDA_VERSION = 4.15
+CRDA_VERSION = 4.14
 CRDA_SITE = https://git.kernel.org/pub/scm/linux/kernel/git/mcgrof/crda.git/snapshot
 CRDA_DEPENDENCIES = host-pkgconf host-python-pycryptodomex libnl libgcrypt
 CRDA_LICENSE = ISC
 CRDA_LICENSE_FILES = LICENSE
-CRDA_CPE_ID_VENDOR = kernel
 
 define CRDA_BUILD_CMDS
 	$(TARGET_CONFIGURE_OPTS) \

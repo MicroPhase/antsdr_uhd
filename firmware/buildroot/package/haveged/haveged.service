@@ -1,22 +1,10 @@
 [Unit]
-# inspiration from upstream init.d/service.fedora
-Description=Entropy Daemon based on the HAVEGE algorithm
-Documentation=man:haveged(8) http://www.issihosts.com/haveged/
-DefaultDependencies=no
-# This would wait for filesystems, but we only need /dev/random, which
-# is certainly available after systemd initialised
-# After=systemd-tmpfiles-setup-dev.service
-Before=sysinit.target shutdown.target systemd-journald.service
+Description=Entropy Harvesting Daemon
+Documentation=man:haveged(8)
 
 [Service]
-ExecStart=/usr/sbin/haveged -w 1024 -v 1 --Foreground
-Restart=always
-SuccessExitStatus=137 143
-
-# Only simple isolation methods that don't pull in dependencies
-CapabilityBoundingSet=CAP_SYS_ADMIN
-SecureBits=noroot-locked
-ProtectSystem=full
+ExecStart=/usr/sbin/haveged -F -w 1024 -v 1
+SuccessExitStatus=143
 
 [Install]
-WantedBy=sysinit.target
+WantedBy=multi-user.target

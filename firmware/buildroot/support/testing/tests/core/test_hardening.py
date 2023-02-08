@@ -52,7 +52,6 @@ class TestRelroPartial(TestHardeningBase):
     config = TestHardeningBase.config + \
         """
         BR2_RELRO_PARTIAL=y
-        # BR2_PIC_PIE is not set
         """
 
     def test_run(self):

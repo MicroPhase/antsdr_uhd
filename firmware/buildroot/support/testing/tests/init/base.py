@@ -1,4 +1,5 @@
 import os
+import subprocess
 import infra.basetest
 
 
@@ -6,7 +7,7 @@ class InitSystemBase(infra.basetest.BRTest):
 
     def start_emulator(self, fs_type, kernel=None, dtb=None, init=None):
         img = os.path.join(self.builddir, "images", "rootfs.{}".format(fs_type))
-        infra.img_round_power2(img)
+        subprocess.call(["truncate", "-s", "%1M", img])
 
         options = ["-drive",
                    "file={},if=sd,format=raw".format(img),
@@ -38,7 +39,8 @@ class InitSystemBase(infra.basetest.BRTest):
 
     def check_init(self, path):
         cmd = "cmp /proc/1/exe {}".format(path)
-        self.assertRunOk(cmd)
+        _, exit_code = self.emulator.run(cmd)
+        self.assertEqual(exit_code, 0)
 
     def check_network(self, interface, exitCode=0):
         cmd = "ip addr show {} |grep inet".format(interface)

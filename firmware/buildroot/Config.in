@@ -80,14 +80,7 @@ config BR2_HOSTARCH_NEEDS_IA32_COMPILER
 config BR2_NEEDS_HOST_UTF8_LOCALE
 	bool
 
-# Hidden boolean selected by packages that need the host to have
-# support for building gcc plugins
-config BR2_NEEDS_HOST_GCC_PLUGIN_SUPPORT
-	bool
-
 source "arch/Config.in"
-
-source "toolchain/Config.in"
 
 menu "Build options"
 
@@ -120,10 +113,6 @@ config BR2_LOCALFILES
 config BR2_SCP
 	string "Secure copy (scp) command"
 	default "scp"
-
-config BR2_SFTP
-	string "Secure file transfer (sftp) command"
-	default "sftp"
 
 config BR2_HG
 	string "Mercurial (hg) command"
@@ -418,23 +407,10 @@ config BR2_DEBUG_3
 endchoice
 endif
 
-config BR2_ENABLE_RUNTIME_DEBUG
-	bool "build packages with runtime debugging info"
-	help
-	  Some packages may have runtime assertions, extra traces, and
-	  similar runtime elements that can help debugging. However,
-	  these elements may negatively influence performance so should
-	  normally not be enabled on production systems.
-
-	  Enable this option to enable such runtime debugging.
-
-	  Note: disabling this option is not a guarantee that all
-	  packages effectively removed these runtime debugging elements.
-
 config BR2_STRIP_strip
 	bool "strip target binaries"
 	default y
-	depends on BR2_BINFMT_ELF
+	depends on !BR2_PACKAGE_HOST_ELF2FLT
 	help
 	  Binaries and libraries in the target filesystem will be
 	  stripped using the normal 'strip' command. This allows to save
@@ -553,25 +529,6 @@ config BR2_OPTIMIZE_FAST
 
 endchoice
 
-config BR2_ENABLE_LTO
-	bool "build packages with link-time optimisation"
-	help
-	  Enable the link-time optimisation (LTO) option when building
-	  packages. Link-time optimisation re-runs optimisations at
-	  link time, which allows the compiler to do interprocedural
-	  analysis across compilation units and thus come with better
-	  results: smaller size and better performance.
-
-	  Note that this analysis is limited to statically linked
-	  object files and libraries.
-
-	  This option may significantly increase build times,
-	  sometimes 5 times longer, with only limited gains.
-
-	  At this time, this option only enables LTO in packages that
-	  have an explicit configuration option for it. Other packages
-	  always enable LTO, but most packages never enable LTO.
-
 config BR2_GOOGLE_BREAKPAD_ENABLE
 	bool "Enable google-breakpad support"
 	depends on BR2_INSTALL_LIBSTDCPP
@@ -622,7 +579,6 @@ choice
 
 config BR2_STATIC_LIBS
 	bool "static only"
-	depends on !BR2_TOOLCHAIN_USES_GLIBC
 	help
 	  Build and use only static libraries. No shared libraries will
 	  be installed on the target. This potentially increases your
@@ -630,9 +586,6 @@ config BR2_STATIC_LIBS
 	  doing. Note that some packages may not be available when this
 	  option is enabled, due to their need for dynamic library
 	  support.
-
-comment "static only needs a toolchain w/ uclibc or musl"
-	depends on BR2_TOOLCHAIN_USES_GLIBC
 
 config BR2_SHARED_LIBS
 	bool "shared only"
@@ -755,18 +708,8 @@ endmenu
 
 comment "Security Hardening Options"
 
-config BR2_PIC_PIE_ARCH_SUPPORTS
-	bool
-	default y
-	# Microblaze glibc toolchains don't work with PIC/PIE enabled
-	depends on !BR2_microblaze
-	# Nios2 toolchains produce non working binaries with -fPIC
-	depends on !BR2_nios2
-
 config BR2_PIC_PIE
 	bool "Build code with PIC/PIE"
-	default y
-	depends on BR2_PIC_PIE_ARCH_SUPPORTS
 	depends on BR2_SHARED_LIBS
 	depends on BR2_TOOLCHAIN_SUPPORTS_PIE
 	help
@@ -774,15 +717,12 @@ config BR2_PIC_PIE
 	  Position-Independent Executables (PIE).
 
 comment "PIC/PIE needs a toolchain w/ PIE"
-	depends on BR2_PIC_PIE_ARCH_SUPPORTS
 	depends on BR2_SHARED_LIBS
 	depends on !BR2_TOOLCHAIN_SUPPORTS_PIE
 
 choice
 	bool "Stack Smashing Protection"
 	default BR2_SSP_ALL if BR2_ENABLE_SSP # legacy
-	default BR2_SSP_STRONG if BR2_TOOLCHAIN_HAS_SSP_STRONG
-	default BR2_SSP_REGULAR
 	depends on BR2_TOOLCHAIN_HAS_SSP
 	help
 	  Enable stack smashing protection support using GCC's
@@ -844,8 +784,6 @@ comment "Stack Smashing Protection needs a toolchain w/ SSP"
 
 choice
 	bool "RELRO Protection"
-	default BR2_RELRO_FULL if BR2_TOOLCHAIN_SUPPORTS_PIE
-	default BR2_RELRO_PARTIAL
 	depends on BR2_SHARED_LIBS
 	help
 	  Enable a link-time protection know as RELRO (RELocation Read
@@ -865,7 +803,6 @@ config BR2_RELRO_PARTIAL
 
 config BR2_RELRO_FULL
 	bool "Full"
-	depends on BR2_PIC_PIE_ARCH_SUPPORTS
 	depends on BR2_TOOLCHAIN_SUPPORTS_PIE
 	select BR2_PIC_PIE
 	help
@@ -874,7 +811,6 @@ config BR2_RELRO_FULL
 	  program loading, i.e every time an executable is started.
 
 comment "RELRO Full needs a toolchain w/ PIE"
-	depends on BR2_PIC_PIE_ARCH_SUPPORTS
 	depends on !BR2_TOOLCHAIN_SUPPORTS_PIE
 
 endchoice
@@ -882,16 +818,8 @@ endchoice
 comment "RELocation Read Only (RELRO) needs shared libraries"
 	depends on !BR2_SHARED_LIBS
 
-config BR2_FORTIFY_SOURCE_ARCH_SUPPORTS
-	bool
-	default y
-	# Microblaze glibc toolchains don't work with Fortify Source enabled
-	depends on !BR2_microblaze
-
 choice
 	bool "Buffer-overflow Detection (FORTIFY_SOURCE)"
-	default BR2_FORTIFY_SOURCE_1
-	depends on BR2_FORTIFY_SOURCE_ARCH_SUPPORTS
 	depends on BR2_TOOLCHAIN_USES_GLIBC
 	depends on !BR2_OPTIMIZE_0
 	help
@@ -932,9 +860,10 @@ config BR2_FORTIFY_SOURCE_2
 endchoice
 
 comment "Fortify Source needs a glibc toolchain and optimization"
-	depends on BR2_FORTIFY_SOURCE_ARCH_SUPPORTS
 	depends on (!BR2_TOOLCHAIN_USES_GLIBC || BR2_OPTIMIZE_0)
 endmenu
+
+source "toolchain/Config.in"
 
 source "system/Config.in"
 

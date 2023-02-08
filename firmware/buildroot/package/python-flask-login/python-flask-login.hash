@@ -1,5 +1,6 @@
-# md5, sha256 from https://pypi.org/pypi/flask-login/json
-md5  8020b22ad7ec6f17034f90117a520633  Flask-Login-0.6.2.tar.gz
-sha256  c0a7baa9fdc448cdd3dd6f0939df72eec5177b2f7abe6cb82fc934d29caac9c3  Flask-Login-0.6.2.tar.gz
-# Locally computed sha256 checksums
-sha256  7a9dfb9c5da204ed1370f3b62c13e2992a12da1da707f47e156897eeb4344e5b  LICENSE
+# from https://pypi.python.org/pypi/flask_login/json
+md5 25b34c74bd509792f291c16e184225df Flask-Login-0.4.1.tar.gz
+sha256 c815c1ac7b3e35e2081685e389a665f2c74d7e077cb93cecabaea352da4752ec Flask-Login-0.4.1.tar.gz
+
+# Locally computed
+sha256 7a9dfb9c5da204ed1370f3b62c13e2992a12da1da707f47e156897eeb4344e5b LICENSE

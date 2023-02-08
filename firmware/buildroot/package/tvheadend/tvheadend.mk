@@ -4,7 +4,7 @@
 #
 ################################################################################
 
-TVHEADEND_VERSION = fbc94aee8bfdd25baba87ab62a39234da20e8dd2
+TVHEADEND_VERSION = 221c29b40b1e53ae09a69d9458442dd4fea665f5
 TVHEADEND_SITE = $(call github,tvheadend,tvheadend,$(TVHEADEND_VERSION))
 TVHEADEND_LICENSE = GPL-3.0+
 TVHEADEND_LICENSE_FILES = LICENSE.md
@@ -12,7 +12,7 @@ TVHEADEND_DEPENDENCIES = \
 	host-gettext \
 	host-pkgconf \
 	host-pngquant \
-	host-python3 \
+	$(if $(BR2_PACKAGE_PYTHON3),host-python3,host-python) \
 	openssl
 
 ifeq ($(BR2_PACKAGE_AVAHI),y)
@@ -29,7 +29,7 @@ endif
 ifeq ($(BR2_PACKAGE_TVHEADEND_TRANSCODING),y)
 TVHEADEND_CONF_OPTS += --enable-libav --enable-libx264
 TVHEADEND_DEPENDENCIES += ffmpeg x264
-ifeq ($(BR2_PACKAGE_LIBVA),y)
+ifeq ($(BR2_PACKAGE_LIBVA)$(BR2_PACKAGE_XORG7),yy)
 TVHEADEND_CONF_OPTS += --enable-vaapi
 TVHEADEND_DEPENDENCIES += libva
 else
@@ -47,12 +47,6 @@ TVHEADEND_DEPENDENCIES += rpi-userland
 else
 TVHEADEND_CONF_OPTS += --disable-omx
 endif
-ifeq ($(BR2_PACKAGE_LIBVPX)$(BR2_INSTALL_LIBSTDCPP),yy)
-TVHEADEND_CONF_OPTS += --enable-libvpx
-TVHEADEND_DEPENDENCIES += libvpx
-else
-TVHEADEND_CONF_OPTS += --disable-libvpx
-endif
 ifeq ($(BR2_PACKAGE_X265),y)
 TVHEADEND_CONF_OPTS += --enable-libx265
 TVHEADEND_DEPENDENCIES += x265
@@ -65,43 +59,8 @@ TVHEADEND_CONF_OPTS += \
 	--disable-libopus \
 	--disable-omx \
 	--disable-vaapi \
-	--disable-libvpx \
 	--disable-libx264 \
 	--disable-libx265
-endif
-
-ifeq ($(BR2_PACKAGE_TVHEADEND_DESCRAMBLER),y)
-TVHEADEND_CONF_OPTS += \
-	--enable-cardclient \
-	--enable-cwc \
-	--enable-cccam \
-	--enable-capmt \
-	--enable-constcw
-else
-TVHEADEND_CONF_OPTS += \
-	--disable-cardclient \
-	--disable-cwc \
-	--disable-cccam \
-	--disable-capmt \
-	--disable-constcw
-endif
-
-ifeq ($(BR2_PACKAGE_TVHEADEND_IPTV),y)
-TVHEADEND_CONF_OPTS += --enable-iptv
-else
-TVHEADEND_CONF_OPTS += --disable-iptv
-endif
-
-ifeq ($(BR2_PACKAGE_TVHEADEND_SATIP),y)
-TVHEADEND_CONF_OPTS += --enable-satip_client --enable-satip_server
-else
-TVHEADEND_CONF_OPTS += --disable-satip_client --disable-satip_server
-endif
-
-ifeq ($(BR2_PACKAGE_TVHEADEND_TIMESHIFT),y)
-TVHEADEND_CONF_OPTS += --enable-timeshift
-else
-TVHEADEND_CONF_OPTS += --disable-timeshift
 endif
 
 ifeq ($(BR2_PACKAGE_LIBDVBCSA),y)
@@ -128,14 +87,11 @@ TVHEADEND_DEPENDENCIES += liburiparser
 TVHEADEND_CFLAGS += $(if $(BR2_USE_WCHAR),,-DURI_NO_UNICODE)
 endif
 
-ifeq ($(BR2_PACKAGE_PCRE2),y)
-TVHEADEND_DEPENDENCIES += pcre2
-TVHEADEND_CONF_OPTS += --disable-pcre --enable-pcre2
-else ifeq ($(BR2_PACKAGE_PCRE),y)
+ifeq ($(BR2_PACKAGE_PCRE),y)
 TVHEADEND_DEPENDENCIES += pcre
-TVHEADEND_CONF_OPTS += --enable-pcre --disable-pcre2
+TVHEADEND_CONF_OPTS += --enable-pcre
 else
-TVHEADEND_CONF_OPTS += --disable-pcre --disable-pcre2
+TVHEADEND_CONF_OPTS += --disable-pcre
 endif
 
 ifeq ($(BR2_TOOLCHAIN_SUPPORTS_PIE),)
@@ -164,11 +120,10 @@ define TVHEADEND_CONFIGURE_CMDS
 			--arch="$(ARCH)" \
 			--cpu="$(GCC_TARGET_CPU)" \
 			--nowerror \
-			--python="$(HOST_DIR)/bin/python3" \
+			--python="$(HOST_DIR)/bin/python" \
 			--enable-dvbscan \
 			--enable-bundle \
 			--enable-pngquant \
-			--disable-execinfo \
 			--disable-ffmpeg_static \
 			--disable-hdhomerun_static \
 			$(TVHEADEND_CONF_OPTS) \
@@ -205,10 +160,8 @@ TVHEADEND_POST_INSTALL_TARGET_HOOKS += TVHEADEND_CLEAN_SHARE
 #    to the other users (because there will be crendentials in there)
 
 define TVHEADEND_INSTALL_INIT_SYSV
-	$(INSTALL) -D package/tvheadend/etc.default.tvheadend \
-		$(TARGET_DIR)/etc/default/tvheadend
-	$(INSTALL) -D package/tvheadend/S99tvheadend \
-		$(TARGET_DIR)/etc/init.d/S99tvheadend
+	$(INSTALL) -D package/tvheadend/etc.default.tvheadend $(TARGET_DIR)/etc/default/tvheadend
+	$(INSTALL) -D package/tvheadend/S99tvheadend          $(TARGET_DIR)/etc/init.d/S99tvheadend
 endef
 
 define TVHEADEND_USERS

@@ -3,4 +3,4 @@ config BR2_PACKAGE_PYTHON_PYCRYPTODOMEX
 	help
 	  Cryptographic library for Python.
 
-	  https://www.pycryptodome.org
+	  http://www.pycryptodome.org
