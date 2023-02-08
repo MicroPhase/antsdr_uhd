@@ -13,7 +13,9 @@ config BR2_PACKAGE_NEARD
 	  daemon is a part of the NFC stack provided by the Linux NFC
 	  project.
 
-	  https://git.kernel.org/pub/scm/network/nfc/neard.git
+	  http://git.kernel.org/?p=network/nfc/neard.git;a=summary
+
+	  https://01.org/linux-nfc/
 
 if BR2_PACKAGE_NEARD
 

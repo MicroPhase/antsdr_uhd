@@ -10,14 +10,17 @@ if BR2_PACKAGE_EBTABLES
 
 config BR2_PACKAGE_EBTABLES_UTILS_SAVE
 	bool "ebtables save"
-	select BR2_PACKAGE_BASH # runtime
-	select BR2_PACKAGE_BUSYBOX_SHOW_OTHERS # bash
+	depends on BR2_PACKAGE_BASH # runtime
 	help
-	  Install the ebtables-legacy-save tool
+	  Install the ebtables-save tool
 
 config BR2_PACKAGE_EBTABLES_UTILS_RESTORE
 	bool "ebtables restore"
+	depends on !BR2_STATIC_LIBS
 	help
-	  Install the ebtables-legacy-restore tool
+	  Install the ebtables-restore tool
+
+comment "ebtables-restore needs a toolchain w/ dynamic library"
+	depends on BR2_STATIC_LIBS
 
 endif

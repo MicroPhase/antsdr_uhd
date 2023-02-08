@@ -4,7 +4,7 @@
 #
 ################################################################################
 
-DASH_VERSION = 0.5.11.5
+DASH_VERSION = 0.5.10.2
 DASH_SITE = http://gondor.apana.org.au/~herbert/dash/files
 DASH_LICENSE = BSD-3-Clause, GPL-2.0+ (mksignames.c)
 DASH_LICENSE_FILES = COPYING
@@ -25,10 +25,6 @@ endef
 DASH_POST_INSTALL_TARGET_HOOKS += DASH_INSTALL_PROFILE
 else
 DASH_CONF_OPTS += --without-libedit
-endif
-
-ifeq ($(BR2_STATIC_LIBS),)
-DASH_CONF_OPTS += --disable-static
 endif
 
 define DASH_INSTALL_TARGET_CMDS

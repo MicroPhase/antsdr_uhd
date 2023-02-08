@@ -7,15 +7,14 @@ config BR2_PACKAGE_VALGRIND_ARCH_SUPPORTS
 	default y if BR2_powerpc || BR2_powerpc64 || BR2_powerpc64le
 	depends on !BR2_MIPS_SOFT_FLOAT
 
-comment "valgrind needs a toolchain w/ dynamic library, threads"
+comment "valgrind needs a toolchain w/ dynamic library"
 	depends on BR2_PACKAGE_VALGRIND_ARCH_SUPPORTS
-	depends on BR2_STATIC_LIBS || !BR2_TOOLCHAIN_HAS_THREADS
+	depends on BR2_STATIC_LIBS
 
 config BR2_PACKAGE_VALGRIND
 	bool "valgrind"
 	depends on BR2_PACKAGE_VALGRIND_ARCH_SUPPORTS
 	depends on !BR2_STATIC_LIBS
-	depends on BR2_TOOLCHAIN_HAS_THREADS
 	help
 	  Tool for debugging and profiling Linux programs.
 

@@ -161,9 +161,6 @@ do_kconfig() {
         toolchains
         jpeg
         openssl
-        skeleton
-        init
-        linux
     )
 
     for br2 in "${items[@]}"; do
@@ -227,30 +224,6 @@ do_kconfig() {
         else
             printf '# No openssl from: %s\n\n' "${br2_desc}"
         fi >>"${outputdir}/.br2-external.in.openssl"
-
-        if [ -f "${br2_ext}/provides/skeleton.in" ]; then
-            printf 'comment "skeleton from: %s"\n' "${br2_desc}"
-            printf 'source "%s/provides/skeleton.in"\n' "${br2_ext}"
-            printf '\n'
-        else
-            printf '# No skeleton from: %s\n\n' "${br2_desc}"
-        fi >>"${outputdir}/.br2-external.in.skeleton"
-
-        if [ -f "${br2_ext}/provides/init.in" ]; then
-            printf 'comment "init from: %s"\n' "${br2_desc}"
-            printf 'source "%s/provides/init.in"\n' "${br2_ext}"
-            printf '\n'
-        else
-            printf '# No init from: %s\n\n' "${br2_desc}"
-        fi >>"${outputdir}/.br2-external.in.init"
-
-        if [ -f "${br2_ext}/linux/Config.ext.in" ]; then
-            printf 'comment "linux extension from: %s"\n' "${br2_desc}"
-            printf 'source "%s/linux/Config.ext.in"\n' "${br2_ext}"
-            printf '\n'
-        else
-            printf '# No linux extension from: %s\n\n' "${br2_desc}"
-        fi >>"${outputdir}/.br2-external.in.linux"
     done
 
     printf 'endmenu\n' >>"${outputdir}/.br2-external.in.menus"

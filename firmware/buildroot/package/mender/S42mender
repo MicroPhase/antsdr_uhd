@@ -2,10 +2,6 @@
 #
 # Starts mender service.
 #
-DAEMON="mender"
-DAEMON_PATH="/usr/bin/mender"
-PIDFILE="/var/run/${DAEMON}.pid"
-DAEMON_ARGS="daemon"
 
 start() {
 	# If /var/lib/mender is a symlink to /var/run/mender, and
@@ -13,7 +9,8 @@ start() {
 	#     create the directory pointed to by the symlink.
 	#   - the filesystem is RW (i.e. we can rm the symlink),
 	#     replace the symlink with an actual directory
-	if [ -L /var/lib/mender ] && [ "$(readlink /var/lib/mender)" = "/var/run/mender" ]
+	if [ -L /var/lib/mender \
+	     -a "$(readlink /var/lib/mender)" = "/var/run/mender" ]
 	then
 		if rm -f /var/lib/mender >/dev/null 2>&1; then
 			mkdir -p /var/lib/mender
@@ -26,16 +23,15 @@ start() {
 
 	printf "Starting mender service: "
 	umask 077
-	start-stop-daemon -bmSqp "$PIDFILE" -x ${DAEMON_PATH} -- ${DAEMON_ARGS}
-	status=$?
-	[ "${status}" = 0 ] && echo "OK" || echo "FAIL"
-}
 
+	start-stop-daemon -S -q -b -m -p /var/run/mender.pid \
+		--exec /usr/bin/mender -- -daemon
+	[ $? = 0 ] && echo "OK" || echo "FAIL"
+}
 stop() {
 	printf "Stopping mender service: "
-	start-stop-daemon -Kqp "$PIDFILE"
-	status=$?
-	[ "${status}" = 0 ] && echo "OK" || echo "FAIL"
+	start-stop-daemon -K -q -p /var/run/mender.pid
+	[ $? = 0 ] && echo "OK" || echo "FAIL"
 }
 restart() {
 	stop
@@ -53,7 +49,7 @@ case "$1" in
 		restart
 		;;
 	*)
-		echo "Usage: $0 {start|stop|reload|restart}"
+		echo "Usage: $0 {start|stop|restart}"
 		exit 1
 esac
 

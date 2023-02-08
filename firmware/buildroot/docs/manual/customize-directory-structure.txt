@@ -27,10 +27,10 @@ to you.
 |           +-- post_image.sh
 |           +-- rootfs_overlay/
 |           |   +-- etc/
-|           |   +-- <some files>
+|           |   +-- <some file>
 |           +-- patches/
 |               +-- foo/
-|               |   +-- <some patches>
+|               |   +-- <some patch>
 |               +-- libbar/
 |                   +-- <some other patches>
 |

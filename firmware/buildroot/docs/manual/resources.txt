@@ -21,18 +21,20 @@ http://lists.buildroot.org/mailman/listinfo/buildroot[mailing list info
 page].
 +
 Mails that are sent to the mailing list are also available in the
-mailing list archives, available through
-http://lists.buildroot.org/pipermail/buildroot[Mailman] or at
-https://lore.kernel.org/buildroot/[lore.kernel.org].
+http://lists.buildroot.org/pipermail/buildroot[mailing list archives] and
+via http://gmane.org[Gmane], at
+http://dir.gmane.org/gmane.comp.lib.uclibc.buildroot[+gmane.comp.lib.uclibc.buildroot+].
+Please search the mailing list archives before asking questions, since
+there is a good chance someone else has asked the same question before.
 
 IRC::
 +
-The Buildroot IRC channel irc://irc.oftc.net/#buildroot[#buildroot] is
-hosted on https://www.oftc.net/WebChat/[OFTC]. It is a useful place to
+The Buildroot IRC channel irc://freenode.net/#buildroot[#buildroot] is
+hosted on http://webchat.freenode.net[Freenode]. It is a useful place to
 ask quick questions or discuss on certain topics.
 +
 When asking for help on IRC, share relevant logs or pieces of code
-using a code sharing website, such as https://paste.ack.tf/.
+using a code sharing website, such as http://code.bulix.org.
 +
 Note that for certain questions, posting to the mailing list may be
 better as it will reach more people, both developers and users.
@@ -68,4 +70,4 @@ review comments in a clean and concise web interface, it can be useful
 for all Buildroot developers.
 +
 The Buildroot patch management interface is available at
-https://patchwork.ozlabs.org/project/buildroot/list/[].
+http://patchwork.buildroot.org[].

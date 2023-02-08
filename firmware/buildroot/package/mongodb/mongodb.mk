@@ -4,23 +4,18 @@
 #
 ################################################################################
 
-MONGODB_VERSION = 4.2.18
-MONGODB_SITE = https://fastdl.mongodb.org/src
-MONGODB_SOURCE = mongodb-src-r$(MONGODB_VERSION).tar.gz
+MONGODB_VERSION_BASE = 4.0.19
+MONGODB_VERSION = r$(MONGODB_VERSION_BASE)
+MONGODB_SITE = $(call github,mongodb,mongo,$(MONGODB_VERSION))
 
 MONGODB_LICENSE = Apache-2.0 (drivers), SSPL (database)
 MONGODB_LICENSE_FILES = APACHE-2.0.txt LICENSE-Community.txt
 
-MONGODB_CPE_ID_VENDOR = mongodb
-MONGODB_SELINUX_MODULES = mongodb
-
 MONGODB_DEPENDENCIES = \
 	boost \
 	host-python-cheetah \
-	host-python-psutil \
 	host-python-pyyaml \
-	host-python-regex \
-	host-python-requests \
+	host-python-typing \
 	host-scons \
 	pcre \
 	snappy \
@@ -34,7 +29,6 @@ MONGODB_SCONS_ENV = CC="$(TARGET_CC)" CXX="$(TARGET_CXX)" \
 	-j"$(PARALLEL_JOBS)"
 
 MONGODB_SCONS_OPTS = \
-	--disable-minimum-compiler-version-enforcement \
 	--disable-warnings-as-errors \
 	--use-system-boost \
 	--use-system-pcre \
@@ -44,7 +38,7 @@ MONGODB_SCONS_OPTS = \
 	--use-system-zlib
 
 # need to pass mongo version when not building from git repo
-MONGODB_SCONS_OPTS += MONGO_VERSION=$(MONGODB_VERSION)-
+MONGODB_SCONS_OPTS += MONGO_VERSION=$(MONGODB_VERSION_BASE)-
 
 # WiredTiger database storage engine only supported on 64 bits
 ifeq ($(BR2_ARCH_IS_64),y)
@@ -66,27 +60,21 @@ endif
 
 ifeq ($(BR2_PACKAGE_LIBCURL),y)
 MONGODB_DEPENDENCIES += libcurl
-MONGODB_SCONS_OPTS += \
-	--enable-free-mon=on \
-	--enable-http-client=on
+MONGODB_SCONS_OPTS += --enable-free-mon=on
 else
-MONGODB_SCONS_OPTS += \
-	--enable-free-mon=off \
-	--enable-http-client=off
+MONGODB_SCONS_OPTS += --enable-free-mon=off
 endif
 
 ifeq ($(BR2_PACKAGE_OPENSSL),y)
 MONGODB_DEPENDENCIES += openssl
 MONGODB_SCONS_OPTS += \
-	--ssl=on \
+	--ssl \
 	--ssl-provider=openssl
-else
-MONGODB_SCONS_OPTS += --ssl=off
 endif
 
 define MONGODB_BUILD_CMDS
 	(cd $(@D); \
-		$(SCONS) \
+		$(HOST_DIR)/bin/python $(SCONS) \
 		$(MONGODB_SCONS_ENV) \
 		$(MONGODB_SCONS_OPTS) \
 		$(MONGODB_SCONS_TARGETS))
@@ -94,7 +82,7 @@ endef
 
 define MONGODB_INSTALL_TARGET_CMDS
 	(cd $(@D); \
-		$(SCONS) \
+		$(HOST_DIR)/bin/python $(SCONS) \
 		$(MONGODB_SCONS_ENV) \
 		$(MONGODB_SCONS_OPTS) \
 		--prefix=$(TARGET_DIR)/usr \

@@ -4,30 +4,18 @@
 #
 ################################################################################
 
-NETSURF_VERSION = 3.10
+NETSURF_VERSION = 3.9
 NETSURF_SOURCE = netsurf-all-$(NETSURF_VERSION).tar.gz
 NETSURF_SITE = http://download.netsurf-browser.org/netsurf/releases/source-full
 NETSURF_LICENSE = GPL-2.0
 NETSURF_LICENSE_FILES = netsurf/COPYING
-NETSURF_CPE_ID_VENDOR = netsurf-browser
 # host-vim needed for the xxd utility
 NETSURF_DEPENDENCIES = expat jpeg libpng \
 	host-bison host-flex host-gperf host-pkgconf host-vim
 
-# internal duktape doesn't build with BR2_OPTIMIZE_FAST
-ifeq ($(BR2_OPTIMIZE_FAST),y)
-define NETSURF_DUKTAPE_CONFIGURE_CMDS
-	echo "override NETSURF_USE_DUKTAPE := NO"       >> $(@D)/netsurf/Makefile.config
-endef
-else
-define NETSURF_DUKTAPE_CONFIGURE_CMDS
-	echo "override NETSURF_USE_DUKTAPE := YES"      >> $(@D)/netsurf/Makefile.config
-endef
-endif
-
 ifeq ($(BR2_PACKAGE_NETSURF_GTK),y)
 NETSURF_DEPENDENCIES += libgtk2
-NETSURF_FRONTEND = gtk2
+NETSURF_FRONTEND = gtk
 endif
 
 ifeq ($(BR2_PACKAGE_NETSURF_GTK3),y)
@@ -88,7 +76,6 @@ endef
 endif
 
 define NETSURF_CONFIGURE_CMDS
-	$(NETSURF_DUKTAPE_CONFIGURE_CMDS)
 	$(NETSURF_ICONV_CONFIGURE_CMDS)
 	$(NETSURF_SVG_CONFIGURE_CMDS)
 	$(NETSURF_FONTLIB_CONFIGURE_CMDS)

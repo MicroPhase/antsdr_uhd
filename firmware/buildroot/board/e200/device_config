@@ -1,0 +1,7 @@
+#S40network / S41network
+IFAC=/etc/network/interfaces
+
+#update.sh
+TARGET=ANTSDR-E200
+FRM_MAGIC="ANTSDR E200 (MICROPHASE)"
+
