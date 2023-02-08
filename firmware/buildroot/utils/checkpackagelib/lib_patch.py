@@ -8,7 +8,6 @@ import re
 
 from checkpackagelib.base import _CheckFunction
 from checkpackagelib.lib import NewlineAtEof           # noqa: F401
-from checkpackagelib.tool import NotExecutable         # noqa: F401
 
 
 class ApplyOrder(_CheckFunction):

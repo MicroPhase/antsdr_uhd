@@ -1,0 +1,55 @@
+#!/bin/sh
+#
+# Start the network....
+#
+
+# Debian ifupdown needs the /run/network lock directory
+
+source /etc/device_config
+
+create_system_files () {
+
+	IFAC=/etc/network/interfaces
+
+	HOSTNAME=`fw_printenv -n hostname 2> /dev/null || cat /etc/hostname`
+	echo $HOSTNAME > /etc/hostname
+
+	ETH_IPADDR=`fw_printenv -n ipaddr_eth 2> /dev/null || echo 192.168.1.10`
+	ETH_NETMASK=`fw_printenv -n netmask_eth 2> /dev/null || echo 255.255.255.0`
+
+	echo -e "auto eth0" >> $IFAC
+	if [ -n "$ETH_IPADDR" ]
+	then
+		echo -e "iface eth0 inet static" >> $IFAC
+		echo -e "\taddress $ETH_IPADDR\n""\tnetmask $ETH_NETMASK\n" >> $IFAC
+	else
+		echo -e "iface eth0 inet dhcp\n" >> $IFAC
+	fi
+	}
+
+mkdir -p /run/network
+
+case "$1" in
+  start)
+	create_system_files
+	printf "Starting network: "
+	/bin/hostname -F /etc/hostname
+	/sbin/ifup -a 2>&1 | logger
+	[ $? = 0 ] && echo "OK" || echo "FAIL"
+	;;
+  stop)
+	printf "Stopping network: "
+	/sbin/ifdown -a
+	[ $? = 0 ] && echo "OK" || echo "FAIL"
+	;;
+  restart|reload)
+	"$0" stop
+	"$0" start
+	;;
+  *)
+	echo "Usage: $0 {start|stop|restart}"
+	exit 1
+esac
+
+exit $?
+

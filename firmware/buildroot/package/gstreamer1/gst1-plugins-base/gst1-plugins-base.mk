@@ -4,14 +4,12 @@
 #
 ################################################################################
 
-GST1_PLUGINS_BASE_VERSION = 1.20.4
+GST1_PLUGINS_BASE_VERSION = 1.16.2
 GST1_PLUGINS_BASE_SOURCE = gst-plugins-base-$(GST1_PLUGINS_BASE_VERSION).tar.xz
 GST1_PLUGINS_BASE_SITE = https://gstreamer.freedesktop.org/src/gst-plugins-base
 GST1_PLUGINS_BASE_INSTALL_STAGING = YES
 GST1_PLUGINS_BASE_LICENSE_FILES = COPYING
-GST1_PLUGINS_BASE_LICENSE = LGPL-2.1+
-
-GST1_PLUGINS_BASE_CFLAGS = $(TARGET_CFLAGS) -std=gnu99
+GST1_PLUGINS_BASE_LICENSE = LGPL-2.0+, LGPL-2.1+
 
 GST1_PLUGINS_BASE_CONF_OPTS = \
 	-Dexamples=disabled \
@@ -19,8 +17,8 @@ GST1_PLUGINS_BASE_CONF_OPTS = \
 	-Dgobject-cast-checks=disabled \
 	-Dglib-asserts=disabled \
 	-Dglib-checks=disabled \
-	-Dqt5=disabled \
-	-Ddoc=disabled
+	-Dgtk_doc=disabled \
+	-Dintrospection=disabled
 
 # Options which require currently unpackaged libraries
 GST1_PLUGINS_BASE_CONF_OPTS += \
@@ -28,25 +26,11 @@ GST1_PLUGINS_BASE_CONF_OPTS += \
 	-Dlibvisual=disabled \
 	-Diso-codes=disabled
 
-ifeq ($(BR2_PACKAGE_GST1_PLUGINS_BASE_INSTALL_TOOLS),y)
-GST1_PLUGINS_BASE_CONF_OPTS += -Dtools=enabled
-else
-GST1_PLUGINS_BASE_CONF_OPTS += -Dtools=disabled
-endif
-
 GST1_PLUGINS_BASE_DEPENDENCIES = gstreamer1 $(TARGET_NLS_DEPENDENCIES)
 
 GST1_PLUGINS_BASE_LDFLAGS = $(TARGET_LDFLAGS) $(TARGET_NLS_LIBS)
 
 # These plugins are listed in the order from ./configure --help
-
-ifeq ($(BR2_PACKAGE_GOBJECT_INTROSPECTION),y)
-GST1_PLUGINS_BASE_CONF_OPTS += -Dintrospection=enabled
-GST1_PLUGINS_BASE_DEPENDENCIES += gobject-introspection
-else
-GST1_PLUGINS_BASE_CONF_OPTS += -Dintrospection=disabled
-endif
-
 ifeq ($(BR2_PACKAGE_ORC),y)
 GST1_PLUGINS_BASE_DEPENDENCIES += orc
 GST1_PLUGINS_BASE_CONF_OPTS += -Dorc=enabled
@@ -157,12 +141,6 @@ ifeq ($(BR2_PACKAGE_GST1_PLUGINS_BASE_PLUGIN_GIO),y)
 GST1_PLUGINS_BASE_CONF_OPTS += -Dgio=enabled
 else
 GST1_PLUGINS_BASE_CONF_OPTS += -Dgio=disabled
-endif
-
-ifeq ($(BR2_PACKAGE_GST1_PLUGINS_BASE_PLUGIN_GIO_TYPEFINDER),y)
-GST1_PLUGINS_BASE_CONF_OPTS += -Dgio-typefinder=enabled
-else
-GST1_PLUGINS_BASE_CONF_OPTS += -Dgio-typefinder=disabled
 endif
 
 ifeq ($(BR2_PACKAGE_GST1_PLUGINS_BASE_PLUGIN_OVERLAYCOMPOSITION),y)

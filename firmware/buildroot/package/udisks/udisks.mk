@@ -4,45 +4,29 @@
 #
 ################################################################################
 
-UDISKS_VERSION = 2.9.4
-UDISKS_SOURCE = udisks-$(UDISKS_VERSION).tar.bz2
-UDISKS_SITE = https://github.com/storaged-project/udisks/releases/download/udisks-$(UDISKS_VERSION)
+UDISKS_VERSION = 1.0.5
+UDISKS_SITE = http://hal.freedesktop.org/releases
 UDISKS_LICENSE = GPL-2.0+
 UDISKS_LICENSE_FILES = COPYING
-UDISKS_CPE_ID_VENDOR = freedesktop
-UDISKS_INSTALL_STAGING = YES
+# For 0002-Fix-systemd-service-file.patch
+UDISKS_AUTORECONF = YES
 
 UDISKS_DEPENDENCIES = \
+	sg3_utils \
 	host-pkgconf \
+	udev \
 	dbus \
 	dbus-glib \
-	libatasmart \
-	libblockdev \
-	libgudev \
-	parted \
 	polkit \
-	sg3_utils \
-	udev \
-	util-linux
+	parted \
+	lvm2 \
+	libatasmart \
+	libgudev
 
-UDISKS_CONF_OPTS = \
-	--disable-acl \
-	--disable-bcache \
-	--disable-btrfs \
-	--disable-introspection \
-	--disable-iscsi \
-	--disable-lsm \
-	--disable-lvm2 \
-	--disable-lvmcache \
-	--disable-man \
-	--disable-rpath \
-	--disable-vdo \
-	--disable-zram
+UDISKS_CONF_OPTS = --disable-remote-access --disable-man-pages
 
-ifeq ($(BR2_PACKAGE_UDISKS_FHS_MEDIA),y)
-UDISKS_CONF_OPTS += --enable-fhs-media
-else
-UDISKS_CONF_OPTS += --disable-fhs-media
+ifeq ($(BR2_PACKAGE_UDISKS_LVM2),y)
+UDISKS_CONF_OPTS += --enable-lvm2
 endif
 
 $(eval $(autotools-package))

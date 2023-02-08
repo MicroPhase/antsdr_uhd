@@ -1,10 +1,11 @@
 config BR2_PACKAGE_UPOWER
 	bool "upower"
 	depends on BR2_PACKAGE_HAS_UDEV
-	depends on BR2_TOOLCHAIN_HAS_THREADS # libgudev
+	depends on BR2_TOOLCHAIN_HAS_THREADS # libgudev, libusb
 	depends on BR2_USE_MMU # libgudev
 	depends on BR2_USE_WCHAR # libgudev
 	select BR2_PACKAGE_LIBGUDEV
+	select BR2_PACKAGE_LIBUSB
 	help
 	  UPower is an abstraction for enumerating power devices,
 	  listening to device events and querying history and

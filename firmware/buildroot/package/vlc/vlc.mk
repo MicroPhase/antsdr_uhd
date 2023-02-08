@@ -4,14 +4,12 @@
 #
 ################################################################################
 
-VLC_VERSION = 3.0.18
+VLC_VERSION = 3.0.11
 VLC_SITE = https://get.videolan.org/vlc/$(VLC_VERSION)
 VLC_SOURCE = vlc-$(VLC_VERSION).tar.xz
 VLC_LICENSE = GPL-2.0+, LGPL-2.1+
 VLC_LICENSE_FILES = COPYING COPYING.LIB
-VLC_CPE_ID_VENDOR = videolan
-VLC_CPE_ID_PRODUCT = vlc_media_player
-VLC_DEPENDENCIES = host-gettext host-pkgconf
+VLC_DEPENDENCIES = host-pkgconf
 VLC_AUTORECONF = YES
 
 # Install vlc libraries in staging.
@@ -117,7 +115,8 @@ else
 VLC_CONF_OPTS += --disable-alsa
 endif
 
-ifeq ($(BR2_PACKAGE_AVAHI_LIBAVAHI_CLIENT),y)
+# avahi support needs avahi-client, which needs avahi-daemon and dbus
+ifeq ($(BR2_PACKAGE_AVAHI)$(BR2_PACKAGE_AVAHI_DAEMON)$(BR2_PACKAGE_DBUS),yyy)
 VLC_CONF_OPTS += --enable-avahi
 VLC_DEPENDENCIES += avahi
 else
@@ -210,9 +209,13 @@ else
 VLC_CONF_OPTS += --disable-gles2
 endif
 
-ifeq ($(BR2_PACKAGE_OPENCV3),y)
+ifeq ($(BR2_PACKAGE_OPENCV)$(BR2_PACKAGE_OPENCV3),y)
 VLC_CONF_OPTS += --enable-opencv
+ifeq ($(BR2_PACKAGE_OPENCV),y)
+VLC_DEPENDENCIES += opencv
+else
 VLC_DEPENDENCIES += opencv3
+endif
 else
 VLC_CONF_OPTS += --disable-opencv
 endif
@@ -377,9 +380,9 @@ else
 VLC_CONF_OPTS += --disable-theora
 endif
 
-ifeq ($(BR2_PACKAGE_LIBUPNP),y)
+ifeq ($(BR2_PACKAGE_LIBUPNP)$(BR2_PACKAGE_LIBUPNP18),y)
 VLC_CONF_OPTS += --enable-upnp
-VLC_DEPENDENCIES += libupnp
+VLC_DEPENDENCIES += $(if $(BR2_PACKAGE_LIBUPNP),libupnp,libupnp18)
 else
 VLC_CONF_OPTS += --disable-upnp
 endif

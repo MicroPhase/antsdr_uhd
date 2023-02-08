@@ -4,11 +4,10 @@
 #
 ################################################################################
 
-LIBHTP_VERSION = 0.5.40
+LIBHTP_VERSION = 0.5.35
 LIBHTP_SITE = $(call github,OISF,libhtp,$(LIBHTP_VERSION))
 LIBHTP_LICENSE = BSD-3-Clause
 LIBHTP_LICENSE_FILES = LICENSE
-LIBHTP_CPE_ID_VENDOR = oisf
 LIBHTP_DEPENDENCIES = \
 	$(if $(BR2_PACKAGE_LIBICONV),libiconv) \
 	zlib

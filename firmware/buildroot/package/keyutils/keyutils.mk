@@ -4,11 +4,11 @@
 #
 ################################################################################
 
-KEYUTILS_VERSION = 1.6.3
-KEYUTILS_SITE = https://git.kernel.org/pub/scm/linux/kernel/git/dhowells/keyutils.git/snapshot
+KEYUTILS_VERSION = 1.6
+KEYUTILS_SOURCE = keyutils-$(KEYUTILS_VERSION).tar.bz2
+KEYUTILS_SITE = http://people.redhat.com/~dhowells/keyutils
 KEYUTILS_LICENSE = GPL-2.0+, LGPL-2.1+
 KEYUTILS_LICENSE_FILES = LICENCE.GPL LICENCE.LGPL
-KEYUTILS_CPE_ID_VENDOR = keyutils_project
 KEYUTILS_INSTALL_STAGING = YES
 
 KEYUTILS_MAKE_PARAMS = \
@@ -22,11 +22,6 @@ KEYUTILS_MAKE_PARAMS = \
 ifeq ($(BR2_SHARED_LIBS),y)
 KEYUTILS_MAKE_PARAMS += NO_ARLIB=1
 endif
-
-# Touch cxx.stamp to avoid adding a C++ dependency
-define KEYUTILS_CONFIGURE_CMDS
-	touch $(@D)/cxx.stamp
-endef
 
 define KEYUTILS_BUILD_CMDS
 	$(TARGET_CONFIGURE_OPTS) $(MAKE) $(KEYUTILS_MAKE_PARAMS) -C $(@D)

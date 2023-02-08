@@ -4,11 +4,10 @@
 #
 ################################################################################
 
-CAPNPROTO_VERSION = 0.9.2
+CAPNPROTO_VERSION = 0.7.0
 CAPNPROTO_SITE = $(call github,capnproto,capnproto,v$(CAPNPROTO_VERSION))
 CAPNPROTO_LICENSE = MIT
 CAPNPROTO_LICENSE_FILES = LICENSE
-CAPNPROTO_CPE_ID_VENDOR = capnproto
 CAPNPROTO_INSTALL_STAGING = YES
 # Fetched from Github with no configure script
 CAPNPROTO_AUTORECONF = YES
@@ -27,11 +26,6 @@ CAPNPROTO_CONF_OPTS += --with-openssl
 CAPNPROTO_DEPENDENCIES += openssl
 else
 CAPNPROTO_CONF_OPTS += --without-openssl
-endif
-
-# musl doesn't support getcontext/setcontext
-ifeq ($(BR2_TOOLCHAIN_USES_MUSL),y)
-CAPNPROTO_CONF_ENV += CXXFLAGS="$(TARGET_CXXFLAGS) -DKJ_USE_FIBERS=0"
 endif
 
 $(eval $(autotools-package))

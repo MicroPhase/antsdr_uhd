@@ -4,10 +4,20 @@
 #
 ################################################################################
 
+ifeq ($(BR2_arc),y)
+GLIBC_VERSION =  arc-2019.09-release
+GLIBC_SITE = $(call github,foss-for-synopsys-dwc-arc-processors,glibc,$(GLIBC_VERSION))
+else ifeq ($(BR2_RISCV_32),y)
+GLIBC_VERSION = 06983fe52cfe8e4779035c27e8cc5d2caab31531
+GLIBC_SITE = $(call github,riscv,riscv-glibc,$(GLIBC_VERSION))
+else ifeq ($(BR2_csky),y)
+GLIBC_VERSION = 7630ed2fa60caea98f500e4a7a51b88f9bf1e176
+GLIBC_SITE = $(call github,c-sky,glibc,$(GLIBC_VERSION))
+else
 # Generate version string using:
 #   git describe --match 'glibc-*' --abbrev=40 origin/release/MAJOR.MINOR/master | cut -d '-' -f 2-
 # When updating the version, please also update localedef
-GLIBC_VERSION = 2.36-66-ga1dc0be03c9dd850b864bd7a9c03cf8e396eb7ca
+GLIBC_VERSION = 2.30-73-gd59630f9959b0bb8991964758ab854ff4378b20d
 # Upstream doesn't officially provide an https download link.
 # There is one (https://sourceware.org/git/glibc.git) but it's not reliable,
 # sometimes the connection times out. So use an unofficial github mirror.
@@ -15,10 +25,10 @@ GLIBC_VERSION = 2.36-66-ga1dc0be03c9dd850b864bd7a9c03cf8e396eb7ca
 # *NEVER* decide on a version string by looking at the mirror.
 # Then check that the mirror has been synced already (happens once a day.)
 GLIBC_SITE = $(call github,bminor,glibc,$(GLIBC_VERSION))
+endif
 
 GLIBC_LICENSE = GPL-2.0+ (programs), LGPL-2.1+, BSD-3-Clause, MIT (library)
 GLIBC_LICENSE_FILES = COPYING COPYING.LIB LICENSES
-GLIBC_CPE_ID_VENDOR = gnu
 
 # glibc is part of the toolchain so disable the toolchain dependency
 GLIBC_ADD_TOOLCHAIN_DEPENDENCY = NO
@@ -51,11 +61,6 @@ endif
 
 ifeq ($(BR2_ENABLE_DEBUG),y)
 GLIBC_EXTRA_CFLAGS += -g
-endif
-
-# glibc explicitly requires compile barriers between files
-ifeq ($(BR2_TOOLCHAIN_GCC_AT_LEAST_4_7),y)
-GLIBC_EXTRA_CFLAGS += -fno-lto
 endif
 
 # The stubs.h header is not installed by install-headers, but is
@@ -98,10 +103,6 @@ endif
 GLIBC_MAKE = $(BR2_MAKE)
 GLIBC_CONF_ENV += ac_cv_prog_MAKE="$(BR2_MAKE)"
 
-ifeq ($(BR2_PACKAGE_GLIBC_KERNEL_COMPAT),)
-GLIBC_CONF_OPTS += --enable-kernel=$(call qstrip,$(BR2_TOOLCHAIN_HEADERS_AT_LEAST))
-endif
-
 # Even though we use the autotools-package infrastructure, we have to
 # override the default configure commands for several reasons:
 #
@@ -110,31 +111,16 @@ endif
 #
 #  2. We have to execute the configure script with bash and not sh.
 #
-# Glibc nowadays can be build with optimization flags f.e. -Os
-
-GLIBC_CFLAGS = $(TARGET_OPTIMIZATION)
-# crash in qemu-system-nios2 with -Os
-ifeq ($(BR2_nios2),y)
-GLIBC_CFLAGS += -O2
-endif
-
-# glibc can't be built without optimization
-ifeq ($(BR2_OPTIMIZE_0),y)
-GLIBC_CFLAGS += -O1
-endif
-
-# glibc can't be built with Optimize for fast
-ifeq ($(BR2_OPTIMIZE_FAST),y)
-GLIBC_CFLAGS += -O2
-endif
-
+# Note that as mentionned in
+# http://patches.openembedded.org/patch/38849/, glibc must be
+# built with -O2, so we pass our own CFLAGS and CXXFLAGS below.
 define GLIBC_CONFIGURE_CMDS
 	mkdir -p $(@D)/build
 	# Do the configuration
 	(cd $(@D)/build; \
 		$(TARGET_CONFIGURE_OPTS) \
-		CFLAGS="$(GLIBC_CFLAGS) $(GLIBC_EXTRA_CFLAGS)" CPPFLAGS="" \
-		CXXFLAGS="$(GLIBC_CFLAGS) $(GLIBC_EXTRA_CFLAGS)" \
+		CFLAGS="-O2 $(GLIBC_EXTRA_CFLAGS)" CPPFLAGS="" \
+		CXXFLAGS="-O2 $(GLIBC_EXTRA_CFLAGS)" \
 		$(GLIBC_CONF_ENV) \
 		$(SHELL) $(@D)/configure \
 		--target=$(GNU_TARGET_NAME) \
@@ -144,11 +130,12 @@ define GLIBC_CONFIGURE_CMDS
 		--enable-shared \
 		$(if $(BR2_x86_64),--enable-lock-elision) \
 		--with-pkgversion="Buildroot" \
+		--without-cvs \
 		--disable-profile \
-		--disable-werror \
 		--without-gd \
-		--with-headers=$(STAGING_DIR)/usr/include \
-		$(GLIBC_CONF_OPTS))
+		--enable-obsolete-rpc \
+		--enable-kernel=$(call qstrip,$(BR2_TOOLCHAIN_HEADERS_AT_LEAST)) \
+		--with-headers=$(STAGING_DIR)/usr/include)
 	$(GLIBC_ADD_MISSING_STUB_H)
 endef
 

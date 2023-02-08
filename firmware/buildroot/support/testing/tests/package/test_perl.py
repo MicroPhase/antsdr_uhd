@@ -19,7 +19,8 @@ class TestPerlBase(infra.basetest.BRTest):
 
     def module_test(self, module, script="1"):
         cmd = "perl -M{} -e '{}'".format(module, script)
-        self.assertRunOk(cmd)
+        _, exit_code = self.emulator.run(cmd)
+        self.assertEqual(exit_code, 0)
 
 
 class TestPerl(TestPerlBase):

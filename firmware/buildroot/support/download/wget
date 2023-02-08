@@ -15,10 +15,10 @@ set -e
 # Environment:
 #   WGET     : the wget command to call
 
-quiet=
+verbose=
 while getopts "${BR_BACKEND_DL_GETOPTS}" OPT; do
     case "${OPT}" in
-    q)  quiet=-q;;
+    q)  verbose=-q;;
     o)  output="${OPTARG}";;
     f)  filename="${OPTARG}";;
     u)  url="${OPTARG}";;
@@ -33,13 +33,6 @@ shift $((OPTIND-1)) # Get rid of our options
 # Caller needs to single-quote its arguments to prevent them from
 # being expanded a second time (in case there are spaces in them)
 _wget() {
-    if [ -z "${quiet}" ]; then
-        printf '%s ' ${WGET} "${@}"; printf '\n'
-    fi
-    _plain_wget "$@"
-}
-# Note: please keep command below aligned with what is printed above
-_plain_wget() {
     eval ${WGET} "${@}"
 }
 
@@ -47,4 +40,4 @@ _plain_wget() {
 # mirror
 [ -n "${encode}" ] && filename=${filename//\?/%3F}
 
-_wget ${quiet} "${@}" -O "'${output}'" "'${url}/${filename}'"
+_wget ${verbose} "${@}" -O "'${output}'" "'${url}/${filename}'"

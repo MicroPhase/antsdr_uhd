@@ -5,6 +5,8 @@ config BR2_PACKAGE_ZEROMQ
 	bool "zeromq"
 	depends on BR2_INSTALL_LIBSTDCPP
 	depends on BR2_TOOLCHAIN_HAS_THREADS
+	select BR2_PACKAGE_UTIL_LINUX
+	select BR2_PACKAGE_UTIL_LINUX_LIBUUID
 	help
 	  ØMQ (ZeroMQ, 0MQ, zmq) looks like an embeddable networking
 	  library but acts like a concurrency framework. It gives you
@@ -56,10 +58,5 @@ config BR2_PACKAGE_ZEROMQ_DRAFTS
 	  Enable unstable draft ZeroMQ APIs
 
 	  https://pyzmq.readthedocs.io/en/latest/draft.html
-
-config BR2_PACKAGE_ZEROMQ_WEBSOCKET
-	bool "WebSocket support"
-	help
-	  Enable WebSocket transport
 
 endif
