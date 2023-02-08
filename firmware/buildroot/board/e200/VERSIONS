@@ -1,0 +1,5 @@
+device-fw v0.34-dirty
+hdl 2019_r2
+buildroot v0.20-20616-g35af59
+linux adi-xilinx-2020.1-535-g9c04de
+u-boot-xlnx v0.20-PlutoSDR-24-ga2c20-dirty
