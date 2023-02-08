@@ -34,6 +34,7 @@
 #include <arpa/inet.h>
 /* if windows #include<Winsock2.h> */
 #include "uhd/transport/udp_zero_copy.hpp"
+#include <boost/asio/ip/address_v4.hpp>
 
 using namespace uhd;
 using namespace uhd::usrp;
@@ -104,24 +105,60 @@ std::string check_ant_option_valid(const std::string& name,
 
 static device_addrs_t ant_find(const device_addr_t& hint)
 {
+    device_addrs_t hints = separate_device_addr(hint);
+
+    if(hints.size() > 1){
+        device_addrs_t found_devices;
+        std::string error_msg;
+        for(const device_addr_t& hint_i : hints){
+            device_addrs_t found_device_i = ant_find(hint_i);
+            if(found_device_i.size() != 1)
+                error_msg +=
+                        str(boost::format(
+                                "Could not resolve device hint \"%s\" to a single device.")
+                            % hint_i.to_string());
+            else
+                found_devices.push_back(found_device_i[0]);
+        }
+        if(found_devices.empty())
+            return device_addrs_t();
+        if(not error_msg.empty())
+            throw uhd::value_error(error_msg);
+        return device_addrs_t(1, combine_device_addrs(found_devices));
+    }
+
+    // initialize the hint for a single device case
+    UHD_ASSERT_THROW(hints.size() <= 1);
+    hints.resize(1);
+    device_addr_t hint_ = hints[0];
     device_addrs_t ant_addrs;
 
-    /* microphase */
-    UHD_LOGGER_INFO("ANTSDR") << "Search Microphase ANTSDR .";
+    // return an empty list of addresses when type is set to non-b200
+    if (hint_.has_key("type") and hint["type"] != "ant")
+        return ant_addrs;
+
+    if(not hint_.has_key("addr")){
+        for(const if_addrs_t& if_addrs : get_if_addrs()){
+            if(if_addrs.inet == boost::asio::ip::address_v4::loopback().to_string())
+                continue;
+
+            device_addr_t new_hint = hint;
+            new_hint["addr"] = if_addrs.bcast;
+
+            device_addrs_t new_ant_addrs = ant_find(new_hint);
+            ant_addrs.insert(
+                    ant_addrs.begin(),new_ant_addrs.begin(),new_ant_addrs.end());
+        }
+        return ant_addrs;
+    }
     /* connect the device from ethernet "addr=" */
     udp_simple::sptr udp_transport;
-    device_addr_t find_e310;
-    if(not hint.has_key("addr")){
-        find_e310["addr"] = "192.168.1.10";
-    }
-    else
-        find_e310["addr"] = hint["addr"];
     try {
         udp_transport = udp_simple::make_broadcast(
-                find_e310["addr"], BOOST_STRINGIZE(MICROPHASE_ANT_UDP_FIND_PORT));
+                hint_["addr"], BOOST_STRINGIZE(MICROPHASE_ANT_UDP_FIND_PORT));
     } catch (const std::exception &e) {
-        UHD_LOGGER_ERROR("Microphase E200")
-                << "Cannot open UDP transport on " << find_e310["addr"] << ":" << e.what();
+        UHD_LOGGER_ERROR("Microphase")
+                << "Cannot open UDP transport on " << hint_["addr"] << ":" << e.what();
         return ant_addrs;
     }
 
@@ -183,21 +220,6 @@ static device_addrs_t ant_find(const device_addr_t& hint)
         if (len == 0)
             break;
     }
-
-    if(ant_addrs.size() != 0){
-        return ant_addrs;
-    }
-    // return an empty list of addresses when type is set to non-b200
-    if (hint.has_key("type") and hint["type"] != "ant")
-        return ant_addrs;
-
-    // Return an empty list of addresses when an address or resource is specified,
-    // since an address and resource is intended for a different, non-USB, device.
-    for (device_addr_t hint_i : separate_device_addr(hint)) {
-        if (hint_i.has_key("addr") || hint_i.has_key("resource"))
-            return ant_addrs;
-    }
-
     return ant_addrs;
 }
 
