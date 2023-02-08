@@ -4,11 +4,10 @@
 #
 ################################################################################
 
-ZLOG_VERSION = 1.2.16
+ZLOG_VERSION = 1.2.14
 ZLOG_SITE = $(call github,HardySimpson,zlog,$(ZLOG_VERSION))
 ZLOG_LICENSE = LGPL-2.1
 ZLOG_LICENSE_FILES = COPYING
-ZLOG_CPE_ID_VENDOR = zlog_project
 ZLOG_INSTALL_STAGING = YES
 
 define ZLOG_BUILD_CMDS

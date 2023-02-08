@@ -4,12 +4,11 @@
 #
 ################################################################################
 
-PYTHON_TRAITLETS_VERSION = 5.7.0
+PYTHON_TRAITLETS_VERSION = 4.3.3
 PYTHON_TRAITLETS_SOURCE = traitlets-$(PYTHON_TRAITLETS_VERSION).tar.gz
-PYTHON_TRAITLETS_SITE = https://files.pythonhosted.org/packages/a2/88/5b2a191dd0287b45b933405d951ebfc490a9dfee2494442e5977653ec43b
+PYTHON_TRAITLETS_SITE = https://files.pythonhosted.org/packages/75/b0/43deb021bc943f18f07cbe3dac1d681626a48997b7ffa1e7fb14ef922b21
 PYTHON_TRAITLETS_LICENSE = BSD-3-Clause
 PYTHON_TRAITLETS_LICENSE_FILES = COPYING.md
-PYTHON_TRAITLETS_SETUP_TYPE = pep517
-PYTHON_TRAITLETS_DEPENDENCIES = host-python-hatchling
+PYTHON_TRAITLETS_SETUP_TYPE = distutils
 
 $(eval $(python-package))

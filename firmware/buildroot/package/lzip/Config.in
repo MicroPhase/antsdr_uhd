@@ -12,4 +12,4 @@ config BR2_PACKAGE_LZIP
 	  perspective. Lzip is a clean implementation of the LZMA
 	  algorithm.
 
-	  https://www.nongnu.org/lzip/lzip.html
+	  http://www.nongnu.org/lzip/lzip.html

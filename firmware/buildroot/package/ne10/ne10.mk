@@ -4,23 +4,13 @@
 #
 ################################################################################
 
-NE10_VERSION = 1.2.1
+NE10_VERSION = 1.2.0
 NE10_SITE = $(call github,projectNe10,Ne10,v$(NE10_VERSION))
 NE10_LICENSE = BSD-3-Clause or Apache-2.0
 NE10_LICENSE_FILES = doc/LICENSE
 NE10_INSTALL_STAGING = YES
 
-NE10_CONF_OPTS = \
-	-DGNULINUX_PLATFORM=ON \
-	-DNE10_BUILD_EXAMPLES=OFF \
-	-DNE10_BUILD_UNIT_TEST=OFF \
-	-DNE10_LINUX_TARGET_ARCH=$(if $(BR2_aarch64),aarch64,armv7)
-
-ifeq ($(BR2_INSTALL_LIBSTDCPP),y)
-NE10_CONF_OPTS += -DNE10_ENABLE_DSP=ON
-else
-NE10_CONF_OPTS += -DNE10_ENABLE_DSP=OFF
-endif
+NE10_CONF_OPTS = -DGNULINUX_PLATFORM=ON
 
 ifeq ($(BR2_STATIC_LIBS),)
 NE10_CONF_OPTS += \

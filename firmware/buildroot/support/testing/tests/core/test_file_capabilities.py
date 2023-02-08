@@ -1,4 +1,5 @@
 import os
+import subprocess
 
 import infra.basetest
 
@@ -13,7 +14,7 @@ class TestFileCapabilities(infra.basetest.BRTest):
         BR2_TARGET_GENERIC_GETTY_PORT="ttyAMA0"
         BR2_LINUX_KERNEL=y
         BR2_LINUX_KERNEL_CUSTOM_VERSION=y
-        BR2_LINUX_KERNEL_CUSTOM_VERSION_VALUE="4.19.204"
+        BR2_LINUX_KERNEL_CUSTOM_VERSION_VALUE="4.11.3"
         BR2_LINUX_KERNEL_DEFCONFIG="vexpress"
         BR2_LINUX_KERNEL_CONFIG_FRAGMENT_FILES="{}"
         BR2_LINUX_KERNEL_DTS_SUPPORT=y
@@ -27,7 +28,7 @@ class TestFileCapabilities(infra.basetest.BRTest):
 
     def test_run(self):
         img = os.path.join(self.builddir, "images", "rootfs.squashfs")
-        infra.img_round_power2(img)
+        subprocess.call(["truncate", "-s", "%1M", img])
 
         self.emulator.boot(arch="armv7",
                            kernel=os.path.join(self.builddir, "images", "zImage"),
@@ -43,4 +44,4 @@ class TestFileCapabilities(infra.basetest.BRTest):
         self.assertIn("cap_kill", output[0])
         self.assertIn("cap_sys_nice", output[0])
         self.assertIn("cap_sys_time", output[0])
-        self.assertIn("=eip", output[0])
+        self.assertIn("+eip", output[0])

@@ -1,5 +1,5 @@
 # Locally calculated after checking pgp signature
-# https://rsync.samba.org/ftp/rsync/src/rsync-3.2.7.tar.gz.asc
-sha256  4e7d9d3f6ed10878c58c5fb724a67dacf4b6aac7340b13e488fb2dc41346f2bb  rsync-3.2.7.tar.gz
+# https://download.samba.org/pub/rsync/src/rsync-3.1.3.tar.gz.asc
+sha256	55cc554efec5fdaad70de921cd5a5eeb6c29a95524c715f3bbf849235b0800c0	rsync-3.1.3.tar.gz
 # Locally calculated
-sha256  85c19ea50a224c2d0067a69c083584e5717b40b76610ec1218f91385775067dd  COPYING
+sha256	8ceb4b9ee5adedde47b31e975c1d90c73ad27b6b165a1dcd80c7c545eb65b903	COPYING

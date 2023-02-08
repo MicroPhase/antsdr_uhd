@@ -4,12 +4,10 @@
 #
 ################################################################################
 
-PUGIXML_VERSION = 1.13
-PUGIXML_SITE = https://github.com/zeux/pugixml/releases/download/v$(PUGIXML_VERSION)
+PUGIXML_VERSION = 1.10
+PUGIXML_SITE = http://github.com/zeux/pugixml/releases/download/v$(PUGIXML_VERSION)
 PUGIXML_LICENSE = MIT
-PUGIXML_LICENSE_FILES = LICENSE.md
-PUGIXML_CPE_ID_VENDOR = pugixml_project
-
+PUGIXML_LICENSE_FILES = readme.txt
 PUGIXML_INSTALL_STAGING = YES
 
 # Pugixml will automatically enable 'long long' support on C++11 compilers,

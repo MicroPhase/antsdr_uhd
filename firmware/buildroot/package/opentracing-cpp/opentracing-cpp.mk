@@ -4,9 +4,8 @@
 #
 ################################################################################
 
-OPENTRACING_CPP_VERSION = 1.6.0
-OPENTRACING_CPP_SITE = \
-	$(call github,opentracing,opentracing-cpp,v$(OPENTRACING_CPP_VERSION))
+OPENTRACING_CPP_VERSION = 1.5.1
+OPENTRACING_CPP_SITE = $(call github,opentracing,opentracing-cpp,v$(OPENTRACING_CPP_VERSION))
 OPENTRACING_CPP_LICENSE = Apache-2.0
 OPENTRACING_CPP_LICENSE_FILES = LICENSE
 
@@ -22,7 +21,5 @@ OPENTRACING_CPP_CONF_OPTS += -DBUILD_STATIC_LIBS=ON
 else ifeq ($(BR2_SHARED_LIBS),y)
 OPENTRACING_CPP_CONF_OPTS += -DBUILD_STATIC_LIBS=OFF
 endif
-
-OPENTRACING_CPP_CONF_OPTS += -DENABLE_LINTING=OFF
 
 $(eval $(cmake-package))

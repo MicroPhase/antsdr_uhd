@@ -20,7 +20,7 @@ class TestF2FS(infra.basetest.BRTest):
         # BR2_TARGET_ROOTFS_TAR is not set
         BR2_LINUX_KERNEL=y
         BR2_LINUX_KERNEL_CUSTOM_VERSION=y
-        BR2_LINUX_KERNEL_CUSTOM_VERSION_VALUE="4.19.204"
+        BR2_LINUX_KERNEL_CUSTOM_VERSION_VALUE="4.16.7"
         BR2_LINUX_KERNEL_USE_DEFCONFIG=y
         BR2_LINUX_KERNEL_DEFCONFIG="vexpress"
         BR2_LINUX_KERNEL_CONFIG_FRAGMENT_FILES="{}"
@@ -30,7 +30,7 @@ class TestF2FS(infra.basetest.BRTest):
         img = os.path.join(self.builddir, "images", "rootfs.f2fs")
         out = infra.run_cmd_on_host(self.builddir, ["host/sbin/dump.f2fs", img])
         out = out.splitlines()
-        prop = dumpf2fs_getprop(out, "Info: total FS sectors")
+        prop = dumpf2fs_getprop(out, "Info: total sectors")
         self.assertEqual(prop, "262144 (128 MB)")
 
         kernel = os.path.join(self.builddir, "images", "zImage")
@@ -44,4 +44,5 @@ class TestF2FS(infra.basetest.BRTest):
                            options=options)
         self.emulator.login()
         cmd = "mount | grep '/dev/root on / type f2fs'"
-        self.assertRunOk(cmd)
+        _, exit_code = self.emulator.run(cmd)
+        self.assertEqual(exit_code, 0)

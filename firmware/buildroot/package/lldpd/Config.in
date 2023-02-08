@@ -18,7 +18,7 @@ config BR2_PACKAGE_LLDPD
 	  lldpd is an ISC-licensed implementation of LLDP for various
 	  Unixes. It also supports some proprietary protocols.
 
-	  https://lldpd.github.io/
+	  https://vincentbernat.github.io/lldpd/
 
 if BR2_PACKAGE_LLDPD
 

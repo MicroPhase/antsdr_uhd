@@ -4,11 +4,10 @@
 #
 ################################################################################
 
-VNSTAT_VERSION = 2.10
+VNSTAT_VERSION = 2.6
 VNSTAT_SITE = http://humdi.net/vnstat
 VNSTAT_LICENSE = GPL-2.0
 VNSTAT_LICENSE_FILES = COPYING
-VNSTAT_SELINUX_MODULES = vnstatd
 VNSTAT_DEPENDENCIES = host-pkgconf sqlite
 VNSTAT_CONF_OPTS = --disable-extra-paths
 

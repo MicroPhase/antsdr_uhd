@@ -4,11 +4,10 @@
 #
 ################################################################################
 
-GNUPLOT_VERSION = 5.4.5
+GNUPLOT_VERSION = 5.0.6
 GNUPLOT_SITE = http://downloads.sourceforge.net/project/gnuplot/gnuplot/$(GNUPLOT_VERSION)
 GNUPLOT_LICENSE = gnuplot license (open source)
 GNUPLOT_LICENSE_FILES = Copyright
-GNUPLOT_CPE_ID_VENDOR = gnuplot_project
 
 GNUPLOT_AUTORECONF = YES
 
@@ -32,7 +31,9 @@ endif
 
 ifeq ($(BR2_PACKAGE_GD)$(BR2_PACKAGE_LIBPNG),yy)
 GNUPLOT_CONF_OPTS += --with-gd
-GNUPLOT_DEPENDENCIES += host-pkgconf gd
+GNUPLOT_DEPENDENCIES += gd
+GNUPLOT_CONF_ENV += \
+	ac_cv_path_GDLIB_CONFIG=$(STAGING_DIR)/usr/bin/gdlib-config
 else
 GNUPLOT_CONF_OPTS += --without-gd
 endif

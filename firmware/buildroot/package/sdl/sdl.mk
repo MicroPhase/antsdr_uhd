@@ -9,12 +9,7 @@ SDL_SOURCE = SDL-$(SDL_VERSION).tar.gz
 SDL_SITE = http://www.libsdl.org/release
 SDL_LICENSE = LGPL-2.1+
 SDL_LICENSE_FILES = COPYING
-SDL_CPE_ID_VENDOR = libsdl
-SDL_CPE_ID_PRODUCT = simple_directmedia_layer
 SDL_INSTALL_STAGING = YES
-
-# 0003-SDL_x11yuv.c-fix-possible-use-after-free.patch
-SDL_IGNORE_CVES += CVE-2022-34568
 
 # we're patching configure.in, but package cannot autoreconf with our version of
 # autotools, so we have to do it manually instead of setting SDL_AUTORECONF = YES

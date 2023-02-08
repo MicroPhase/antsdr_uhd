@@ -24,13 +24,13 @@ After building, you should obtain this tree:
 
     output/images/
     +-- arc-ucls1012a.dtb
-    +-- Image.gz
+    +-- Image
     +-- part0-000000.itb
     +-- rootfs.cpio
     +-- rootfs.cpio.gz
     +-- rootfs.tar
     +-- u-boot.bin
-    +-- br2-ucls1012a.its
+    +-- ucls1012a.its
 
 Flashing
 --------
