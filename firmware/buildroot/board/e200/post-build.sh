@@ -50,7 +50,6 @@ ${INSTALL} -D -m 0755 ${BOARD_DIR}/S15watchdog ${TARGET_DIR}/etc/init.d/
 ${INSTALL} -D -m 0755 ${BOARD_DIR}/S20urandom ${TARGET_DIR}/etc/init.d/
 ${INSTALL} -D -m 0755 ${BOARD_DIR}/S21misc ${TARGET_DIR}/etc/init.d/
 ${INSTALL} -D -m 0755 ${BOARD_DIR}/S40network ${TARGET_DIR}/etc/init.d/
-# ${INSTALL} -D -m 0755 ${BOARD_DIR}/S41network ${TARGET_DIR}/etc/init.d/
 ${INSTALL} -D -m 0644 ${BOARD_DIR}/fw_env.config ${TARGET_DIR}/etc/
 ${INSTALL} -D -m 0644 ${BOARD_DIR}/VERSIONS ${TARGET_DIR}/opt/
 ${INSTALL} -D -m 0755 ${BOARD_DIR}/device_reboot ${TARGET_DIR}/usr/sbin/
@@ -66,6 +65,7 @@ ${INSTALL} -D -m 0755 ${BOARD_DIR}/ifupdown.sh ${TARGET_DIR}/lib/mdev/ifupdown.s
 ${INSTALL} -D -m 0644 ${BOARD_DIR}/input-event-daemon.conf ${TARGET_DIR}/etc/
 ${INSTALL} -D -m 0755 ${BOARD_DIR}/net_set ${TARGET_DIR}/sbin
 ${INSTALL} -D -m 0755 ${BOARD_DIR}/e200 ${TARGET_DIR}/sbin
+${INSTALL} -D -m 0755 ${BOARD_DIR}/ip_set ${TARGET_DIR}/bin
 ${INSTALL} -D -m 0755 ${BOARD_DIR}/S90device_start.sh ${TARGET_DIR}/etc/init.d/
 
 ${INSTALL} -D -m 0755 ${BOARD_DIR}/wpa_supplicant/* ${TARGET_DIR}/etc/wpa_supplicant/
