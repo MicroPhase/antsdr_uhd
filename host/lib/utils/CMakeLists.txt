@@ -43,8 +43,6 @@ CHECK_CXX_SOURCE_COMPILES("
     " HAVE_WIN_SETTHREADPRIORITY
 )
 
-
-
 if(HAVE_PTHREAD_SETSCHEDPARAM)
     message(STATUS "  Priority scheduling supported through pthread_setschedparam.")
     list(APPEND THREAD_PRIO_DEFS HAVE_PTHREAD_SETSCHEDPARAM)
@@ -62,7 +60,6 @@ endif()
 ########################################################################
 
 set(CMAKE_REQUIRED_LIBRARIES "pthread")
-
 CHECK_CXX_SOURCE_COMPILES("
     #include <pthread.h>
     int main(){
@@ -73,6 +70,7 @@ CHECK_CXX_SOURCE_COMPILES("
     }
     " HAVE_PTHREAD_SETNAME
 )
+unset(CMAKE_REQUIRED_LIBRARIES)
 
 if(CYGWIN)
     #SCHED_RR non-operational on cygwin
@@ -92,6 +90,7 @@ endif()
 # Setup defines for thread affinitizing
 ########################################################################
 
+set(CMAKE_REQUIRED_LIBRARIES "pthread")
 CHECK_CXX_SOURCE_COMPILES("
     #include <pthread.h>
     int main(){
@@ -102,6 +101,7 @@ CHECK_CXX_SOURCE_COMPILES("
     }
     " HAVE_PTHREAD_SETAFFINITY_NP
 )
+unset(CMAKE_REQUIRED_LIBRARIES)
 
 if(CYGWIN)
     set(HAVE_PTHREAD_SETAFFINITY_NP False)
@@ -115,6 +115,7 @@ CHECK_CXX_SOURCE_COMPILES("
     }
     " HAVE_WIN_SETTHREADAFFINITYMASK
 )
+
 if(HAVE_PTHREAD_SETAFFINITY_NP)
     message(STATUS "  Setting thread affinity is supported through pthread_setaffinity_np.")
     list(APPEND THREAD_PRIO_DEFS HAVE_PTHREAD_SETAFFINITY_NP)
@@ -127,7 +128,6 @@ else()
     list(APPEND THREAD_PRIO_DEFS HAVE_THREAD_SETAFFINITY_DUMMY)
 endif()
 
-
 set_source_files_properties(
     ${CMAKE_CURRENT_SOURCE_DIR}/thread.cpp
     PROPERTIES COMPILE_DEFINITIONS "${THREAD_PRIO_DEFS}"
@@ -138,7 +138,6 @@ set_source_files_properties(
 ########################################################################
 message(STATUS "")
 message(STATUS "Configuring module loading...")
-include(CheckCXXSourceCompiles)
 
 set(CMAKE_REQUIRED_LIBRARIES ${CMAKE_DL_LIBS})
 CHECK_CXX_SOURCE_COMPILES("
@@ -149,7 +148,7 @@ CHECK_CXX_SOURCE_COMPILES("
     }
     " HAVE_DLOPEN
 )
-set(CMAKE_REQUIRED_LIBRARIES)
+unset(CMAKE_REQUIRED_LIBRARIES)
 
 CHECK_CXX_SOURCE_COMPILES("
     #define WIN32_LEAN_AND_MEAN
@@ -177,6 +176,21 @@ set_source_files_properties(
     ${CMAKE_CURRENT_SOURCE_DIR}/load_modules.cpp
     PROPERTIES COMPILE_DEFINITIONS "${LOAD_MODULES_DEFS}"
 )
+
+########################################################################
+# Check if we dynamically need to link against libatomic
+# "Guerney, deploy the family atomics!"
+########################################################################
+message(STATUS "")
+message(STATUS "Configuring atomics support...")
+include(UHDAtomics)
+CHECK_ATOMICS_LIB_REQUIRED(NEED_LIBATOMIC)
+if(NEED_LIBATOMIC)
+    message(STATUS "  Atomics support is provided by separate libatomic.")
+    LIBUHD_APPEND_LIBS("atomic")
+else()
+    message(STATUS "  Atomics support is built-in, no linking required.")
+endif()
 
 ########################################################################
 # Define UHD_PKG_DATA_PATH for paths.cpp

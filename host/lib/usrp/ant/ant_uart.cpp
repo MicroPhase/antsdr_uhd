@@ -7,19 +7,19 @@
 
 #include "ant_uart.hpp"
 #include "ant_impl.hpp"
-#include "uhd/exception.hpp"
-#include "uhd/transport/bounded_buffer.hpp"
-#include "uhd/transport/vrt_if_packet.hpp"
-#include "uhd/types/time_spec.hpp"
-#include "uhd/utils/byteswap.hpp"
-#include "uhd/utils/log.hpp"
+#include <uhd/exception.hpp>
+#include <uhd/transport/bounded_buffer.hpp>
+#include <uhd/transport/vrt_if_packet.hpp>
+#include <uhd/types/time_spec.hpp>
+#include <uhd/utils/byteswap.hpp>
+#include <uhd/utils/log.hpp>
 
 using namespace uhd;
 using namespace uhd::transport;
 
-struct b200_uart_impl : ant_uart
+struct ant_uart_impl : ant_uart
 {
-    b200_uart_impl(zero_copy_if::sptr xport, const uint32_t sid)
+    ant_uart_impl(zero_copy_if::sptr xport, const uint32_t sid)
         : _xport(xport)
         , _sid(sid)
         , _count(0)
@@ -97,5 +97,5 @@ struct b200_uart_impl : ant_uart
 
 ant_uart::sptr ant_uart::make(zero_copy_if::sptr xport, const uint32_t sid)
 {
-    return ant_uart::sptr(new b200_uart_impl(xport, sid));
+    return ant_uart::sptr(new ant_uart_impl(xport, sid));
 }

@@ -6,6 +6,7 @@
 //
 
 #include <uhd/transport/nirio/rpc/rpc_client.hpp>
+#include <uhdlib/utils/narrow.hpp>
 #include <boost/asio/error.hpp>
 #include <boost/bind.hpp>
 #include <boost/format.hpp>
@@ -27,7 +28,7 @@ rpc_client::rpc_client(const std::string& server,
     const std::string& port,
     uint32_t process_id,
     uint32_t host_id)
-    : _socket(_io_service)
+    : _socket(_io_service), _hshake_args_server()
 {
     // Fill in handshake info
     _hshake_args_client.version             = CURRENT_VERSION;
@@ -113,7 +114,7 @@ const boost::system::error_code& rpc_client::call(func_id_t func_id,
     if (_io_service_thread.get()) {
         _request.header.func_id = func_id;
         in_args.store(_request.data);
-        _request.header.func_args_size = _request.data.size();
+        _request.header.func_args_size = uhd::narrow_cast<uint32_t>(_request.data.size());
 
         _exec_err.clear();
 

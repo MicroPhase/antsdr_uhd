@@ -6,12 +6,12 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 //
 
-#ifndef INCLUDED_B200_UART_HPP
-#define INCLUDED_B200_UART_HPP
+#ifndef INCLUDED_ANT_UART_HPP
+#define INCLUDED_ANT_UART_HPP
 
-#include "uhd/transport/zero_copy.hpp"
-#include "uhd/types/serial.hpp" //uart iface
-#include "uhd/utils/noncopyable.hpp"
+#include <uhd/transport/zero_copy.hpp>
+#include <uhd/types/serial.hpp> //uart iface
+#include <uhd/utils/noncopyable.hpp>
 #include <memory>
 
 class ant_uart : uhd::noncopyable, public uhd::uart_iface
@@ -23,4 +23,4 @@ public:
 };
 
 
-#endif /* INCLUDED_B200_UART_HPP */
+#endif /* INCLUDED_ANT_UART_HPP */

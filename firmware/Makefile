@@ -36,6 +36,17 @@ $(error "      3] export VIVADO_VERSION=v20xx.x")
 endif
 
 TARGET ?= e200
+SUPPORTED_TARGETS:=e200 e310v2
+
+
+ifeq ($(findstring $(TARGET),$(SUPPORTED_TARGETS)),)
+all:
+	@echo "Invalid `TARGET variable ; valid values are: e310 e310v2" &&
+	exit 1
+else
+all: clean-build $(TARGETS) 
+endif
+
 
 all : build	build/uboot-env.txt	build/uImage build/device_tree.dtb build/system_top.bit build/BOOT.bin \
 	  build/rootfs.cpio.gz
@@ -92,6 +103,10 @@ buildroot/output/images/rootfs.cpio.gz:
 build/rootfs.cpio.gz : buildroot/output/images/rootfs.cpio.gz | build
 	cp $< $@
 
+build/$(TARGET).itb: u-boot-xlnx/tools/mkimage build/zImage build/rootfs.cpio.gz $(TARGET_DTS_FILES) build/system_top.bit
+	u-boot-xlnx/tools/mkimage -f scripts/$(TARGET).its $@
+
+
 ## hdf
 build/system_top.hdf: | build
 	bash -c "source $(VIVADO_SETTINGS) && make -C fpga/antsdr_$(TARGET) -j $(NCORES) && cp fpga/antsdr_$(TARGET)/antsdr_$(TARGET)/antsdr_$(TARGET).sdk/system_top.hdf $@"
@@ -116,11 +131,12 @@ build/boot.bif : build/u-boot.elf build/fsbl.elf
 build/BOOT.bin : build/boot.bif
 	bash -c "source $(VIVADO_SETTINGS) && bootgen -image build/boot.bif -o i build/BOOT.bin"
 
+
 SDIMGDIR=$(CURDIR)/build_sdimg
 sdimg: build/
 	mkdir $(SDIMGDIR)
 	cp build/BOOT.bin $(SDIMGDIR)/
-	cp build/antsdr_$(TARGET).bit $(SDIMGDIR)/
+	cp build/antsdr_$(TARGET).bit $(SDIMGDIR)/antsdr.bit
 	cp build/uImage $(SDIMGDIR)/
 	cp build/uboot-env.txt $(SDIMGDIR)/uEnv.txt
 	cp build/device_tree.dtb $(SDIMGDIR)/devicetree.dtb
@@ -131,9 +147,12 @@ sdimg: build/
 clean-build:
 	rm -rf build
 	rm -rf build_sdimg
+	make -C fpga/antsdr_$(TARGET) clean
+
 
 clean: clean-build
 	make -C linux ARCH=arm CROSS_COMPILE=$(CROSS_COMPILE) distclean
 	make -C u-boot-xlnx ARCH=arm CROSS_COMPILE=$(CROSS_COMPILE) distclean
 	make -C fpga/antsdr_$(TARGET) clean
+	rm -rf build_sdimg
 

@@ -1,5 +1,5 @@
 # create the vivado project
-create_project antsdr_e200 ./antsdr_e200 -part xc7z020clg400-2
+create_project antsdr_e200 ./antsdr_e200 -part xc7z020clg400-2 -force
 
 # add custom ip to the project
 set_property  ip_repo_paths  { ./ip/deep_fifo ./ip/get_dna} [current_project]

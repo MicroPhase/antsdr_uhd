@@ -107,11 +107,27 @@ class Max10CpldFlashCtrl():
 
     def erase_flash_memory(self):
         with self:
+            # determine M04 or M08 variant based on
+            # value encoded in the FLASH_CFM0_START_ADDR_REG
+            # register
+            start_addr = self.get_start_addr()
+            if start_addr == 0x9C00:
+                self.max10_variant = "m04"
+            elif start_addr == 0xAC00:
+                self.max10_variant = "m08"
+            else:
+                raise RuntimeError('Unknown MAX10 variant (FLASH_CFM0_START_ADDR_REG=0x{:04X})'.format(start_addr))
             # check for sectors to be erased:
             if self.is_memory_initialization_enabled():
-                sectors = [2, 3, 4]
+                if self.max10_variant == "m04":
+                    sectors = [2, 3, 4]
+                else:
+                    sectors = [3, 4, 5]
             else:
-                sectors = [4]
+                if self.max10_variant == "m04":
+                    sectors = [4]
+                else:
+                    sectors = [5]
             # erase each sector individually
             for sector in sectors:
                 # start erase
@@ -147,9 +163,6 @@ class Max10CpldFlashCtrl():
     def verify_flash_memory(self, raw_data):
         # read words one at a time
         for i, data in enumerate(raw_data):
-            # status display
-            if (i%1000 == 0):
-                self.log.debug('%d%% done', i*4/self.file_size*100)
             # write address
             self.poke32(self.FLASH_ADDR_REG, self.cpld_start_address+i)
             # start read operation
@@ -162,10 +175,13 @@ class Max10CpldFlashCtrl():
             # read data from device
             device_data = self.peek32(self.FLASH_READ_DATA_REG)
             if (data != device_data):
-                self.log.error("Data mismatch! address %d, expected value 0x%08X,"
+                self.log.debug("CPLD image mismatch! address %d, expected value 0x%08X,"
                                " read value 0x%08X" %
                                (i+self.cpld_start_address, data, device_data))
                 return False
+            # status display
+            if (i%1000 == 0):
+                self.log.debug('%d%% verified', i*4/self.file_size*100)
         return True
 
     def reverse_bits_in_byte(self, n):
