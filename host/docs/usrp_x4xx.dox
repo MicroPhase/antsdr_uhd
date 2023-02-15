@@ -255,7 +255,7 @@ The Ettus USRP X410 has various network interfaces:
     single interface is used (`sfpX`).
 
 The configuration files for these network interfaces are stored in:
-`/etc/systemd/network/`.
+`/data/network/<interface>.network`.
 
 Interface Name | Description                            | Default Configuration | Configuration File | Example: X4_200 FPGA image |
 ---------------|----------------------------------------|-----------------------|--------------------|----------------------------|
@@ -269,6 +269,33 @@ Interface Name | Description                            | Default Configuration 
 `sfp1_1`       | QSFP28 1 (lane 1)                      | 192.168.21.2/24       | sfp1_1.network     | N/C                        |
 `sfp1_2`       | QSFP28 1 (lane 2)                      | 192.168.22.2/24       | sfp1_2.network     | N/C                        |
 `sfp1_3`       | QSFP28 1 (lane 3)                      | 192.168.23.2/24       | sfp1_3.network     | N/C                        |
+
+For example, `/data/network/eth0.network` by default looks like:
+```
+[Match]
+Name=eth0
+KernelCommandLine=!nfsroot
+
+[Network]
+DHCP=ipv4
+IPForward=ipv4
+
+[DHCP]
+UseHostname=true
+ClientIdentifier=mac
+```
+
+In order to change the eth0 interface from using DHCP to using a static IP, you
+can edit `/data/network/eth0.network` to be like:
+```
+[Match]
+Name=eth0
+KernelCommandLine=!nfsroot
+
+[Network]
+Address=192.168.1.123/24
+```
+replacing the IP address with the IP of your choice.
 
 \subsubsection x4xx_getting_started_network_connectivity_leds Network Status LEDs
 
@@ -454,6 +481,22 @@ only the X4_200 image is shipped with UHD, which allows a 245.76 MHz or
 
 \section x4xx_updating_filesystems Updating Filesystems
 
+The easiest way to update the filesystem is directly from the X410 via the
+built-in `usrp_update_fs` utility.
+
+To perform a filesystem "factory-reset", run:
+
+    $ usrp_update_fs
+
+To update to the most-recent filesystem, run:
+
+    $ usrp_update_fs -t master
+
+Note: Old filesystems may not support this utility. Alternatively, one may use
+Mender to update the filesystem. See \ref x4xx_updating_filesystems_mender.
+
+\subsection x4xx_updating_filesystems_mender Updating the Filesystem Using Mender
+
 Mender is a third-party software that enables remote updating of the root file
 system without physically accessing the device (see also the [Mender
 website](https://mender.io)). Mender can be executed locally on the device, or a
@@ -473,9 +516,11 @@ update was originally launched (which presumably is in a working state). Another
 update can be launched now to correct the previous, failed update, until it
 works.
 
-To initiate an update from the device itself, download a Mender artifact
+\subsubsection x4xx_updating_filesystems_mender_artifact Downloading a Mender Artifact
+
+To initiate an update directly from the X410 device, download a Mender artifact
 containing the update itself. These are files with a `.mender` suffix. They can
-be downloaded by using the uhd_images_downloader utility:
+be downloaded by using the `uhd_images_downloader` utility:
 
     $ uhd_images_downloader -t mender -t x4xx
 
@@ -483,11 +528,30 @@ Append the `-l` switch to print out the URLs only:
 
     $ uhd_images_downloader -t mender -t x4xx -l
 
-Then run mender on the command line:
+By default, this utility will download the `.mender` artifact to
+`/usr/share/uhd/images`.
+
+Note: `uhd_images_downloader` will only download the artifacts released with
+the currently installed filesystem version (factory-reset). To install the
+latest released filesystem version instead, first download the most-recent
+manifest from the UHD Github repository:
+
+    $ wget https://raw.githubusercontent.com/EttusResearch/uhd/master/images/manifest.txt
+
+Second, use the `-m` switch to use the new manifest file:
+
+    $ uhd_images_downloader -t mender -t x4xx -m manifest.txt
+
+\subsubsection x4xx_updating_filesystems_mender_install Installing the Mender Artifact
+
+Once a Mender artifact is downloaded to the X410 (see
+\ref x4xx_updating_filesystems_mender_artifact), install it by running mender
+on the command line:
 
     $ mender install /path/to/latest.mender
 
-The artifact can also be stored on a remote server:
+Alternatively, Mender may be used to download and install an artifact that is
+stored on a remote server, all in one step:
 
     $ mender install http://server.name/path/to/latest.mender
 
@@ -539,10 +603,21 @@ Otherwise, let the boot continue as normal.
 <b>Caution! Updating the motherboard CPLD has the potential to brick your
 device if done improperly.</b>
 
+After updating the filesystem, you may have to update your motherboard CPLD. If
+you forget to update the CPLD, MPM will fail to fully initialize and emit a
+warning. This is not critical, and the CPLD update can be performed later by
+following these same steps, but the device will not be usable until then.
+
+Even though the CPLD may not require updating, it is recommended to always run
+these steps for a consistent update procedure.
+
 You can update the motherboard (MB) CPLD by running the following command on
 the X410:
 
     x4xx_update_cpld --file=<path to cpld-x410.rpd>
+
+Note: Old filesystems may not contain this command. If you are performing a
+mender update, simply run these commands after the update.
 
 Filesystems will usually contain a compatible `cpld-x410.rpd` file at
 `/lib/firmware/ni/cpld-x410.rpd`. If you're installing a new filesystem via
@@ -643,7 +718,7 @@ stopped by hitting Ctrl-C at the APU serial console.
 \subsubsection x4xx_flash_emmc Flashing eMMC
 
 Once the X410's eMMC is accessible over USB, it's possible to write the
-filesystem image using `bmaptool`. You can obtain the latest filesystem image by
+filesystem image using `dd`. You can obtain the latest filesystem image by
 running:
 
     uhd_images_downloader -t sdimg -t x4xx
@@ -653,10 +728,14 @@ found.
 
 Run:
 
-    sudo bmaptool /path/to/usrp_x4xx_fs.sdimg.bz2 /dev/sdX
+    sudo dd if=/path/to/usrp_x4xx_fs.sdimg of=/dev/sdX bs=1M
 
 to flash the eMMC with this image (replacing /dev/sdX with the block device
 of the X410's eMMC as indicated by your kernel log).
+
+When copying has completed, hit Ctrl-C on the U-boot
+prompt to terminate the mass storage mode. Then, power-cycle the device to load
+the new filesystem.
 
 \subsection x4xx_jtag_boot Booting X410 over JTAG
 
@@ -713,7 +792,7 @@ For a list of which arguments can be passed into make(), see Section
  mgmt_addr             | IPv4 address or hostname to which to connect the RPC client. Defaults to `addr'.| mgmt_addr=ni-sulfur-311FE00
  find_all              | When using broadcast, find all devices, even if unreachable via CHDR.           | find_all=1
  master_clock_rate     | Master Clock Rate in Hz.                                                        | master_clock_rate=250e6
- serialize_init        | Force serial initialization of daughterboards.                                  | serialize_init=1
+ serialize_init        | Force serial initialization of motherboards (default is parallel)               | serialize_init=1
  skip_init             | Skip the initialization process for the device.                                 | skip_init=1
  time_source           | Specify the time (PPS) source.                                                  | time_source=internal
  clock_source          | Specify the reference clock source.                                             | clock_source=internal
