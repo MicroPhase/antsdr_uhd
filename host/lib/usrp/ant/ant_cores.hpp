@@ -9,9 +9,9 @@
 #ifndef INCLUDED_B200_CORES_HPP
 #define INCLUDED_B200_CORES_HPP
 
-#include "uhd/utils/noncopyable.hpp"
-#include "uhdlib/usrp/common/adf4001_ctrl.hpp"
-#include "uhdlib/usrp/cores/spi_core_3000.hpp"
+#include <uhd/utils/noncopyable.hpp>
+#include <uhdlib/usrp/common/adf4001_ctrl.hpp>
+#include <uhdlib/usrp/cores/spi_core_3000.hpp>
 #include <memory>
 #include <mutex>
 

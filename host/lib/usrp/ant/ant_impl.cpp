@@ -6,17 +6,18 @@
 //
 
 #include "ant_impl.hpp"
+#include "../../transport/libusb1_base.hpp"
 #include "ant_regs.hpp"
-#include "uhd/cal/database.hpp"
-#include "uhd/config.hpp"
-#include "uhd/exception.hpp"
-#include "uhd/transport/usb_control.hpp"
-#include "uhd/usrp/dboard_eeprom.hpp"
-#include "uhd/utils/cast.hpp"
-#include "uhd/utils/log.hpp"
-#include "uhd/utils/paths.hpp"
-#include "uhd/utils/safe_call.hpp"
-#include "uhd/utils/static.hpp"
+#include <uhd/cal/database.hpp>
+#include <uhd/config.hpp>
+#include <uhd/exception.hpp>
+#include <uhd/transport/usb_control.hpp>
+#include <uhd/usrp/dboard_eeprom.hpp>
+#include <uhd/utils/cast.hpp>
+#include <uhd/utils/log.hpp>
+#include <uhd/utils/paths.hpp>
+#include <uhd/utils/safe_call.hpp>
+#include <uhd/utils/static.hpp>
 #include <boost/filesystem.hpp>
 #include <boost/format.hpp>
 #include <boost/functional/hash.hpp>
@@ -27,7 +28,7 @@
 #include <ctime>
 #include <functional>
 #include <memory>
-
+#include <thread>
 
 #include "uhd/transport/if_addrs.hpp"
 #include "uhd/utils/byteswap.hpp"
@@ -45,11 +46,12 @@ namespace {
 constexpr int64_t REENUMERATION_TIMEOUT_MS = 3000;
 }
 
-// B205
-class b2xxmini_ad9361_client_t : public ad9361_params
+
+// ant
+class ant_ad9361_client_t : public ad9361_params
 {
 public:
-    ~b2xxmini_ad9361_client_t() override {}
+    ~ant_ad9361_client_t() override {}
     double get_band_edge(frequency_band_t band) override
     {
         switch (band) {
@@ -97,11 +99,6 @@ std::string check_ant_option_valid(const std::string& name,
 
     return option;
 }
-
-/***********************************************************************
- * Discovery
- **********************************************************************/
-//! Look up the type of ant-Series device we're currently running.
 
 static device_addrs_t ant_find(const device_addr_t& hint)
 {
@@ -211,7 +208,7 @@ static device_addrs_t ant_find(const device_addr_t& hint)
                 uint8_t board_version[8];
                 memcpy(board_version,ctrl_data_in->board_version,sizeof(board_version));
                 std::string board_str((char*)board_version,sizeof(board_version));
-                if(board_str.size() < 8)
+                if(board_str.at(0) != 'E')
                     mp_addr["product"] = "E200";
                 else
                     mp_addr["product"] = board_str;
@@ -234,7 +231,6 @@ static device_addrs_t ant_find(const device_addr_t& hint)
  **********************************************************************/
 static device::sptr ant_make(const device_addr_t& device_addr)
 {
-
     // We try twice, because the first time, the link might be in a bad state
     // and we might need to reset the link, but if that didn't help, trying
     // a third time is pointless.
@@ -255,27 +251,29 @@ UHD_STATIC_BLOCK(register_ant_device)
 /***********************************************************************
  * Structors
  **********************************************************************/
-ant_impl::ant_impl(const uhd::device_addr_t &device_addr)
+ant_impl::ant_impl(
+    const uhd::device_addr_t& device_addr)
     : _product(B200)
     , // Some safe value
     _revision(0)
     , _enable_user_regs(device_addr.has_key("enable_user_regs"))
     , _time_source(UNKNOWN)
+    , _time_set_with_pps(false)
     , _tick_rate(0.0) // Forces a clock initialization at startup
 {
-    _tree = property_tree::make();
-    _type = device::USRP;
+    _tree                 = property_tree::make();
+    _type                 = device::USRP;
     const fs_path mb_path = "/mboards/0";
 
-    if (device_addr.has_key("type") && device_addr["type"] == "ant") {
+    if(device_addr.has_key("type") && (device_addr["type"] == "ant" )) {
         /* Microphase not use usb
-         * and not eeprom
-         * so there is no iface
-         * */
+            * and not eeprom
+            * so there is no iface
+            * */
 
         /* set the product is B200
-         * because the e310 is using b200_driver
-         * */
+            * because the e310 is using b200_driver
+            * */
         _product = B210;
         _product_mp = E310;
         const std::string addr = device_addr["addr"];
@@ -295,7 +293,6 @@ ant_impl::ant_impl(const uhd::device_addr_t &device_addr)
                 );
 
         _gpsdo_capable = 0;
-
         ////////////////////////////////////////////////////////////////////
         // Set up frontend mapping
         ////////////////////////////////////////////////////////////////////
@@ -309,17 +306,14 @@ ant_impl::ant_impl(const uhd::device_addr_t &device_addr)
         // does not have an FE2, so we don't swap FEs.
 
         // Swapped setup:
-//        _fe1 = 1;
-//        _fe2 = 0;
-//        _gpio_state.swap_atr = 1;
-        _fe1 = 0;
-        _fe2 = 1;
+        _fe1                 = 0;
+        _fe2                 = 1;
         _gpio_state.swap_atr = 0;
         // Unswapped setup:
         if (_product == B200MINI or _product == B205MINI
             or (_product == B200 and _revision >= 5)) {
-            _fe1 = 0; // map radio0 to FE1
-            _fe2 = 1; // map radio1 to FE2
+            _fe1                 = 0; // map radio0 to FE1
+            _fe2                 = 1; // map radio1 to FE2
             _gpio_state.swap_atr = 0; // ATRs for radio0 are mapped to FE1
         }
 
@@ -351,24 +345,24 @@ ant_impl::ant_impl(const uhd::device_addr_t &device_addr)
         _async_task_data->async_md.reset(new async_md_type(1000 /*messages deep*/));
         if (_gpsdo_capable) {
             _async_task_data->gpsdo_uart =
-                    ant_uart::make(_ctrl_transport, ANT_TX_GPS_UART_SID);
+                ant_uart::make(_ctrl_transport, ANT_TX_GPS_UART_SID);
         }
-        _async_task = uhd::msg_task::make(boost::bind(
-                &ant_impl::handle_async_task, this, _ctrl_transport, _async_task_data));
+        _async_task = uhd::msg_task::make(std::bind(
+            &ant_impl::handle_async_task, this, _ctrl_transport, _async_task_data));
 
         ////////////////////////////////////////////////////////////////////
         // Local control endpoint
         ////////////////////////////////////////////////////////////////////
-        _local_ctrl = radio_ctrl_core_3000::make(false /*lilE*/,
-                                                 _ctrl_transport,
-                                                 zero_copy_if::sptr() /*null*/,
-                                                 ANT_LOCAL_CTRL_SID);
+        _local_ctrl = ant_radio_ctrl_core::make(false /*lilE*/,
+            _ctrl_transport,
+            zero_copy_if::sptr() /*null*/,
+            ANT_LOCAL_CTRL_SID);
         _local_ctrl->hold_task(_async_task);
         _async_task_data->local_ctrl = _local_ctrl; // weak
         this->check_fpga_compat();
 
         /* Initialize the GPIOs, set the default bandsels to the lower range. Note
-         * that calling update_bandsel calls update_gpio_state(). */
+        * that calling update_bandsel calls update_gpio_state(). */
         update_bandsel("RX", 800e6);
         update_bandsel("TX", 850e6);
 
@@ -380,14 +374,14 @@ ant_impl::ant_impl(const uhd::device_addr_t &device_addr)
                 UHD_LOGGER_INFO("ANT") << "Detecting internal GPSDO.... " << std::flush;
                 try {
                     _gps = gps_ctrl::make(_async_task_data->gpsdo_uart);
-                } catch (std::exception &e) {
+                } catch (std::exception& e) {
                     UHD_LOGGER_ERROR("ANT")
-                            << "An error occurred making GPSDO control: " << e.what();
+                        << "An error occurred making GPSDO control: " << e.what();
                 }
                 if (_gps and _gps->gps_detected()) {
-                    for (const std::string &name: _gps->get_sensors()) {
+                    for (const std::string& name : _gps->get_sensors()) {
                         _tree->create<sensor_value_t>(mb_path / "sensors" / name)
-                                .set_publisher(std::bind(&gps_ctrl::get_sensor, _gps, name));
+                            .set_publisher(std::bind(&gps_ctrl::get_sensor, _gps, name));
                     }
                 } else {
                     _local_ctrl->poke32(TOREG(SR_CORE_GPSDO_ST), ANT_GPSDO_ST_NONE);
@@ -402,7 +396,7 @@ ant_impl::ant_impl(const uhd::device_addr_t &device_addr)
         _tree->create<std::string>("/name").set("B-Series Device");
         _tree->create<std::string>(mb_path / "name").set(product_name);
         _tree->create<std::string>(mb_path / "codename")
-                .set((_product == B200MINI or _product == B205MINI) ? "Pixie" : "Sasquatch");
+            .set((_product == B200MINI or _product == B205MINI) ? "Pixie" : "Sasquatch");
 
         ////////////////////////////////////////////////////////////////////
         // Create data transport
@@ -429,7 +423,6 @@ ant_impl::ant_impl(const uhd::device_addr_t &device_addr)
                 ignored_out_params, fi_hints);
         while (_data_tx1_transport->get_recv_buff(0.0)) {
         }
-
         ////////////////////////////////////////////////////////////////////
         // create time and clock control objects
         ////////////////////////////////////////////////////////////////////
@@ -444,7 +437,8 @@ ant_impl::ant_impl(const uhd::device_addr_t &device_addr)
         UHD_LOGGER_INFO("ANT") << "Initialize CODEC control...";
         reset_codec();
         ad9361_params::sptr client_settings;
-        client_settings = std::make_shared<b2xxmini_ad9361_client_t>();
+
+        client_settings = std::make_shared<ant_ad9361_client_t>();
 
         _codec_ctrl = ad9361_ctrl::make_spi(client_settings, _spi_iface, AD9361_SLAVENO);
 
@@ -454,13 +448,13 @@ ant_impl::ant_impl(const uhd::device_addr_t &device_addr)
         {
             const fs_path codec_path = mb_path / ("rx_codecs") / "A";
             _tree->create<std::string>(codec_path / "name")
-                    .set(product_name + " RX dual ADC");
+                .set(product_name + " RX dual ADC");
             _tree->create<int>(codec_path / "gains"); // empty cuz gains are in frontend
         }
         {
             const fs_path codec_path = mb_path / ("tx_codecs") / "A";
             _tree->create<std::string>(codec_path / "name")
-                    .set(product_name + " TX dual DAC");
+                .set(product_name + " TX dual DAC");
             _tree->create<int>(codec_path / "gains"); // empty cuz gains are in frontend
         }
 
@@ -468,10 +462,10 @@ ant_impl::ant_impl(const uhd::device_addr_t &device_addr)
         // create clock control objects
         ////////////////////////////////////////////////////////////////////
         _tree->create<double>(mb_path / "tick_rate")
-                .set_coercer(std::bind(&ant_impl::set_tick_rate, this, std::placeholders::_1))
-                .set_publisher(std::bind(&ant_impl::get_tick_rate, this))
-                .add_coerced_subscriber(
-                        std::bind(&ant_impl::update_tick_rate, this, std::placeholders::_1));
+            .set_coercer(std::bind(&ant_impl::set_tick_rate, this, std::placeholders::_1))
+            .set_publisher(std::bind(&ant_impl::get_tick_rate, this))
+            .add_coerced_subscriber(
+                std::bind(&ant_impl::update_tick_rate, this, std::placeholders::_1));
         _tree->create<meta_range_t>(mb_path / "tick_rate/range").set_publisher([this]() {
             return this->_codec_ctrl->get_clock_rate_range();
         });
@@ -482,7 +476,7 @@ ant_impl::ant_impl(const uhd::device_addr_t &device_addr)
         // and do the misc mboard sensors
         ////////////////////////////////////////////////////////////////////
         _tree->create<sensor_value_t>(mb_path / "sensors" / "ref_locked")
-                .set_publisher(std::bind(&ant_impl::get_ref_locked, this));
+            .set_publisher(std::bind(&ant_impl::get_ref_locked, this));
 
         ////////////////////////////////////////////////////////////////////
         // create frontend mapping
@@ -492,17 +486,17 @@ ant_impl::ant_impl(const uhd::device_addr_t &device_addr)
         _tree->create<std::vector<size_t>>(mb_path / "rx_chan_dsp_mapping").set(default_map);
         _tree->create<std::vector<size_t>>(mb_path / "tx_chan_dsp_mapping").set(default_map);
         _tree->create<subdev_spec_t>(mb_path / "rx_subdev_spec")
-                .set_coercer(
-                        std::bind(&ant_impl::coerce_subdev_spec, this, std::placeholders::_1))
-                .set(subdev_spec_t())
-                .add_coerced_subscriber(
-                        std::bind(&ant_impl::update_subdev_spec, this, "rx", std::placeholders::_1));
+            .set_coercer(
+                std::bind(&ant_impl::coerce_subdev_spec, this, std::placeholders::_1))
+            .set(subdev_spec_t())
+            .add_coerced_subscriber(
+                std::bind(&ant_impl::update_subdev_spec, this, "rx", std::placeholders::_1));
         _tree->create<subdev_spec_t>(mb_path / "tx_subdev_spec")
-                .set_coercer(
-                        std::bind(&ant_impl::coerce_subdev_spec, this, std::placeholders::_1))
-                .set(subdev_spec_t())
-                .add_coerced_subscriber(
-                        std::bind(&ant_impl::update_subdev_spec, this, "tx", std::placeholders::_1));
+            .set_coercer(
+                std::bind(&ant_impl::coerce_subdev_spec, this, std::placeholders::_1))
+            .set(subdev_spec_t())
+            .add_coerced_subscriber(
+                std::bind(&ant_impl::update_subdev_spec, this, "tx", std::placeholders::_1));
 
         ////////////////////////////////////////////////////////////////////
         // setup radio control
@@ -518,104 +512,103 @@ ant_impl::ant_impl(const uhd::device_addr_t &device_addr)
             this->setup_radio(i);
 
         // now test each radio module's connection to the codec interface
-        for (radio_perifs_t &perif: _radio_perifs) {
+        for (radio_perifs_t& perif : _radio_perifs) {
             _codec_mgr->loopback_self_test(
-                    [&perif](const uint32_t value) {
-                        perif.ctrl->poke32(TOREG(SR_CODEC_IDLE), value);
-                    },
-                    [&perif]() { return perif.ctrl->peek64(RB64_CODEC_READBACK); });
+                [&perif](const uint32_t value) {
+                    perif.ctrl->poke32(TOREG(SR_CODEC_IDLE), value);
+                },
+                [&perif]() { return perif.ctrl->peek64(RB64_CODEC_READBACK); });
         }
 
         // register time now and pps onto available radio cores
         _tree->create<time_spec_t>(mb_path / "time" / "now")
-                .set_publisher(std::bind(&time_core_3000::get_time_now, _radio_perifs[0].time64))
-                .add_coerced_subscriber(
-                        std::bind(&ant_impl::set_time, this, std::placeholders::_1))
-                .set(0.0);
+            .set_publisher(std::bind(&time_core_3000::get_time_now, _radio_perifs[0].time64))
+            .add_coerced_subscriber(
+                std::bind(&ant_impl::set_time, this, std::placeholders::_1))
+            .set(0.0);
         // re-sync the times when the tick rate changes
         _tree->access<double>(mb_path / "tick_rate")
-                .add_coerced_subscriber(std::bind(&ant_impl::sync_times, this));
+            .add_coerced_subscriber(std::bind(&ant_impl::sync_times, this));
         _tree->create<time_spec_t>(mb_path / "time" / "pps")
-                .set_publisher(
-                        std::bind(&time_core_3000::get_time_last_pps, _radio_perifs[0].time64));
-        for (radio_perifs_t &perif: _radio_perifs) {
-            _tree->access<time_spec_t>(mb_path / "time" / "pps")
-                    .add_coerced_subscriber(std::bind(
-                            &time_core_3000::set_time_next_pps, perif.time64, std::placeholders::_1));
-        }
+            .set_publisher(
+                std::bind(&time_core_3000::get_time_last_pps, _radio_perifs[0].time64));
+        _tree->access<time_spec_t>(mb_path / "time" / "pps")
+            .add_coerced_subscriber(std::bind(
+                &ant_impl::set_time_next_pps, this, std::placeholders::_1));
 
         // setup time source props
         const std::vector<std::string> time_sources =
-                (_gpsdo_capable)
+            (_gpsdo_capable)
                 ? std::vector<std::string>{"none", "internal", "external", "gpsdo"}
                 : std::vector<std::string>{"none", "internal", "external"};
         _tree->create<std::vector<std::string>>(mb_path / "time_source" / "options")
-                .set(time_sources);
+            .set(time_sources);
         _tree->create<std::string>(mb_path / "time_source" / "value")
-                .set_coercer(std::bind(
-                        &check_ant_option_valid, "time source", time_sources, std::placeholders::_1))
-                .add_coerced_subscriber(
-                        std::bind(&ant_impl::update_time_source, this, std::placeholders::_1));
+            .set_coercer(std::bind(
+                &check_ant_option_valid, "time source", time_sources, std::placeholders::_1))
+            .add_coerced_subscriber(
+                std::bind(&ant_impl::update_time_source, this, std::placeholders::_1));
         // setup reference source props
         const std::vector<std::string> clock_sources =
-                (_gpsdo_capable) ? std::vector<std::string>{"internal", "external", "gpsdo"}
-                                 : std::vector<std::string>{"internal", "external"};
+            (_gpsdo_capable) ? std::vector<std::string>{"internal", "external", "gpsdo"}
+                            : std::vector<std::string>{"internal", "external"};
         _tree->create<std::vector<std::string>>(mb_path / "clock_source" / "options")
-                .set(clock_sources);
+            .set(clock_sources);
         _tree->create<std::string>(mb_path / "clock_source" / "value")
-                .set_coercer(std::bind(
-                        &check_ant_option_valid, "clock source", clock_sources, std::placeholders::_1))
-                .add_coerced_subscriber(
-                        std::bind(&ant_impl::update_clock_source, this, std::placeholders::_1));
+            .set_coercer(std::bind(
+                &check_ant_option_valid, "clock source", clock_sources, std::placeholders::_1))
+            .add_coerced_subscriber(
+                std::bind(&ant_impl::update_clock_source, this, std::placeholders::_1));
 
         ////////////////////////////////////////////////////////////////////
         // front panel gpio
         ////////////////////////////////////////////////////////////////////
         _radio_perifs[0].fp_gpio =
-                gpio_atr_3000::make(_radio_perifs[0].ctrl, TOREG(SR_FP_GPIO), RB32_FP_GPIO);
-        for (const auto &attr: gpio_attr_map) {
+            gpio_atr_3000::make(_radio_perifs[0].ctrl,
+                gpio_atr_offsets::make_default(TOREG(SR_FP_GPIO), RB32_FP_GPIO));
+        for (const auto& attr : gpio_attr_map) {
             switch (attr.first) {
                 case usrp::gpio_atr::GPIO_SRC:
                     _tree
-                            ->create<std::vector<std::string>>(
-                                    mb_path / "gpio" / "FP0" / attr.second)
-                            .set(std::vector<std::string>(
-                                    32, usrp::gpio_atr::default_attr_value_map.at(attr.first)))
-                            .add_coerced_subscriber([](const std::vector<std::string> &) {
-                                throw uhd::runtime_error("This device does not support setting "
-                                                         "the GPIO_SRC attribute.");
-                            });
+                        ->create<std::vector<std::string>>(
+                            mb_path / "gpio" / "FP0" / attr.second)
+                        .set(std::vector<std::string>(
+                            32, usrp::gpio_atr::default_attr_value_map.at(attr.first)))
+                        .add_coerced_subscriber([](const std::vector<std::string>&) {
+                            throw uhd::runtime_error("This device does not support setting "
+                                                    "the GPIO_SRC attribute.");
+                        });
                     break;
                 case usrp::gpio_atr::GPIO_CTRL:
                 case usrp::gpio_atr::GPIO_DDR:
                     _tree
-                            ->create<std::vector<std::string>>(
-                                    mb_path / "gpio" / "FP0" / attr.second)
-                            .set(std::vector<std::string>(
-                                    32, usrp::gpio_atr::default_attr_value_map.at(attr.first)))
-                            .add_coerced_subscriber([this, attr](
-                                    const std::vector<std::string> str_val) {
-                                uint32_t val = 0;
-                                for (size_t i = 0; i < str_val.size(); i++) {
-                                    val += usrp::gpio_atr::gpio_attr_value_pair.at(attr.second)
-                                            .at(str_val[i])
-                                            << i;
-                                }
-                                _radio_perifs[0].fp_gpio->set_gpio_attr(attr.first, val);
-                            });
+                        ->create<std::vector<std::string>>(
+                            mb_path / "gpio" / "FP0" / attr.second)
+                        .set(std::vector<std::string>(
+                            32, usrp::gpio_atr::default_attr_value_map.at(attr.first)))
+                        .add_coerced_subscriber([this, attr](
+                                                    const std::vector<std::string> str_val) {
+                            uint32_t val = 0;
+                            for (size_t i = 0; i < str_val.size(); i++) {
+                                val += usrp::gpio_atr::gpio_attr_value_pair.at(attr.second)
+                                        .at(str_val[i])
+                                    << i;
+                            }
+                            _radio_perifs[0].fp_gpio->set_gpio_attr(attr.first, val);
+                        });
                     break;
                 case usrp::gpio_atr::GPIO_READBACK:
                     _tree->create<uint32_t>(mb_path / "gpio" / "FP0" / "READBACK")
-                            .set_publisher(
-                                    std::bind(&gpio_atr_3000::read_gpio, _radio_perifs[0].fp_gpio));
+                        .set_publisher(
+                            std::bind(&gpio_atr_3000::read_gpio, _radio_perifs[0].fp_gpio));
                     break;
                 default:
                     _tree->create<uint32_t>(mb_path / "gpio" / "FP0" / attr.second)
-                            .set(0)
-                            .add_coerced_subscriber(std::bind(&gpio_atr_3000::set_gpio_attr,
-                                                              _radio_perifs[0].fp_gpio,
-                                                              attr.first,
-                                                              std::placeholders::_1));
+                        .set(0)
+                        .add_coerced_subscriber(std::bind(&gpio_atr_3000::set_gpio_attr,
+                            _radio_perifs[0].fp_gpio,
+                            attr.first,
+                            std::placeholders::_1));
             }
         }
 
@@ -624,11 +617,11 @@ ant_impl::ant_impl(const uhd::device_addr_t &device_addr)
         ////////////////////////////////////////////////////////////////////
         dboard_eeprom_t db_eeprom;
         _tree->create<dboard_eeprom_t>(mb_path / "dboards" / "A" / "rx_eeprom")
-                .set(db_eeprom);
+            .set(db_eeprom);
         _tree->create<dboard_eeprom_t>(mb_path / "dboards" / "A" / "tx_eeprom")
-                .set(db_eeprom);
+            .set(db_eeprom);
         _tree->create<dboard_eeprom_t>(mb_path / "dboards" / "A" / "gdb_eeprom")
-                .set(db_eeprom);
+            .set(db_eeprom);
 
         ////////////////////////////////////////////////////////////////////
         // do some post-init tasks
@@ -639,19 +632,19 @@ ant_impl::ant_impl(const uhd::device_addr_t &device_addr)
         }
         // We can automatically choose a master clock rate, but not if the user specifies one
         const double default_tick_rate =
-                device_addr.cast<double>("master_clock_rate", ad936x_manager::DEFAULT_TICK_RATE);
+            device_addr.cast<double>("master_clock_rate", ad936x_manager::DEFAULT_TICK_RATE);
         _tree->access<double>(mb_path / "tick_rate").set(default_tick_rate);
         _tree->access<bool>(mb_path / "auto_tick_rate")
-                .set(not device_addr.has_key("master_clock_rate"));
+            .set(not device_addr.has_key("master_clock_rate"));
 
         // subdev spec contains full width of selections
         subdev_spec_t rx_spec, tx_spec;
-        for (const std::string &fe:
-                _tree->list(mb_path / "dboards" / "A" / "rx_frontends")) {
+        for (const std::string& fe :
+            _tree->list(mb_path / "dboards" / "A" / "rx_frontends")) {
             rx_spec.push_back(subdev_spec_pair_t("A", fe));
         }
-        for (const std::string &fe:
-                _tree->list(mb_path / "dboards" / "A" / "tx_frontends")) {
+        for (const std::string& fe :
+            _tree->list(mb_path / "dboards" / "A" / "tx_frontends")) {
             tx_spec.push_back(subdev_spec_pair_t("A", fe));
         }
         _tree->access<subdev_spec_t>(mb_path / "rx_subdev_spec").set(rx_spec);
@@ -664,9 +657,9 @@ ant_impl::ant_impl(const uhd::device_addr_t &device_addr)
         // Set the DSP chains to some safe value
         for (size_t i = 0; i < _radio_perifs.size(); i++) {
             _radio_perifs[i].ddc->set_host_rate(
-                    default_tick_rate / ad936x_manager::DEFAULT_DECIM);
+                default_tick_rate / ad936x_manager::DEFAULT_DECIM);
             _radio_perifs[i].duc->set_host_rate(
-                    default_tick_rate / ad936x_manager::DEFAULT_INTERP);
+                default_tick_rate / ad936x_manager::DEFAULT_INTERP);
         }
     }
 }
@@ -692,22 +685,22 @@ void ant_impl::setup_radio(const size_t dspno)
     ////////////////////////////////////////////////////////////////////
     // radio control
     ////////////////////////////////////////////////////////////////////
-    perif.ctrl = radio_ctrl_core_3000::make(
+    perif.ctrl = ant_radio_ctrl_core::make(
         false /*lilE*/, _ctrl_transport, zero_copy_if::sptr() /*null*/, sid);
     perif.ctrl->hold_task(_async_task);
     _async_task_data->radio_ctrl[dspno] = perif.ctrl; // weak
     _tree->access<time_spec_t>(mb_path / "time" / "cmd")
         .add_coerced_subscriber(std::bind(
-            &radio_ctrl_core_3000::set_time, perif.ctrl, std::placeholders::_1));
+            &ant_radio_ctrl_core::set_time, perif.ctrl, std::placeholders::_1));
     _tree->access<double>(mb_path / "tick_rate")
         .add_coerced_subscriber(std::bind(
-            &radio_ctrl_core_3000::set_tick_rate, perif.ctrl, std::placeholders::_1));
+            &ant_radio_ctrl_core::set_tick_rate, perif.ctrl, std::placeholders::_1));
     this->register_loopback_self_test(perif.ctrl);
 
     ////////////////////////////////////////////////////////////////////
     // Set up peripherals
     ////////////////////////////////////////////////////////////////////
-    perif.atr = gpio_atr_3000::make_write_only(perif.ctrl, TOREG(SR_ATR));
+    perif.atr = gpio_atr_3000::make(perif.ctrl, gpio_atr_offsets::make_write_only(TOREG(SR_ATR)));
     perif.atr->set_atr_mode(MODE_ATR, 0xFFFFFFFF);
     // create rx dsp control objects
     perif.framer = rx_vita_core_3000::make(perif.ctrl, TOREG(SR_RX_CTRL));
@@ -756,7 +749,7 @@ void ant_impl::setup_radio(const size_t dspno)
             }
         })
         .add_coerced_subscriber(std::bind(
-                &ant_impl::update_rx_samp_rate, this, dspno, std::placeholders::_1));
+            &ant_impl::update_rx_samp_rate, this, dspno, std::placeholders::_1));
     _tree->create<stream_cmd_t>(rx_dsp_path / "stream_cmd")
         .add_coerced_subscriber(std::bind(&rx_vita_core_3000::issue_stream_command,
             perif.framer,
@@ -788,7 +781,7 @@ void ant_impl::setup_radio(const size_t dspno)
             }
         })
         .add_coerced_subscriber(std::bind(
-                &ant_impl::update_tx_samp_rate, this, dspno, std::placeholders::_1));
+            &ant_impl::update_tx_samp_rate, this, dspno, std::placeholders::_1));
     _tree->access<double>(mb_path / "tick_rate")
         .add_coerced_subscriber(std::bind(&ant_impl::update_tx_dsp_tick_rate,
             this,
@@ -993,10 +986,6 @@ double ant_impl::set_tick_rate(const double new_tick_rate)
     return _tick_rate;
 }
 
-/***********************************************************************
- * compat checks
- **********************************************************************/
-
 void ant_impl::check_fpga_compat(void)
 {
     const uint64_t compat       = _local_ctrl->peek64(0);
@@ -1005,7 +994,8 @@ void ant_impl::check_fpga_compat(void)
     const uint16_t compat_minor = uint16_t(compat & 0xffff);
     if (signature != 0xACE0BA5E)
         throw uhd::runtime_error(
-            "ant::check_fpga_compat signature register readback failed");
+            "b200::check_fpga_compat signature register readback failed");
+
     const uint16_t expected = ((_product == B200MINI or _product == B205MINI)
                                    ? B205_FPGA_COMPAT_NUM
                                    : B200_FPGA_COMPAT_NUM);
@@ -1108,11 +1098,28 @@ void ant_impl::set_time(const uhd::time_spec_t& t)
         perif.time64->set_time_sync(t);
     _local_ctrl->poke32(TOREG(SR_CORE_SYNC), 1 << 2 | uint32_t(_time_source));
     _local_ctrl->poke32(TOREG(SR_CORE_SYNC), _time_source);
+    _time_set_with_pps = false;
+}
+
+void ant_impl::set_time_next_pps(const uhd::time_spec_t& t)
+{
+    for (radio_perifs_t& perif : _radio_perifs)
+        perif.time64->set_time_next_pps(t);
+    _time_set_with_pps = true;
 }
 
 void ant_impl::sync_times()
 {
-    set_time(_radio_perifs[0].time64->get_time_now());
+    if (_time_set_with_pps) {
+        UHD_LOG_DEBUG("ANT", "Re-synchronizing time using PPS");
+        uhd::time_spec_t time_last_pps = _radio_perifs[0].time64->get_time_last_pps();
+        while (_radio_perifs[0].time64->get_time_last_pps() == time_last_pps) {
+            std::this_thread::sleep_for(std::chrono::milliseconds(1));
+        }
+        set_time_next_pps(time_last_pps + 2.0);
+    } else {
+        set_time(_radio_perifs[0].time64->get_time_now());
+    }
 }
 
 /***********************************************************************
@@ -1246,7 +1253,7 @@ void ant_impl::update_enables(void)
                          and bool(_radio_perifs[_fe2].rx_streamer.lock());
     const size_t num_rx = (enb_rx1 ? 1 : 0) + (enb_rx2 ? 1 : 0);
     const size_t num_tx = (enb_tx1 ? 1 : 0) + (enb_tx2 ? 1 : 0);
-    const bool mimo     = num_rx == 2 or num_tx == 2;
+    const uint32_t mimo = (num_rx == 2 or num_tx == 2) ? 1 : 0;
 
     if ((num_rx + num_tx) == 3) {
         throw uhd::runtime_error(
@@ -1258,9 +1265,12 @@ void ant_impl::update_enables(void)
     if ((num_rx + num_tx) == 0)
         _codec_ctrl->set_active_chains(true, false, true, false); // enable something
 
-    // figure out if mimo is enabled based on new state
-    _gpio_state.mimo = (mimo) ? 1 : 0;
-    update_gpio_state();
+    // update MIMO state and re-sync times if necessary
+    if (_gpio_state.mimo != mimo) {
+        _gpio_state.mimo = mimo;
+        update_gpio_state();
+        sync_times();
+    }
 
     // atrs change based on enables
     this->update_atrs();

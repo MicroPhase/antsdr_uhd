@@ -5,63 +5,57 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 //
 
-#ifndef INCLUDED_B200_IMPL_HPP
-#define INCLUDED_B200_IMPL_HPP
+#ifndef INCLUDED_ANT_IMPL_HPP
+#define INCLUDED_ANT_IMPL_HPP
 
 #include "ant_cores.hpp"
+#include "ant_radio_ctrl_core.hpp"
 #include "ant_uart.hpp"
-#include "uhd/device.hpp"
-#include "uhd/property_tree.hpp"
-#include "uhd/transport/bounded_buffer.hpp"
-#include "uhd/transport/usb_zero_copy.hpp"
-#include "uhd/types/dict.hpp"
-#include "uhd/types/sensors.hpp"
-#include "uhd/types/stream_cmd.hpp"
-#include "uhd/usrp/gps_ctrl.hpp"
-#include "uhd/usrp/mboard_eeprom.hpp"
-#include "uhd/usrp/subdev_spec.hpp"
-#include "uhd/utils/pimpl.hpp"
-#include "uhd/utils/tasks.hpp"
-#include "uhdlib/usrp/common/ad9361_ctrl.hpp"
-#include "uhdlib/usrp/common/ad936x_manager.hpp"
-#include "uhdlib/usrp/common/adf4001_ctrl.hpp"
-#include "uhdlib/usrp/common/recv_packet_demuxer_3000.hpp"
-#include "uhdlib/usrp/cores/gpio_atr_3000.hpp"
-#include "uhdlib/usrp/cores/radio_ctrl_core_3000.hpp"
-#include "uhdlib/usrp/cores/rx_dsp_core_3000.hpp"
-#include "uhdlib/usrp/cores/rx_vita_core_3000.hpp"
-#include "uhdlib/usrp/cores/time_core_3000.hpp"
-#include "uhdlib/usrp/cores/tx_dsp_core_3000.hpp"
-#include "uhdlib/usrp/cores/tx_vita_core_3000.hpp"
-#include "uhdlib/usrp/cores/user_settings_core_3000.hpp"
-#include "uhdlib/usrp/common/pwr_cal_mgr.hpp"
+#include <uhd/device.hpp>
+#include <uhd/property_tree.hpp>
+#include <uhd/transport/bounded_buffer.hpp>
+#include <uhd/transport/usb_zero_copy.hpp>
+#include <uhd/types/dict.hpp>
+#include <uhd/types/sensors.hpp>
+#include <uhd/types/stream_cmd.hpp>
+#include <uhd/usrp/gps_ctrl.hpp>
+#include <uhd/usrp/mboard_eeprom.hpp>
+#include <uhd/usrp/subdev_spec.hpp>
+#include <uhd/utils/pimpl.hpp>
+#include <uhd/utils/tasks.hpp>
+#include <uhdlib/usrp/common/ad9361_ctrl.hpp>
+#include <uhdlib/usrp/common/ad936x_manager.hpp>
+#include <uhdlib/usrp/common/adf4001_ctrl.hpp>
+#include <uhdlib/usrp/common/pwr_cal_mgr.hpp>
+#include <uhdlib/usrp/common/recv_packet_demuxer_3000.hpp>
+#include <uhdlib/usrp/cores/gpio_atr_3000.hpp>
+#include <uhdlib/usrp/cores/rx_dsp_core_3000.hpp>
+#include <uhdlib/usrp/cores/rx_vita_core_3000.hpp>
+#include <uhdlib/usrp/cores/time_core_3000.hpp>
+#include <uhdlib/usrp/cores/tx_dsp_core_3000.hpp>
+#include <uhdlib/usrp/cores/tx_vita_core_3000.hpp>
+#include <uhdlib/usrp/cores/user_settings_core_3000.hpp>
+#include <unordered_map>
 #include <boost/assign.hpp>
 #include <memory>
 #include <mutex>
-#include <unordered_map>
-/* microphase */
-#include "uhd/transport/udp_simple.hpp"
-#include "uhd/transport/udp_zero_copy.hpp"
-#include "uhd/transport/vrt_if_packet.hpp"
 
 /* microphase */
-/*
- * UDP ports for the E310 communication
- * ports 49200 - 49210
- * */
+#include <uhd/transport/udp_simple.hpp>
+#include <uhd/transport/udp_zero_copy.hpp>
+#include <uhd/transport/vrt_if_packet.hpp>
 
 /* microphase */
 enum microphase_produce_t {E310 ,E200 ,ETTUS};
 
-enum b200_product_t { B200, B210, B200MINI, B205MINI };
+enum ant_product_t { B200, B210, B200MINI, B205MINI };
 
 #define MICROPHASE_ANT_UDP_FIND_PORT 49100
 #define MICROPHASE_ANT_UDP_CTRL_PORT 49200
 #define MICROPHASE_ANT_UDP_DATA_TX_PORT 49202
 #define MICROPHASE_ANT_UDP_DATA_TX1_PORT 49203
 #define MICROPHASE_ANT_UDP_DATA_RX_PORT 49204
-
-#define MICROPHASE_ANT_FW_COMPAT_NUM 2
+#define MICROPHASE_E310_FW_COMPAT_NUM 2
 
 #define BUFF_SIZE 1e6
 
@@ -79,7 +73,7 @@ typedef enum{
     MICROPHASE_AUTHOR_DUDE = 'c',
 
     MICROPHASE_DATA_RX_WAZZUP_BR0 = 'r',
-} microphase_ant_ctrl_id_e;
+} microphase_e310_ctrl_id_e;
 
 typedef struct {
     uint32_t check;
@@ -96,6 +90,8 @@ static const uint16_t B200_FPGA_COMPAT_NUM    = 16;
 static const uint16_t B205_FPGA_COMPAT_NUM    = 7;
 static const double ANT_BUS_CLOCK_RATE       = 100e6;
 static const uint32_t ANT_GPSDO_ST_NONE      = 0x83;
+static constexpr double ANT_MAX_RATE_USB2    = 53248000; // bytes/s
+static constexpr double ANT_MAX_RATE_USB3    = 500000000; // bytes/s
 
 #define FLIP_SID(sid) (((sid) << 16) | ((sid) >> 16))
 
@@ -126,7 +122,7 @@ class ant_impl : public uhd::device
 {
 public:
     // structors
-    ant_impl(const uhd::device_addr_t &);
+    ant_impl(const uhd::device_addr_t&);
     ~ant_impl(void) override;
 
     // the io interface
@@ -148,7 +144,7 @@ public:
 private:
     /* microphase product */
     microphase_produce_t _product_mp;
-    b200_product_t _product;
+    ant_product_t _product;
     size_t _revision;
     bool _gpsdo_capable;
     //! This flag is true if the FPGA has custom (user) registers and access to
@@ -156,19 +152,22 @@ private:
     const bool _enable_user_regs;
 
     // controllers
-    radio_ctrl_core_3000::sptr _local_ctrl;
+   
+    ant_radio_ctrl_core::sptr _local_ctrl;
     uhd::usrp::ad9361_ctrl::sptr _codec_ctrl;
     uhd::usrp::ad936x_manager::sptr _codec_mgr;
     ant_local_spi_core::sptr _spi_iface;
     std::shared_ptr<uhd::usrp::adf4001_ctrl> _adf4001_iface;
     uhd::gps_ctrl::sptr _gps;
 
-    /* microphase */
+        /* microphase */
     uhd::transport::zero_copy_if::sptr _data_tx_transport;
     uhd::transport::zero_copy_if::sptr _data_tx1_transport;
     uhd::transport::zero_copy_if::sptr _data_rx_transport;
 
+
     // transports
+    // uhd::transport::zero_copy_if::sptr _data_transport;
     uhd::transport::zero_copy_if::sptr _ctrl_transport;
     uhd::usrp::recv_packet_demuxer_3000::sptr _demux;
 
@@ -183,8 +182,8 @@ private:
     struct AsyncTaskData
     {
         std::shared_ptr<async_md_type> async_md;
-        std::weak_ptr<radio_ctrl_core_3000> local_ctrl;
-        std::weak_ptr<radio_ctrl_core_3000> radio_ctrl[2];
+        std::weak_ptr<ant_radio_ctrl_core> local_ctrl;
+        std::weak_ptr<ant_radio_ctrl_core> radio_ctrl[2];
         ant_uart::sptr gpsdo_uart;
     };
     std::shared_ptr<AsyncTaskData> _async_task_data;
@@ -198,6 +197,7 @@ private:
     void update_subdev_spec(const std::string& tx_rx, const uhd::usrp::subdev_spec_t&);
     void update_time_source(const std::string&);
     void set_time(const uhd::time_spec_t&);
+    void set_time_next_pps(const uhd::time_spec_t&);
     void sync_times(void);
     void update_clock_source(const std::string&);
     void update_bandsel(const std::string& which, double freq);
@@ -209,7 +209,7 @@ private:
     // perifs in the radio core
     struct radio_perifs_t
     {
-        radio_ctrl_core_3000::sptr ctrl;
+        ant_radio_ctrl_core::sptr ctrl;
         uhd::usrp::gpio_atr::gpio_atr_3000::sptr atr;
         uhd::usrp::gpio_atr::gpio_atr_3000::sptr fp_gpio;
         time_core_3000::sptr time64;
@@ -264,6 +264,7 @@ private:
         NONE     = 3,
         UNKNOWN  = 4
     } _time_source;
+    bool _time_set_with_pps;
 
     void update_gpio_state(void);
 
@@ -376,4 +377,4 @@ private:
             const double timeout);
 };
 
-#endif /* INCLUDED_B200_IMPL_HPP */
+#endif /* INCLUDED_ANT_IMPL_HPP */
