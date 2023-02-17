@@ -243,7 +243,7 @@
 	"ramdisk_load_address=0x4000000\0"	\
 	"devicetree_image=devicetree.dtb\0"	\
 	"devicetree_load_address=0x2000000\0"	\
-	"bitstream_image=antsdr_e200.bit\0"	\
+	"bitstream_image=antsdr.bit\0"	\
 	"boot_image=BOOT.bin\0"	\
 	"uenvcmd=run sdboot\0" \
 	"bootargs=console=ttyPS0,115200 root=/dev/ram0 rw earlyprintk rootfstype=ext4 rootwait\0" \
