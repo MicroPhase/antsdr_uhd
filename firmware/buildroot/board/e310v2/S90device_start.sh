@@ -1,7 +1,7 @@
 case "$1" in
 	start)
 		echo -n "Starting device start : "
-		start-stop-daemon --start --background /sbin/e200
+		start-stop-daemon --start --background /sbin/e310v2
 		start-stop-daemon --start --background /sbin/net_set
 		[ $? = 0 ] && echo "OK" || echo "FAIL"
 		;;
