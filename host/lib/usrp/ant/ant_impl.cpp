@@ -211,7 +211,7 @@ static device_addrs_t ant_find(const device_addr_t& hint)
                 uint8_t board_version[8];
                 memcpy(board_version,ctrl_data_in->board_version,sizeof(board_version));
                 std::string board_str((char*)board_version,sizeof(board_version));
-                if(board_str.size() < 8)
+                if(board_str.at(0) != 'E')
                     mp_addr["product"] = "E200";
                 else
                     mp_addr["product"] = board_str;
