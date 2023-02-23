@@ -1,4 +1,4 @@
-From 2439bd2ed5dbdd7e5fda15adefd0f6f1b047ec1b Mon Sep 17 00:00:00 2001
+From 3ec9bbf5bd9cced0005c99d7d65997b119abf2f6 Mon Sep 17 00:00:00 2001
 From: Christophe Vu-Brugier <cvubrugier@fastmail.fm>
 Date: Wed, 23 Dec 2015 11:44:30 +0100
 Subject: [PATCH] Do not adjust the shebang of Python scripts for
@@ -21,7 +21,7 @@ diff --git a/Lib/distutils/command/build_scripts.py b/Lib/distutils/command/buil
 index ccc70e6465..d6d54195c1 100644
 --- a/Lib/distutils/command/build_scripts.py
 +++ b/Lib/distutils/command/build_scripts.py
-@@ -91,7 +91,7 @@ def copy_scripts(self):
+@@ -91,7 +91,7 @@ class build_scripts(Command):
                      adjust = True
                      post_interp = match.group(1) or b''
  
@@ -31,5 +31,5 @@ index ccc70e6465..d6d54195c1 100644
                           self.build_dir)
                  updated_files.append(outfile)
 -- 
-2.34.1
+2.20.1
 

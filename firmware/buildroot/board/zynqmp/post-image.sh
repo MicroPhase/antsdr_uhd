@@ -10,6 +10,4 @@ FIRST_DT=$(sed -nr \
 
 [ -z "${FIRST_DT}" ] || ln -fs ${FIRST_DT}.dtb ${BINARIES_DIR}/system.dtb
 
-BOARD_DIR="$(dirname $0)"
-
-support/scripts/genimage.sh -c $BOARD_DIR/genimage.cfg
+support/scripts/genimage.sh -c board/zynqmp/genimage.cfg

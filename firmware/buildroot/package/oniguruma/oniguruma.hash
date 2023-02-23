@@ -1,4 +1,3 @@
-# From https://github.com/kkos/oniguruma/releases/download/v6.9.8/onig-6.9.8.tar.gz.sha256
-sha256  28cd62c1464623c7910565fb1ccaaa0104b2fe8b12bcd646e81f73b47535213e  onig-6.9.8.tar.gz
-# Hash for license file
-sha256  70ba5469ea0bab6e18a32d7009068f996503168d27be57747e08da34337ff26f  COPYING
+# Locally calculated
+sha256  bd0faeb887f748193282848d01ec2dad8943b5dfcb8dc03ed52dcc963549e819  onig-6.9.6.tar.gz
+sha256  6c7038393e8f30fee16257e713f77e383712f1465d6d25929596746b10b42bd3  COPYING

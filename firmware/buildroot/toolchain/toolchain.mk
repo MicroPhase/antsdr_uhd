@@ -27,10 +27,6 @@ define TOOLCHAIN_GLIBC_COPY_GCONV_LIBS
 		$(INSTALL) -m 0644 $(STAGING_DIR)/usr/lib/$${d}/gconv/*.so \
 				   $(TARGET_DIR)/usr/lib/gconv \
 		|| exit 1; \
-		if [ -d $(STAGING_DIR)/usr/lib/$${d}/gconv/gconv-modules.d ]; then \
-			cp -a $(STAGING_DIR)/usr/lib/$${d}/gconv/gconv-modules.d \
-				$(TARGET_DIR)/usr/lib/gconv/ || exit 1; \
-		fi; \
 	else \
 		for l in $(TOOLCHAIN_GLIBC_GCONV_LIBS); do \
 			$(INSTALL) -m 0644 -D $(STAGING_DIR)/usr/lib/$${d}/gconv/$${l}.so \
@@ -45,9 +41,8 @@ define TOOLCHAIN_GLIBC_COPY_GCONV_LIBS
 				 || exit 1; \
 			done; \
 		done; \
-		./support/scripts/expunge-gconv-modules \
-			$(STAGING_DIR)/usr/lib/$${d}/gconv \
-			"$(TOOLCHAIN_GLIBC_GCONV_LIBS)" \
+		./support/scripts/expunge-gconv-modules "$(TOOLCHAIN_GLIBC_GCONV_LIBS)" \
+			<$(STAGING_DIR)/usr/lib/$${d}/gconv/gconv-modules \
 			>$(TARGET_DIR)/usr/lib/gconv/gconv-modules; \
 	fi
 endef

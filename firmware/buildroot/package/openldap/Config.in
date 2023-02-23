@@ -8,7 +8,7 @@ config BR2_PACKAGE_OPENLDAP
 
 	  This only installs client-side support.
 
-	  https://www.openldap.org/
+	  http://www.openldap.org/
 
 if BR2_PACKAGE_OPENLDAP
 

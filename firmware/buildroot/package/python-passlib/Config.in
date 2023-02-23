@@ -4,4 +4,4 @@ config BR2_PACKAGE_PYTHON_PASSLIB
 	  comprehensive password hashing framework supporting over 30
 	  schemes.
 
-	  https://passlib.readthedocs.io
+	  https://bitbucket.org/ecollins/passlib

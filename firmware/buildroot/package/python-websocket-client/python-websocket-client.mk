@@ -4,11 +4,14 @@
 #
 ################################################################################
 
-PYTHON_WEBSOCKET_CLIENT_VERSION = 1.4.2
-PYTHON_WEBSOCKET_CLIENT_SOURCE = websocket-client-$(PYTHON_WEBSOCKET_CLIENT_VERSION).tar.gz
-PYTHON_WEBSOCKET_CLIENT_SITE = https://files.pythonhosted.org/packages/75/af/1d13b93e7a21aca7f8ab8645fcfcfad21fc39716dc9dce5dc2a97f73ff78
+PYTHON_WEBSOCKET_CLIENT_VERSION = 0.57.0
+PYTHON_WEBSOCKET_CLIENT_SOURCE = websocket_client-$(PYTHON_WEBSOCKET_CLIENT_VERSION).tar.gz
+PYTHON_WEBSOCKET_CLIENT_SITE = https://files.pythonhosted.org/packages/8b/0f/52de51b9b450ed52694208ab952d5af6ebbcbce7f166a48784095d930d8c
 PYTHON_WEBSOCKET_CLIENT_SETUP_TYPE = setuptools
-PYTHON_WEBSOCKET_CLIENT_LICENSE = Apache-2.0
+# Project was under LGPL-2.1+, but was relicensed under
+# BSD-3-Clause. The LICENSE file contains the BSD-3-Clause text, but
+# the source files still contain a LGPL-2.1+ header.
+PYTHON_WEBSOCKET_CLIENT_LICENSE = LGPL-2.1+, BSD-3-Clause
 PYTHON_WEBSOCKET_CLIENT_LICENSE_FILES = LICENSE
 
 $(eval $(python-package))

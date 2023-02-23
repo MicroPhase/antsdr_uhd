@@ -4,28 +4,19 @@
 #
 ################################################################################
 
-LIBSHOUT_VERSION = 2.4.6
+LIBSHOUT_VERSION = 2.4.3
 LIBSHOUT_SITE = https://downloads.xiph.org/releases/libshout
 LIBSHOUT_LICENSE = LGPL-2.0+
 LIBSHOUT_LICENSE_FILES = COPYING
 LIBSHOUT_INSTALL_STAGING = YES
-LIBSHOUT_DEPENDENCIES = host-pkgconf libogg
-LIBSHOUT_CONF_OPTS = \
-	--disable-examples \
-	--disable-tools
+LIBSHOUT_DEPENDENCIES = host-pkgconf libogg libvorbis
+LIBSHOUT_CONF_OPTS = --disable-examples
 
 ifeq ($(BR2_PACKAGE_LIBTHEORA),y)
 LIBSHOUT_CONF_OPTS += --enable-theora
 LIBSHOUT_DEPENDENCIES += libtheora
 else
 LIBSHOUT_CONF_OPTS += --disable-theora
-endif
-
-ifeq ($(BR2_PACKAGE_LIBVORBIS),y)
-LIBSHOUT_CONF_OPTS += --enable-vorbis
-LIBSHOUT_DEPENDENCIES += libvorbis
-else
-LIBSHOUT_CONF_OPTS += --disable-vorbis
 endif
 
 ifeq ($(BR2_PACKAGE_SPEEX),y)
@@ -38,6 +29,9 @@ endif
 ifeq ($(BR2_PACKAGE_OPENSSL),y)
 LIBSHOUT_CONF_OPTS += --with-openssl
 LIBSHOUT_DEPENDENCIES += openssl
+else ifeq ($(BR2_PACKAGE_LIBRESSL),y)
+LIBSHOUT_CONF_OPTS += --with-openssl=$(STAGING_DIR)/lib
+LIBSHOUT_DEPENDENCIES += libressl
 else
 LIBSHOUT_CONF_OPTS += --without-openssl
 endif

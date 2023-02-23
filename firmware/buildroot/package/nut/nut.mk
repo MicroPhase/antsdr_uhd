@@ -4,38 +4,32 @@
 #
 ################################################################################
 
-NUT_VERSION = 2.8.0
-NUT_SITE = https://github.com/networkupstools/nut/releases/download/v$(NUT_VERSION)
+NUT_VERSION_MAJOR = 2.7
+NUT_VERSION = $(NUT_VERSION_MAJOR).4
+NUT_SITE = http://www.networkupstools.org/source/$(NUT_VERSION_MAJOR)
 NUT_LICENSE = GPL-2.0+, GPL-3.0+ (python scripts), GPL/Artistic (perl client)
 NUT_LICENSE_FILES = COPYING LICENSE-GPL2 LICENSE-GPL3
-NUT_SELINUX_MODULES = apache nut
-NUT_INSTALL_STAGING = YES
 NUT_DEPENDENCIES = host-pkgconf
 
-# prevent usage of unsafe paths
-define NUT_FIX_CONFIGURE
-	$(SED) 's%CFLAGS="-isystem /usr/local/include%_UNUSED_CFLAGS="-isystem /usr/local/include%' $(@D)/configure
-	$(SED) 's%CXXFLAGS="-isystem /usr/local/include%_UNUSED_CXXFLAGS="-isystem /usr/local/include%' $(@D)/configure
-endef
-NUT_POST_PATCH_HOOKS += NUT_FIX_CONFIGURE
+# Our patch changes m4 macros, so we need to autoreconf
+NUT_AUTORECONF = YES
+
+# Race condition in tools generation
+NUT_MAKE = $(MAKE1)
 
 # Put the PID files in a read-write place (/var/run is a tmpfs)
 # since the default location (/var/state/ups) maybe readonly.
 NUT_CONF_OPTS = \
 	--with-altpidpath=/var/run/upsd \
-	--with-dev \
-	--without-doc
+	--without-hal
 
-NUT_CONF_ENV = \
-	ax_cv_check_cflags__Werror__Wno_unknown_warning_option=no \
-	ax_cv_check_cxxflags__Werror__Wno_unknown_warning_option=no \
-	ac_cv_func_strcasecmp=yes \
-	ac_cv_func_strdup=yes \
-	ac_cv_func_strncasecmp=yes \
-	ax_cv__printf_string_null=yes
+# For uClibc-based toolchains, nut forgets to link with -lm
+ifeq ($(BR2_TOOLCHAIN_USES_UCLIBC),y)
+NUT_CONF_ENV += LDFLAGS="$(TARGET_LDFLAGS) -lm"
+endif
 
 ifeq ($(call qstrip,$(BR2_PACKAGE_NUT_DRIVERS)),)
-NUT_CONF_OPTS += --with-drivers=auto
+NUT_CONF_OPTS += --with-drivers=all
 else
 NUT_CONF_OPTS += --with-drivers=$(BR2_PACKAGE_NUT_DRIVERS)
 endif
@@ -47,22 +41,17 @@ else
 NUT_CONF_OPTS += --without-avahi
 endif
 
-ifeq ($(BR2_PACKAGE_FREEIPMI),y)
-NUT_CONF_OPTS += --with-freeipmi
-NUT_DEPENDENCIES += freeipmi
-else
-NUT_CONF_OPTS += --without-freeipmi
-endif
-
 # gd with support for png is required for the CGI
 ifeq ($(BR2_PACKAGE_GD)$(BR2_PACKAGE_LIBPNG),yy)
 NUT_DEPENDENCIES += gd libpng
-NUT_CONF_OPTS += --with-cgi
+NUT_CONF_OPTS += \
+	--with-cgi \
+	--with-gdlib-config=$(STAGING_DIR)/usr/bin/gdlib-config
 else
 NUT_CONF_OPTS += --without-cgi
 endif
 
-# nut-scanner needs libltdl, which is a wrapper around dlopen/dlsym,
+# nut-scanner needs libltdl, which is a wrapper arounf dlopen/dlsym,
 # so is not available for static-only builds.
 # There is no flag to directly enable/disable nut-scanner, it's done
 # via the --enable/disable-libltdl flag.
@@ -73,10 +62,7 @@ else
 NUT_CONF_OPTS += --without-libltdl
 endif
 
-ifeq ($(BR2_PACKAGE_LIBUSB),y)
-NUT_DEPENDENCIES += libusb
-NUT_CONF_OPTS += --with-usb
-else ifeq ($(BR2_PACKAGE_LIBUSB_COMPAT),y)
+ifeq ($(BR2_PACKAGE_LIBUSB_COMPAT),y)
 NUT_DEPENDENCIES += libusb-compat
 NUT_CONF_OPTS += --with-usb
 else

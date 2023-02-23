@@ -3,4 +3,4 @@ config BR2_PACKAGE_PYTHON_HPACK
 	help
 	  Pure-Python HPACK header compression.
 
-	  https://github.com/python-hyper/hpack
+	  http://hyper.rtfd.org

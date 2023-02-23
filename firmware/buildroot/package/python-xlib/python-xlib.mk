@@ -4,8 +4,9 @@
 #
 ################################################################################
 
-PYTHON_XLIB_VERSION = 0.32
-PYTHON_XLIB_SITE = https://files.pythonhosted.org/packages/4d/cf/a29ecb43a5c84a65ffd726e3b28806f56b3bc5e796ddb533ff52af107dcf
+PYTHON_XLIB_VERSION = 0.25
+PYTHON_XLIB_SOURCE = python-xlib-$(PYTHON_XLIB_VERSION).tar.bz2
+PYTHON_XLIB_SITE = https://files.pythonhosted.org/packages/3c/d9/51fc07ae57f6a44e62e2ee04bd501d763ac169ff05c838403ec7ae556992
 PYTHON_XLIB_SETUP_TYPE = setuptools
 PYTHON_XLIB_LICENSE = LGPL-2.1+
 PYTHON_XLIB_LICENSE_FILES = LICENSE

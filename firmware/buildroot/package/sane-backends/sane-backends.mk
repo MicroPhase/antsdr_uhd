@@ -4,13 +4,12 @@
 #
 ################################################################################
 
-SANE_BACKENDS_VERSION = 1.1.1
+SANE_BACKENDS_VERSION = 1.0.27
 SANE_BACKENDS_SITE = \
-	https://gitlab.com/sane-project/backends/uploads/7d30fab4e115029d91027b6a58d64b43
+	https://gitlab.com/sane-project/backends/uploads/a3ba9fff29253a94e84074917bff581a
 SANE_BACKENDS_CONFIG_SCRIPTS = sane-config
 SANE_BACKENDS_LICENSE = GPL-2.0+
 SANE_BACKENDS_LICENSE_FILES = COPYING
-SANE_BACKENDS_CPE_ID_VENDOR = sane-backends_project
 SANE_BACKENDS_INSTALL_STAGING = YES
 
 SANE_BACKENDS_CONF_OPTS = \
@@ -44,7 +43,7 @@ endif
 
 ifeq ($(BR2_PACKAGE_AVAHI)$(BR2_PACKAGE_DBUS)$(BR2_PACKAGE_LIBGLIB2),yyy)
 SANE_BACKENDS_DEPENDENCIES += avahi
-SANE_BACKENDS_CONF_OPTS += --with-avahi
+SANE_BACKENDS_CONF_OPTS += --enable-avahi
 endif
 
 ifeq ($(BR2_PACKAGE_NETSNMP),y)
@@ -52,27 +51,6 @@ SANE_BACKENDS_CONF_ENV += ac_cv_path_SNMP_CONFIG_PATH=$(STAGING_DIR)/usr/bin/net
 SANE_BACKENDS_DEPENDENCIES += netsnmp
 else
 SANE_BACKENDS_CONF_OPTS += --without-snmp
-endif
-
-ifeq ($(BR2_PACKAGE_LIBCURL),y)
-SANE_BACKENDS_DEPENDENCIES += libcurl
-SANE_BACKENDS_CONF_OPTS += --with-libcurl
-else
-SANE_BACKENDS_CONF_OPTS += --without-libcurl
-endif
-
-ifeq ($(BR2_PACKAGE_POPPLER)$(BR2_PACKAGE_CAIRO)$(BR2_PACKAGE_LIBGLIB2),yyy)
-SANE_BACKENDS_DEPENDENCIES += poppler libglib2
-SANE_BACKENDS_CONF_OPTS += --with-poppler-glib
-else
-SANE_BACKENDS_CONF_OPTS += --without-poppler-glib
-endif
-
-ifeq ($(BR2_PACKAGE_LIBXML2),y)
-SANE_BACKENDS_DEPENDENCIES += libxml2
-SANE_BACKENDS_CONF_OPTS += --with-usb-record-replay
-else
-SANE_BACKENDS_CONF_OPTS += --without-usb-record-replay
 endif
 
 define SANE_BACKENDS_DISABLE_DOCS

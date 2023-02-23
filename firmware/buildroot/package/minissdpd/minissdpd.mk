@@ -4,12 +4,10 @@
 #
 ################################################################################
 
-MINISSDPD_VERSION = 1.6.0
+MINISSDPD_VERSION = 1.5.20190824
 MINISSDPD_SITE = http://miniupnp.free.fr/files
 MINISSDPD_LICENSE = BSD-3-Clause
 MINISSDPD_LICENSE_FILES = LICENSE
-MINISSDPD_CPE_ID_VENDOR = miniupnp_project
-MINISSDPD_SELINUX_MODULES = minissdpd
 MINISSDPD_DEPENDENCIES = libnfnetlink
 
 define MINISSDPD_BUILD_CMDS
@@ -20,7 +18,7 @@ endef
 
 define MINISSDPD_INSTALL_TARGET_CMDS
 	$(TARGET_MAKE_ENV) $(MAKE) -C $(@D) \
-		DESTDIR=$(TARGET_DIR) install
+		PREFIX=$(TARGET_DIR) install
 endef
 
 # Use dedicated init scripts for systemV and systemd instead of using

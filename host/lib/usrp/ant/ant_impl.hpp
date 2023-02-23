@@ -87,6 +87,7 @@ typedef struct {
     uint32_t serial;
     uint32_t auth;
     uint8_t serial_all[32];
+    uint8_t board_version[8];
 } microphase_ant_ctrl_data_t;
 
 static const uint8_t ANT_FW_COMPAT_NUM_MAJOR = 8;

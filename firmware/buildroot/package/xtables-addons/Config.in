@@ -16,4 +16,4 @@ config BR2_PACKAGE_XTABLES_ADDONS
 	  Likewise, it contains extensions that were not, or are not
 	  yet, accepted in the main kernel/iptables packages.
 
-	  https://inai.de/projects/xtables-addons/
+	  http://xtables-addons.sourceforge.net/

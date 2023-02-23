@@ -2,7 +2,6 @@ config BR2_PACKAGE_HIDAPI
 	bool "hidapi"
 	depends on BR2_PACKAGE_HAS_UDEV
 	depends on BR2_TOOLCHAIN_HAS_THREADS_NPTL
-	depends on BR2_TOOLCHAIN_GCC_AT_LEAST_4_9 # libusb
 	select BR2_PACKAGE_LIBUSB
 	select BR2_PACKAGE_LIBGUDEV
 	select BR2_PACKAGE_LIBICONV if !BR2_ENABLE_LOCALE
@@ -15,7 +14,5 @@ config BR2_PACKAGE_HIDAPI
 
 	  http://github.com/libusb/hidapi/
 
-comment "hidapi needs udev /dev management and a toolchain w/ NPTL, threads, gcc >= 4.9"
-	depends on !BR2_TOOLCHAIN_HAS_THREADS_NPTL || \
-		!BR2_PACKAGE_HAS_UDEV || \
-		!BR2_TOOLCHAIN_GCC_AT_LEAST_4_9
+comment "hidapi needs udev /dev management and a toolchain w/ NPTL threads"
+	depends on !BR2_TOOLCHAIN_HAS_THREADS_NPTL || !BR2_PACKAGE_HAS_UDEV

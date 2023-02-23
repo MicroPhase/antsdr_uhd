@@ -18,9 +18,7 @@ IBRDTND_CONF_OPTS = \
 	--without-vmime
 
 # don't build documentation
-IBRDTND_CONF_ENV = \
-	PDFLATEX='no' \
-	CXXFLAGS="$(TARGET_CXXFLAGS) -std=c++11"
+IBRDTND_CONF_ENV = PDFLATEX='no'
 
 ifeq ($(BR2_PACKAGE_LIBDAEMON),y)
 IBRDTND_CONF_OPTS += --enable-libdaemon

@@ -6,15 +6,4 @@ config BR2_PACKAGE_LIBXKBCOMMON
 	  processes a reduced subset of keymaps as defined by the XKB
 	  specification.
 
-	  https://xkbcommon.org
-
-if BR2_PACKAGE_LIBXKBCOMMON
-
-config BR2_PACKAGE_LIBXKBCOMMON_TOOLS
-	bool "tools"
-	help
-	  Tools: xkbcli, xkbcli-compile-keymap, xkbcli-how-to-type,
-	  xkbcli-interactive-evdev, xkbcli-interactive-x11,
-	  xkbcli-interactive-wayland
-
-endif
+	  http://xkbcommon.org/

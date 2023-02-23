@@ -4,11 +4,10 @@
 #
 ################################################################################
 
-AIRCRACK_NG_VERSION = 1.7
+AIRCRACK_NG_VERSION = 1.6
 AIRCRACK_NG_SITE = http://download.aircrack-ng.org
 AIRCRACK_NG_LICENSE = GPL-2.0+
 AIRCRACK_NG_LICENSE_FILES = LICENSE
-AIRCRACK_NG_CPE_ID_VENDOR = aircrack-ng
 AIRCRACK_NG_DEPENDENCIES = \
 	$(if $(BR2_PACKAGE_CMOCKA),cmocka) \
 	$(if $(BR2_PACKAGE_LIBNL),libnl) \
@@ -69,7 +68,7 @@ endif
 
 ifeq ($(BR2_PACKAGE_SQLITE),y)
 AIRCRACK_NG_DEPENDENCIES += sqlite
-AIRCRACK_NG_CONF_OPTS += --with-sqlite3=$(STAGING_DIR)/usr
+AIRCRACK_NG_CONF_OPTS += --with-sqlite3
 else
 AIRCRACK_NG_CONF_OPTS += --without-sqlite3
 endif
