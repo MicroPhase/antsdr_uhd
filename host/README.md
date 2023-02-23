@@ -28,7 +28,7 @@ make
 - **Install**
 ```sh
 sudo make install
-sudo ldconifg
+sudo ldconfig
 ```
 The default installation path: /usr/local/lib/uhd
 
