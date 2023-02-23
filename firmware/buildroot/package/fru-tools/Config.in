@@ -1,5 +1,0 @@
-config BR2_PACKAGE_FRU_TOOLS
-	bool "fru-tools"
-	help
-	  Tools to display/manipulate FMC FRU info.
-	  https://github.com/analogdevicesinc/fru_tools

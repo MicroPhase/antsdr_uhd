@@ -1,6 +1,0 @@
-config BR2_PACKAGE_JESD204B_STATUS
-	bool "JESD204B Status Monitoring Utility"
-	select BR2_PACKAGE_NCURSES
-	help
-	  JESD204B Status Monitoring Utility
-	  https://wiki.analog.com/resources/tools-software/linux-software/jesd_status

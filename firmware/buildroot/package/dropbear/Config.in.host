@@ -1,8 +1,0 @@
-config BR2_PACKAGE_HOST_DROPBEAR
-	bool "host dropbearkey"
-	help
-	  Dropbearkey can generate the SSH keys on the host if they have
-	  to be included in the Buildroot output file. This feature can
-	  be required for the targets where a persistent location to
-	  store these keys is not available, new keys being otherwise
-	  generated at each boot.

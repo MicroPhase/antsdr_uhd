@@ -1,0 +1,3 @@
+[submodule "firmware/buildroot"]
+	path = firmware/buildroot
+	url = https://github.com/bkerler/buildroot
