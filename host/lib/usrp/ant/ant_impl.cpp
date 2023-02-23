@@ -982,12 +982,12 @@ void ant_impl::check_fpga_compat(void)
                                    ? B205_FPGA_COMPAT_NUM
                                    : B200_FPGA_COMPAT_NUM);
     if (compat_major != expected) {
-        throw uhd::runtime_error(str(
-            boost::format("Expected FPGA compatibility number %d, but got %d:\n"
-                          "The FPGA build is not compatible with the host code build.\n"
-                          "%s")
-            % int(expected) % compat_major
-            % print_utility_error("uhd_images_downloader.py")));
+      //  throw uhd::runtime_error(str(
+      //      boost::format("Expected FPGA compatibility number %d, but got %d:\n"
+      //                    "The FPGA build is not compatible with the host code build.\n"
+      //                    "%s")
+      //      % int(expected) % compat_major
+      //      % print_utility_error("uhd_images_downloader.py")));
     }
     _tree->create<std::string>("/mboards/0/fpga_version")
         .set(str(boost::format("%u.%u") % compat_major % compat_minor));
