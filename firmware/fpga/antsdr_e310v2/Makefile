@@ -3,7 +3,7 @@ TARGET ?= e310v2
 HDF_DIR = $(PWD)/antsdr_$(TARGET)/antsdr_$(TARGET).sdk/
 all : 
 
-ifeq ($(wildcard $(HDF_DIR)/system_top.hdf),)
+ifeq ($(wildcard $(HDF_DIR)/system_top.hdf), )
 	vivado -mode batch -source antsdr_$(TARGET).tcl
 else
 	@echo $(HDF_DIR)

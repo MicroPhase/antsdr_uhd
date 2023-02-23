@@ -10,13 +10,7 @@ Build
 
 First, configure Buildroot for the i.MX8MQ EVK board:
 
-If you want to use the NXP kernel:
-
   make freescale_imx8mqevk_defconfig
-
-Or if you want to use a mainline kernel:
-
-  make imx8mqevk_defconfig
 
 Build all components:
 

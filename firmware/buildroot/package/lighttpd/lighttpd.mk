@@ -5,133 +5,71 @@
 ################################################################################
 
 LIGHTTPD_VERSION_MAJOR = 1.4
-LIGHTTPD_VERSION = $(LIGHTTPD_VERSION_MAJOR).67
+LIGHTTPD_VERSION = $(LIGHTTPD_VERSION_MAJOR).55
 LIGHTTPD_SOURCE = lighttpd-$(LIGHTTPD_VERSION).tar.xz
 LIGHTTPD_SITE = http://download.lighttpd.net/lighttpd/releases-$(LIGHTTPD_VERSION_MAJOR).x
 LIGHTTPD_LICENSE = BSD-3-Clause
 LIGHTTPD_LICENSE_FILES = COPYING
-LIGHTTPD_CPE_ID_VENDOR = lighttpd
-LIGHTTPD_DEPENDENCIES = host-pkgconf xxhash
+LIGHTTPD_DEPENDENCIES = host-pkgconf
 LIGHTTPD_CONF_OPTS = \
-	-Dwith_dbi=false \
-	-Dwith_fam=false \
-	-Dwith_gnutls=false \
-	-Dwith_libev=false \
-	-Dwith_libunwind=false \
-	-Dwith_mbedtls=false \
-	-Dwith_nettle=false \
-	-Dwith_nss=false \
-	-Dwith_pcre=false \
-	-Dwith_sasl=false \
-	-Dwith_wolfssl=false \
-	-Dwith_xattr=false \
-	-Dwith_xxhash=true \
-	-Dbuild_extra_warnings=false \
-	-Dbuild_static=false \
-	-Dmoduledir=lib/lighttpd
-
-ifeq ($(BR2_PACKAGE_LIGHTTPD_BROTLI),y)
-LIGHTTPD_DEPENDENCIES += brotli
-LIGHTTPD_CONF_OPTS += -Dwith_brotli=true
-else
-LIGHTTPD_CONF_OPTS += -Dwith_brotli=false
-endif
-
-ifeq ($(BR2_PACKAGE_LIGHTTPD_BZIP2),y)
-LIGHTTPD_DEPENDENCIES += bzip2
-LIGHTTPD_CONF_OPTS += -Dwith_bzip=true
-else
-LIGHTTPD_CONF_OPTS += -Dwith_bzip=false
-endif
-
-ifeq ($(BR2_PACKAGE_LIGHTTPD_KRB5),y)
-LIGHTTPD_DEPENDENCIES += libkrb5
-LIGHTTPD_CONF_OPTS += -Dwith_krb5=true
-else
-LIGHTTPD_CONF_OPTS += -Dwith_krb5=false
-endif
-
-ifeq ($(BR2_PACKAGE_LIGHTTPD_LDAP),y)
-LIGHTTPD_DEPENDENCIES += openldap
-LIGHTTPD_CONF_OPTS += -Dwith_ldap=true
-else
-LIGHTTPD_CONF_OPTS += -Dwith_ldap=false
-endif
-
-ifeq ($(BR2_PACKAGE_LIGHTTPD_LUA),y)
-LIGHTTPD_DEPENDENCIES += lua
-LIGHTTPD_CONF_OPTS += -Dwith_lua=true
-else
-LIGHTTPD_CONF_OPTS += -Dwith_lua=false
-endif
-
-ifeq ($(BR2_PACKAGE_LIGHTTPD_MAXMINDDB),y)
-LIGHTTPD_DEPENDENCIES += libmaxminddb
-LIGHTTPD_CONF_OPTS += -Dwith_maxminddb=true
-else
-LIGHTTPD_CONF_OPTS += -Dwith_maxminddb=false
-endif
-
-ifeq ($(BR2_PACKAGE_LIGHTTPD_MYSQL),y)
-LIGHTTPD_DEPENDENCIES += mysql
-LIGHTTPD_CONF_OPTS += -Dwith_mysql=true
-else
-LIGHTTPD_CONF_OPTS += -Dwith_mysql=false
-endif
+	--without-wolfssl \
+	--libdir=/usr/lib/lighttpd \
+	--libexecdir=/usr/lib
 
 ifeq ($(BR2_PACKAGE_LIGHTTPD_OPENSSL),y)
 LIGHTTPD_DEPENDENCIES += openssl
-LIGHTTPD_CONF_OPTS += -Dwith_openssl=true
+LIGHTTPD_CONF_OPTS += --with-openssl
 else
-LIGHTTPD_CONF_OPTS += -Dwith_openssl=false
+LIGHTTPD_CONF_OPTS += --without-openssl
 endif
 
 ifeq ($(BR2_PACKAGE_LIGHTTPD_PAM),y)
 LIGHTTPD_DEPENDENCIES += linux-pam
-LIGHTTPD_CONF_OPTS += -Dwith_pam=true
+LIGHTTPD_CONF_OPTS += --with-pam
 else
-LIGHTTPD_CONF_OPTS += -Dwith_pam=false
-endif
-
-ifeq ($(BR2_PACKAGE_LIGHTTPD_PCRE),y)
-LIGHTTPD_DEPENDENCIES += pcre2
-LIGHTTPD_CONF_OPTS += -Dwith_pcre2=true
-else
-LIGHTTPD_CONF_OPTS += -Dwith_pcre2=false
-endif
-
-ifeq ($(BR2_PACKAGE_LIGHTTPD_PGSQL),y)
-LIGHTTPD_DEPENDENCIES += postgresql
-LIGHTTPD_CONF_OPTS += -Dwith_pgsql=true
-else
-LIGHTTPD_CONF_OPTS += -Dwith_pgsql=false
-endif
-
-ifeq ($(BR2_PACKAGE_LIGHTTPD_WEBDAV),y)
-LIGHTTPD_DEPENDENCIES += libxml2 sqlite
-LIGHTTPD_CONF_OPTS += -Dwith_webdav_props=true
-ifeq ($(BR2_PACKAGE_UTIL_LINUX_LIBUUID),y)
-LIGHTTPD_CONF_OPTS += -Dwith_webdav_locks=true
-LIGHTTPD_DEPENDENCIES += util-linux
-else
-LIGHTTPD_CONF_OPTS += -Dwith_webdav_locks=false
-endif
-else
-LIGHTTPD_CONF_OPTS += -Dwith_webdav_props=false -Dwith_webdav_locks=false
+LIGHTTPD_CONF_OPTS += --without-pam
 endif
 
 ifeq ($(BR2_PACKAGE_LIGHTTPD_ZLIB),y)
 LIGHTTPD_DEPENDENCIES += zlib
-LIGHTTPD_CONF_OPTS += -Dwith_zlib=true
+LIGHTTPD_CONF_OPTS += --with-zlib
 else
-LIGHTTPD_CONF_OPTS += -Dwith_zlib=false
+LIGHTTPD_CONF_OPTS += --without-zlib
 endif
 
-ifeq ($(BR2_PACKAGE_LIGHTTPD_ZSTD),y)
-LIGHTTPD_DEPENDENCIES += zstd
-LIGHTTPD_CONF_OPTS += -Dwith_zstd=true
+ifeq ($(BR2_PACKAGE_LIGHTTPD_BZIP2),y)
+LIGHTTPD_DEPENDENCIES += bzip2
+LIGHTTPD_CONF_OPTS += --with-bzip2
 else
-LIGHTTPD_CONF_OPTS += -Dwith_zstd=false
+LIGHTTPD_CONF_OPTS += --without-bzip2
+endif
+
+ifeq ($(BR2_PACKAGE_LIGHTTPD_PCRE),y)
+LIGHTTPD_CONF_ENV = PCRECONFIG=$(STAGING_DIR)/usr/bin/pcre-config
+LIGHTTPD_DEPENDENCIES += pcre
+LIGHTTPD_CONF_OPTS += --with-pcre
+else
+LIGHTTPD_CONF_OPTS += --without-pcre
+endif
+
+ifeq ($(BR2_PACKAGE_LIGHTTPD_WEBDAV),y)
+LIGHTTPD_DEPENDENCIES += libxml2 sqlite
+LIGHTTPD_CONF_OPTS += --with-webdav-props
+ifeq ($(BR2_PACKAGE_UTIL_LINUX_LIBUUID),y)
+LIGHTTPD_CONF_OPTS += --with-webdav-locks
+LIGHTTPD_DEPENDENCIES += util-linux
+else
+LIGHTTPD_CONF_OPTS += --without-webdav-locks
+endif
+else
+LIGHTTPD_CONF_OPTS += --without-webdav-props --without-webdav-locks
+endif
+
+ifeq ($(BR2_PACKAGE_LIGHTTPD_LUA),y)
+LIGHTTPD_DEPENDENCIES += lua
+LIGHTTPD_CONF_OPTS += --with-lua
+else
+LIGHTTPD_CONF_OPTS += --without-lua
 endif
 
 define LIGHTTPD_INSTALL_CONFIG
@@ -165,4 +103,4 @@ define LIGHTTPD_INSTALL_INIT_SYSTEMD
 		$(TARGET_DIR)/usr/lib/tmpfiles.d/lighttpd.conf
 endef
 
-$(eval $(meson-package))
+$(eval $(autotools-package))

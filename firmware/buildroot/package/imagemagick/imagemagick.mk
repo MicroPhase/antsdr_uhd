@@ -4,11 +4,10 @@
 #
 ################################################################################
 
-IMAGEMAGICK_VERSION = 7.1.0-51
+IMAGEMAGICK_VERSION = 7.0.10-28
 IMAGEMAGICK_SITE = $(call github,ImageMagick,ImageMagick,$(IMAGEMAGICK_VERSION))
 IMAGEMAGICK_LICENSE = Apache-2.0
 IMAGEMAGICK_LICENSE_FILES = LICENSE
-IMAGEMAGICK_CPE_ID_VENDOR = imagemagick
 
 IMAGEMAGICK_INSTALL_STAGING = YES
 IMAGEMAGICK_CONFIG_SCRIPTS = \
@@ -32,12 +31,9 @@ IMAGEMAGICK_CONF_OPTS = \
 	--without-fpx \
 	--without-gslib \
 	--without-gvc \
-	--without-heic \
 	--without-jbig \
-	--without-jxl \
 	--without-lqr \
 	--without-openexr \
-	--without-openjp2 \
 	--without-perl \
 	--without-raqm \
 	--without-wmf \
@@ -91,13 +87,6 @@ else
 IMAGEMAGICK_CONF_OPTS += --without-png
 endif
 
-ifeq ($(BR2_PACKAGE_LIBRAW),y)
-IMAGEMAGICK_CONF_OPTS += --with-raw
-IMAGEMAGICK_DEPENDENCIES += libraw
-else
-IMAGEMAGICK_CONF_OPTS += --without-raw
-endif
-
 ifeq ($(BR2_PACKAGE_LIBRSVG),y)
 IMAGEMAGICK_CONF_OPTS += --with-rsvg
 IMAGEMAGICK_DEPENDENCIES += librsvg
@@ -111,20 +100,6 @@ IMAGEMAGICK_CONF_ENV += ac_cv_path_xml2_config=$(STAGING_DIR)/usr/bin/xml2-confi
 IMAGEMAGICK_DEPENDENCIES += libxml2
 else
 IMAGEMAGICK_CONF_OPTS += --without-xml
-endif
-
-ifeq ($(BR2_PACKAGE_LIBZIP),y)
-IMAGEMAGICK_CONF_OPTS += --with-zip
-IMAGEMAGICK_DEPENDENCIES += libzip
-else
-IMAGEMAGICK_CONF_OPTS += --without-zip
-endif
-
-ifeq ($(BR2_PACKAGE_ZSTD),y)
-IMAGEMAGICK_CONF_OPTS += --with-zstd
-IMAGEMAGICK_DEPENDENCIES += zstd
-else
-IMAGEMAGICK_CONF_OPTS += --without-zstd
 endif
 
 ifeq ($(BR2_PACKAGE_PANGO),y)
@@ -178,12 +153,6 @@ else
 IMAGEMAGICK_CONF_OPTS += --without-bzlib
 endif
 
-ifeq ($(BR2_INSTALL_LIBSTDCPP),y)
-IMAGEMAGICK_CONF_OPTS += --with-utilities
-else
-IMAGEMAGICK_CONF_OPTS += --without-utilities
-endif
-
 HOST_IMAGEMAGICK_CONF_OPTS = \
 	--disable-opencl \
 	--disable-openmp \
@@ -193,19 +162,13 @@ HOST_IMAGEMAGICK_CONF_OPTS = \
 	--without-fpx \
 	--without-gslib \
 	--without-gvc \
-	--without-heic \
 	--without-jbig \
-	--without-jxl \
 	--without-lqr \
 	--without-openexr \
-	--without-openjp2 \
 	--without-perl \
 	--without-raqm \
-	--without-raw \
 	--without-wmf \
 	--without-x \
-	--without-zip \
-	--without-zstd \
 	--without-bzlib \
 	--without-fftw \
 	--without-lcms \

@@ -4,19 +4,20 @@
 #
 ################################################################################
 
-PCIUTILS_VERSION = 3.8.0
+PCIUTILS_VERSION = 3.5.5
 PCIUTILS_SITE = $(BR2_KERNEL_MIRROR)/software/utils/pciutils
 PCIUTILS_SOURCE = pciutils-$(PCIUTILS_VERSION).tar.xz
 PCIUTILS_INSTALL_STAGING = YES
 PCIUTILS_LICENSE = GPL-2.0+
 PCIUTILS_LICENSE_FILES = COPYING
 PCIUTILS_MAKE_OPTS = \
-	CROSS_COMPILE="$(TARGET_CROSS)" \
-	HOST="$(NORMALIZED_ARCH)-linux" \
-	OPT="$(TARGET_CFLAGS) -std=gnu99" \
+	CC="$(TARGET_CC)" \
+	HOST="$(KERNEL_ARCH)-linux" \
+	OPT="$(TARGET_CFLAGS)" \
 	LDFLAGS="$(TARGET_LDFLAGS)" \
-	DNS=no \
-	STRIP=
+	RANLIB=$(TARGET_RANLIB) \
+	AR=$(TARGET_AR) \
+	DNS=no
 
 ifeq ($(BR2_PACKAGE_HAS_UDEV),y)
 PCIUTILS_DEPENDENCIES += udev
@@ -47,6 +48,10 @@ endif
 
 define PCIUTILS_CONFIGURE_CMDS
 	$(SED) 's/wget --no-timestamping/wget/' $(PCIUTILS_DIR)/update-pciids.sh
+	$(SED) 's/uname -s/echo Linux/' \
+		-e 's/uname -r/echo $(LINUX_HEADERS_VERSION)/' \
+		$(PCIUTILS_DIR)/lib/configure
+	$(SED) 's/^STRIP/#STRIP/' $(PCIUTILS_DIR)/Makefile
 endef
 
 define PCIUTILS_BUILD_CMDS

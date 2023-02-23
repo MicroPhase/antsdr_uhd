@@ -7,4 +7,4 @@ config BR2_PACKAGE_LIBGTA
 	  Libgta is a portable library that implements the Generic
 	  Tagged Array (GTA) file format.
 
-	  https://marlam.de/gta
+	  http://gta.nongnu.org

@@ -16,7 +16,7 @@ class TestJffs2(infra.basetest.BRTest):
         """
         BR2_TARGET_ROOTFS_JFFS2=y
         BR2_TARGET_ROOTFS_JFFS2_CUSTOM=y
-        BR2_TARGET_ROOTFS_JFFS2_CUSTOM_EBSIZE=0x40000
+        BR2_TARGET_ROOTFS_JFFS2_CUSTOM_EBSIZE=0x80000
         BR2_TARGET_ROOTFS_JFFS2_NOCLEANMARKER=y
         BR2_TARGET_ROOTFS_JFFS2_PAD=y
         BR2_TARGET_ROOTFS_JFFS2_PADSIZE=0x4000000
@@ -41,4 +41,5 @@ class TestJffs2(infra.basetest.BRTest):
                            options=["-drive", "file={},if=pflash".format(img)])
         self.emulator.login()
         cmd = "mount | grep '/dev/root on / type jffs2'"
-        self.assertRunOk(cmd)
+        _, exit_code = self.emulator.run(cmd)
+        self.assertEqual(exit_code, 0)

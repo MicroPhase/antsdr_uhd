@@ -4,13 +4,12 @@
 #
 ################################################################################
 
-BDWGC_VERSION = 8.2.2
+BDWGC_VERSION = 8.0.4
 BDWGC_SOURCE = gc-$(BDWGC_VERSION).tar.gz
-BDWGC_SITE = https://github.com/ivmai/bdwgc/releases/download/v$(BDWGC_VERSION)
+BDWGC_SITE = http://www.hboehm.info/gc/gc_source
 BDWGC_INSTALL_STAGING = YES
 BDWGC_LICENSE = bdwgc license
 BDWGC_LICENSE_FILES = README.QUICK
-BDWGC_CPE_ID_VENDOR = bdwgc_project
 BDWGC_DEPENDENCIES = libatomic_ops host-pkgconf
 HOST_BDWGC_DEPENDENCIES = host-libatomic_ops host-pkgconf
 
@@ -20,9 +19,6 @@ BDWGC_CFLAGS_EXTRA += -DAO_NO_SPARC_V9
 endif
 ifeq ($(BR2_STATIC_LIBS),y)
 BDWGC_CFLAGS_EXTRA += -DGC_NO_DLOPEN
-endif
-ifeq ($(BR2_TOOLCHAIN_HAS_THREADS_NPTL),)
-BDWGC_CFLAGS_EXTRA += -DNO_PTHREAD_GETATTR_NP
 endif
 
 # Ensure we use the system libatomic_ops, and not the internal one.

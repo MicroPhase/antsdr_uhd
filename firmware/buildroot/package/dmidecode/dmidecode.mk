@@ -4,12 +4,11 @@
 #
 ################################################################################
 
-DMIDECODE_VERSION = 3.4
+DMIDECODE_VERSION = 3.2
 DMIDECODE_SOURCE = dmidecode-$(DMIDECODE_VERSION).tar.xz
 DMIDECODE_SITE = http://download.savannah.gnu.org/releases/dmidecode
 DMIDECODE_LICENSE = GPL-2.0+
 DMIDECODE_LICENSE_FILES = LICENSE
-DMIDECODE_SELINUX_MODULES = dmidecode
 
 define DMIDECODE_BUILD_CMDS
 	$(TARGET_MAKE_ENV) $(MAKE) -C $(@D) $(TARGET_CONFIGURE_OPTS)

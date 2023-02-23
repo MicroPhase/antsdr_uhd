@@ -4,17 +4,14 @@
 #
 ################################################################################
 
-JANUS_GATEWAY_VERSION = 1.0.3
+JANUS_GATEWAY_VERSION = 0.8.1
 JANUS_GATEWAY_SITE = $(call github,meetecho,janus-gateway,v$(JANUS_GATEWAY_VERSION))
 JANUS_GATEWAY_LICENSE = GPL-3.0 with OpenSSL exception
 JANUS_GATEWAY_LICENSE_FILES = COPYING
-JANUS_GATEWAY_CPE_ID_VENDOR = meetecho
-JANUS_GATEWAY_CPE_ID_PRODUCT = janus
 
 # ding-libs provides the ini_config library
 JANUS_GATEWAY_DEPENDENCIES = host-pkgconf jansson libnice \
-	libsrtp libglib2 openssl libconfig \
-	$(if $(BR2_PACKAGE_LIBOGG),libogg)
+	libsrtp host-gengetopt libglib2 openssl libconfig
 
 # Straight out of the repository, no ./configure, and we also patch
 # configure.ac.
@@ -24,25 +21,11 @@ JANUS_GATEWAY_CONF_OPTS = \
 	--disable-data-channels \
 	--disable-sample-event-handler
 
-ifeq ($(BR2_PACKAGE_JANUS_GATEWAY_DEMOS),)
-define JANUS_GATEWAY_REMOVE_DEMOS
-	$(RM) -fr $(TARGET_DIR)/usr/share/janus/demos/
-endef
-JANUS_GATEWAY_POST_INSTALL_TARGET_HOOKS += JANUS_GATEWAY_REMOVE_DEMOS
-endif
-
 ifeq ($(BR2_PACKAGE_JANUS_GATEWAY_AUDIO_BRIDGE),y)
 JANUS_GATEWAY_DEPENDENCIES += opus
 JANUS_GATEWAY_CONF_OPTS += --enable-plugin-audiobridge
 else
 JANUS_GATEWAY_CONF_OPTS += --disable-plugin-audiobridge
-endif
-
-ifeq ($(BR2_PACKAGE_JANUS_GATEWAY_DUKTAPE),y)
-JANUS_GATEWAY_DEPENDENCIES += duktape
-JANUS_GATEWAY_CONF_OPTS += --enable-plugin-duktape
-else
-JANUS_GATEWAY_CONF_OPTS += --disable-plugin-duktape
 endif
 
 ifeq ($(BR2_PACKAGE_JANUS_GATEWAY_ECHO_TEST),y)
@@ -89,6 +72,7 @@ JANUS_GATEWAY_CONF_OPTS += --disable-plugin-videoroom
 endif
 
 ifeq ($(BR2_PACKAGE_JANUS_GATEWAY_VOICE_MAIL),y)
+JANUS_GATEWAY_DEPENDENCIES += libogg
 JANUS_GATEWAY_CONF_OPTS += --enable-plugin-voicemail
 else
 JANUS_GATEWAY_CONF_OPTS += --disable-plugin-voicemail
@@ -127,17 +111,5 @@ JANUS_GATEWAY_CONF_OPTS += --enable-websockets
 else
 JANUS_GATEWAY_CONF_OPTS += --disable-websockets
 endif
-
-ifeq ($(BR2_PACKAGE_SYSTEMD),y)
-JANUS_GATEWAY_DEPENDENCIES += systemd
-JANUS_GATEWAY_CONF_OPTS += --enable-systemd-sockets
-else
-JANUS_GATEWAY_CONF_OPTS += --disable-systemd-sockets
-endif
-
-define JANUS_GATEWAY_INSTALL_INIT_SYSTEMD
-	$(INSTALL) -D -m 644 package/janus-gateway/janus-gateway.service \
-		$(TARGET_DIR)/usr/lib/systemd/system/janus-gateway.service
-endef
 
 $(eval $(autotools-package))

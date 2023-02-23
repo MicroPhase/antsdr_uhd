@@ -1,6 +1,6 @@
 Buildroot for Boundary Devices platforms:
 
-https://boundarydevices.com/nitrogen-sbcs-and-soms/
+https://boundarydevices.com/product-category/popular-sbc-and-som-modules/
 
 Here is the list of targeted platforms per defconfig:
 
@@ -19,22 +19,7 @@ Here is the list of targeted platforms per defconfig:
 - nitrogen7_defconfig
   - Nitrogen7
 
-- nitrogen8m_defconfig
-  - Nitrogen8M
-  - Nitrogen8M_SOM
-
-- nitrogen8mm_defconfig
-  - Nitrogen8MMini
-  - Nitrogen8MMini_SOM
-
-- nitrogen8mn_defconfig
-  - Nitrogen8MNano
-  - Nitrogen8MNano_SOM
-
-- nitrogen8mp_defconfig
-  - Nitrogen8MPlus_SOM
-
-To install, simply copy the image to your storage (SD, eMMC, USB):
+To install, simply copy the image to a uSD card:
 
 $ sudo dd if=output/images/sdcard.img of=/dev/sdX
 
@@ -43,9 +28,3 @@ Where 'sdX' is the device node of the uSD partition.
 To upgrade u-boot, cancel autoboot and type:
 
 > run upgradeu
-
-See Boundary Devices's buildroot-external-boundary project
-for additional and advanced defconfigs using Qt5, gstreamer,
-NXP proprietary packages with demo applications:
-
-https://github.com/boundarydevices/buildroot-external-boundary
