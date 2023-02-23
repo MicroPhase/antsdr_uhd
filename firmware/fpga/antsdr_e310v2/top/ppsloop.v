@@ -6,7 +6,7 @@
 
 
 module ppsloop#(
-  parameter DEVICE = "E310V2"
+  parameter DEVICE = "E200"
 )(
     input reset,
     input xoclk, // 40 MHz from VCTCXO
@@ -384,6 +384,9 @@ module ppsloop#(
    */
 
   always @(posedge clk) begin
+    if (plllck == 1'b0 ) begin
+      daco <= dac_dflt;
+    end
     if (no_pps) begin
      daco <= dac_dflt;
     end

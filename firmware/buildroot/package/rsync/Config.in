@@ -7,4 +7,4 @@ config BR2_PACKAGE_RSYNC
 	help
 	  File transfer program to keep remote files in sync.
 
-	  https://rsync.samba.org/
+	  http://rsync.samba.org/

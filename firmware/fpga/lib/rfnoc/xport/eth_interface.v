@@ -76,6 +76,7 @@ module eth_interface #(
 
   localparam [47:0] DEFAULT_MAC_ADDR  = {8'h00, 8'h80, 8'h2f, 8'h16, 8'hc5, 8'h2f};
   localparam [31:0] DEFAULT_IP_ADDR   = {8'd192, 8'd168, 8'd1, 8'd10};
+  localparam [31:0] DEFAULT_IP_ADDR_INT   = {8'd192, 8'd168, 8'd1, 8'd200};
   localparam [15:0] DEFAULT_UDP_PORT  = 16'd49153;
 
   //---------------------------------------------------------
@@ -121,10 +122,10 @@ module eth_interface #(
   assign my_ip        = bridge_en ? bridge_ip_reg : ip_reg;
   assign my_udp_port  = bridge_en ? bridge_udp_port : udp_port;
 
-  // assign work_mac = mac_mask[0] ? my_mac : 'd0;
-  // assign work_ip = mac_mask[0] ? my_ip : 'd0;
-  assign work_mac = my_mac;
-  assign work_ip = DEFAULT_IP_ADDR;
+  assign work_mac = mac_mask[0] ? my_mac : DEFAULT_MAC_ADDR;
+  assign work_ip = mac_mask[0] ? my_ip : DEFAULT_IP_ADDR_INT;
+  // assign work_mac = my_mac;
+  // assign work_ip = DEFAULT_IP_ADDR;
 
   always @(posedge clk) begin
     if (reset) begin

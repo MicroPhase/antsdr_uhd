@@ -7,4 +7,4 @@ config BR2_PACKAGE_XKEYBOARD_CONFIG
 	help
 	  keyboard configuration database for X
 
-	  https://gitlab.freedesktop.org/xkeyboard-config/xkeyboard-config
+	  http://xlibs.freedesktop.org/xkbdesc

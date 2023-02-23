@@ -1,0 +1,6 @@
+config BR2_PACKAGE_LIBM2K
+	bool "libm2k"
+	select BR2_PACKAGE_LIBIIO
+	help
+	  Library for interfacing with the ADALM2000. More information available at https://wiki.analog.com/libm2k
+	  https://github.com/analogdevicesinc/libm2k

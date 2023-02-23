@@ -7,4 +7,4 @@ config BR2_PACKAGE_PYTHON_PYPARSING
 	  module provides a library of classes that client code uses
 	  to construct the grammar directly in Python code.
 
-	  https://github.com/pyparsing/pyparsing/
+	  http://pyparsing.wikispaces.com/

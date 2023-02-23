@@ -4,10 +4,11 @@
 #
 ################################################################################
 
-QWT_VERSION = 6.1.6
+QWT_VERSION = 6.1.4
 QWT_SOURCE = qwt-$(QWT_VERSION).tar.bz2
 QWT_SITE = http://downloads.sourceforge.net/project/qwt/qwt/$(QWT_VERSION)
 QWT_INSTALL_STAGING = YES
+QWT_DEPENDENCIES = qt5base
 
 QWT_LICENSE = LGPL-2.1 with exceptions
 QWT_LICENSE_FILES = COPYING
@@ -41,11 +42,14 @@ else
 QWT_CONFIG += -e 's/^.*QWT_CONFIG.*QwtDll.*$$/QWT_CONFIG += QwtDll/'
 endif
 
-define QWT_TWEAK_QWTCONFIG_PRI
+define QWT_CONFIGURE_CMDS
 	$(SED) $(QWT_CONFIG) $(@D)/qwtconfig.pri
+	(cd $(@D); $(TARGET_MAKE_ENV) $(QT5_QMAKE))
 endef
 
-QWT_PRE_CONFIGURE_HOOKS += QWT_TWEAK_QWTCONFIG_PRI
+define QWT_BUILD_CMDS
+	$(TARGET_MAKE_ENV) $(MAKE) -C $(@D)
+endef
 
 # After installation, we fixup the INSTALL_PREFIX in qwtconfig.pri so
 # that when building with qmake, -L$(STAGING_DIR)/usr/lib is used and
@@ -61,4 +65,4 @@ define QWT_INSTALL_TARGET_CMDS
 	rm -Rf $(TARGET_DIR)/usr/mkspecs
 endef
 
-$(eval $(qmake-package))
+$(eval $(generic-package))

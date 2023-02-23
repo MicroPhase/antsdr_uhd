@@ -12,14 +12,12 @@ endif
 
 # Not possible to directly refer to mesa3d variables, because of
 # first/second expansion trickery...
-MESA3D_HEADERS_VERSION = 22.3.0
+MESA3D_HEADERS_VERSION = 19.3.4
 MESA3D_HEADERS_SOURCE = mesa-$(MESA3D_HEADERS_VERSION).tar.xz
-MESA3D_HEADERS_SITE = https://archive.mesa3d.org
+MESA3D_HEADERS_SITE = https://mesa.freedesktop.org/archive
 MESA3D_HEADERS_DL_SUBDIR = mesa3d
 MESA3D_HEADERS_LICENSE = MIT, SGI, Khronos
-MESA3D_HEADERS_LICENSE_FILES = docs/license.rst
-MESA3D_HEADERS_CPE_ID_VENDOR = mesa3d
-MESA3D_HEADERS_CPE_ID_PRODUCT = mesa
+MESA3D_HEADERS_LICENSE_FILES = docs/license.html
 
 # Only installs header files
 MESA3D_HEADERS_INSTALL_STAGING = YES
@@ -37,14 +35,14 @@ ifeq ($(BR2_PACKAGE_XORG7),y)
 # contains -i.
 define MESA3D_HEADERS_BUILD_DRI_PC
 	sed -e 's:@VERSION@:$(MESA3D_HEADERS_VERSION):' \
-		$(MESA3D_HEADERS_PKGDIR)/dri.pc \
-		>$(@D)/src/gallium/frontends/dri/dri.pc
+	    package/mesa3d-headers/dri.pc \
+	    >$(@D)/src/mesa/drivers/dri/dri.pc
 endef
 
 define MESA3D_HEADERS_INSTALL_DRI_PC
 	$(INSTALL) -D -m 0644 $(@D)/include/GL/internal/dri_interface.h \
 		$(STAGING_DIR)/usr/include/GL/internal/dri_interface.h
-	$(INSTALL) -D -m 0644 $(@D)/src/gallium/frontends/dri/dri.pc \
+	$(INSTALL) -D -m 0644 $(@D)/src/mesa/drivers/dri/dri.pc \
 		$(STAGING_DIR)/usr/lib/pkgconfig/dri.pc
 endef
 

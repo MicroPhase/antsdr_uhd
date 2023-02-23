@@ -3,13 +3,21 @@ set_property -dict {PACKAGE_PIN V22 IOSTANDARD LVCMOS33} [get_ports CLK_40M_DAC_
 set_property -dict {PACKAGE_PIN W22 IOSTANDARD LVCMOS33} [get_ports CLK_40M_DAC_DIN]
 
 
-set_property -dict {PACKAGE_PIN V18  IOSTANDARD LVCMOS33} [get_ports PPS_IN_EXT]
+set_property -dict {PACKAGE_PIN Y18  IOSTANDARD LVCMOS33} [get_ports PPS_IN_EXT]
 set_property -dict {PACKAGE_PIN AA18 IOSTANDARD LVCMOS33} [get_ports PPS_IN_INT]
-set_property -dict {PACKAGE_PIN Y18  IOSTANDARD LVCMOS33} [get_ports CLK_40MHz_FPGA]
+set_property -dict {PACKAGE_PIN V13  IOSTANDARD LVCMOS18} [get_ports CLK_40MHz_FPGA]
 
 
 
 set_property -dict {PACKAGE_PIN Y11 IOSTANDARD LVCMOS18} [get_ports CLKIN_10MHz]
+set_property -dict {PACKAGE_PIN W11 IOSTANDARD LVCMOS18} [get_ports REF_CLK_REQ]
+
+set_property -dict {PACKAGE_PIN AA20 IOSTANDARD LVCMOS33} [get_ports PPS_LED]
+set_property -dict {PACKAGE_PIN T20  IOSTANDARD LVCMOS33} [get_ports REF_LOCKED]
+
+set_property -dict {PACKAGE_PIN Y19 IOSTANDARD LVCMOS33} [get_ports GPS_nRST]
+set_property -dict {PACKAGE_PIN Y21 IOSTANDARD LVCMOS33} [get_ports GPS_UART_TX]
+set_property -dict {PACKAGE_PIN Y22 IOSTANDARD LVCMOS33} [get_ports GPS_UART_RX]
 
 
 # #### FX3 Lines ##############################################################
@@ -141,26 +149,19 @@ set_property  -dict {PACKAGE_PIN  L19  IOSTANDARD LVCMOS18 } [get_ports CAT_FBCL
 set_property  -dict {PACKAGE_PIN  L20  IOSTANDARD LVCMOS18 } [get_ports CAT_FBCLK_N]        ;
 
 
-
-
-
-set_property  -dict {PACKAGE_PIN  V18  IOSTANDARD LVCMOS33 } [get_ports PPS_IN_EXT ]; # external pps
-set_property  -dict {PACKAGE_PIN  AA18 IOSTANDARD LVCMOS33 } [get_ports PPS_IN_INT ]; # gps pps
-
-
 set_property  -dict {PACKAGE_PIN  R18  IOSTANDARD LVCMOS33 } [get_ports FE_RX1_SEL1   ] ; # FE_TXRX1_SEL1
-set_property  -dict {PACKAGE_PIN  T18  IOSTANDARD LVCMOS33 } [get_ports FE_RX1_SEL2   ] ; # FE_TXRX1_SEL2
+# set_property  -dict {PACKAGE_PIN  T18  IOSTANDARD LVCMOS33 } [get_ports FE_RX1_SEL2   ] ; # FE_TXRX1_SEL2
 set_property  -dict {PACKAGE_PIN  N13  IOSTANDARD LVCMOS33 } [get_ports FE_RX2_SEL1     ] ; # FE_RX1_SEL1
-set_property  -dict {PACKAGE_PIN  N14  IOSTANDARD LVCMOS33 } [get_ports FE_RX2_SEL2     ] ; # FE_RX1_SEL2
+# set_property  -dict {PACKAGE_PIN  N14  IOSTANDARD LVCMOS33 } [get_ports FE_RX2_SEL2     ] ; # FE_RX1_SEL2
 set_property  -dict {PACKAGE_PIN  P14  IOSTANDARD LVCMOS33 } [get_ports FE_TXRX1_SEL1   ] ; # FE_TXRX2_SEL1
-set_property  -dict {PACKAGE_PIN  R14  IOSTANDARD LVCMOS33 } [get_ports FE_TXRX1_SEL2   ] ; # FE_TXRX2_SEL2
+# set_property  -dict {PACKAGE_PIN  R14  IOSTANDARD LVCMOS33 } [get_ports FE_TXRX1_SEL2   ] ; # FE_TXRX2_SEL2
 set_property  -dict {PACKAGE_PIN  P15  IOSTANDARD LVCMOS33 } [get_ports FE_TXRX2_SEL1     ] ; # FE_RX2_SEL1
-set_property  -dict {PACKAGE_PIN  R16  IOSTANDARD LVCMOS33 } [get_ports FE_TXRX2_SEL2     ] ; # FE_RX2_SEL2
+# set_property  -dict {PACKAGE_PIN  R16  IOSTANDARD LVCMOS33 } [get_ports FE_TXRX2_SEL2     ] ; # FE_RX2_SEL2
 
 set_property  -dict {PACKAGE_PIN  N17  IOSTANDARD LVCMOS33 } [get_ports tx_amp_en1 ]; # TX AMP power enable
 set_property  -dict {PACKAGE_PIN  P17  IOSTANDARD LVCMOS33 } [get_ports tx_amp_en2 ]; # TX AMP power enable
 # set_property  -dict {PACKAGE_PIN  U17  IOSTANDARD LVCMOS33 } [get_ports rx_bais_en ]; # TX AMP power enable
 # set_property  -dict {PACKAGE_PIN  U18  IOSTANDARD LVCMOS33 } [get_ports tx_bais_en ]; # TX AMP power enable
-set_property  -dict {PACKAGE_PIN  Y19  IOSTANDARD LVCMOS33 } [get_ports clk_sel]        ;
+# set_property  -dict {PACKAGE_PIN  Y19  IOSTANDARD LVCMOS33 } [get_ports clk_sel]        ;
 
 set_property BITSTREAM.GENERAL.COMPRESS TRUE [current_design]

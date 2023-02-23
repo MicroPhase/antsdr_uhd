@@ -129,8 +129,6 @@ static const struct str_len_s unsafe_paths[] = {
 	STR_LEN(/usr/lib),
 	STR_LEN(/usr/local/include),
 	STR_LEN(/usr/local/lib),
-	STR_LEN(/usr/X11R6/include),
-	STR_LEN(/usr/X11R6/lib),
 	{ NULL, 0 },
 };
 
@@ -507,10 +505,8 @@ int main(int argc, char **argv)
 
 	exec_args = args;
 #ifdef BR_CCACHE
-	/* If BR2_USE_CCACHE is not defined, or its value is not 1,
-	 * skip the ccache call */
-	char *br_use_ccache = getenv("BR2_USE_CCACHE");
-	if (!br_use_ccache || strncmp(br_use_ccache, "1", strlen("1")))
+	if (getenv("BR_NO_CCACHE"))
+		/* Skip the ccache call */
 		exec_args++;
 #endif
 

@@ -8,18 +8,11 @@ CAIRO_VERSION = 1.16.0
 CAIRO_SOURCE = cairo-$(CAIRO_VERSION).tar.xz
 CAIRO_LICENSE = LGPL-2.1 or MPL-1.1 (library)
 CAIRO_LICENSE_FILES = COPYING COPYING-LGPL-2.1 COPYING-MPL-1.1
-CAIRO_CPE_ID_VENDOR = cairographics
 CAIRO_SITE = http://cairographics.org/releases
 CAIRO_INSTALL_STAGING = YES
 
 # 0002-ft-Use-FT_Done_MM_Var-instead-of-free-when-available-in-cairo_ft_apply_variation.patch
 CAIRO_IGNORE_CVES += CVE-2018-19876
-# 0003-_arc_max_angle_for_tolerance_normalized-fix-infinite.patch
-CAIRO_IGNORE_CVES += CVE-2019-6462
-# 0004-Fix-mask-usage-in-image-compositor.patch
-CAIRO_IGNORE_CVES += CVE-2020-35492
-
-CAIRO_CONF_ENV = LIBS="$(CAIRO_LIBS)"
 
 # relocation truncated to fit: R_68K_GOT16O
 ifeq ($(BR2_m68k_cf),y)
@@ -33,7 +26,7 @@ endif
 # cairo can use C++11 atomics when available, so we need to link with
 # libatomic for the architectures who need libatomic.
 ifeq ($(BR2_TOOLCHAIN_HAS_LIBATOMIC),y)
-CAIRO_LIBS += -latomic
+CAIRO_CONF_ENV += LIBS="-latomic"
 endif
 
 CAIRO_CONF_OPTS = \
@@ -48,7 +41,7 @@ HOST_CAIRO_CONF_OPTS = \
 	--enable-interpreter=no \
 	--disable-directfb \
 	--enable-ft \
-	--enable-gobject \
+	--disable-gobject \
 	--disable-glesv2 \
 	--disable-vg \
 	--disable-xlib \
@@ -58,14 +51,13 @@ HOST_CAIRO_CONF_OPTS = \
 	--disable-ps \
 	--disable-pdf \
 	--enable-png \
-	--enable-script \
+	--disable-script \
 	--disable-svg \
 	--disable-tee \
 	--disable-xml
 HOST_CAIRO_DEPENDENCIES = \
 	host-freetype \
 	host-fontconfig \
-	host-libglib2 \
 	host-libpng \
 	host-pixman \
 	host-pkgconf
@@ -85,11 +77,6 @@ CAIRO_CONF_OPTS += --enable-ft
 CAIRO_DEPENDENCIES += freetype
 else
 CAIRO_CONF_OPTS += --disable-ft
-endif
-
-ifeq ($(BR2_PACKAGE_LIBEXECINFO),y)
-CAIRO_DEPENDENCIES += libexecinfo
-CAIRO_LIBS += -lexecinfo
 endif
 
 ifeq ($(BR2_PACKAGE_LIBGLIB2),y)

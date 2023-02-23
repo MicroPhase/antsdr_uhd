@@ -4,15 +4,12 @@
 #
 ################################################################################
 
-MC_VERSION = 4.8.28
+MC_VERSION = 4.8.23
 MC_SOURCE = mc-$(MC_VERSION).tar.xz
 MC_SITE = http://ftp.midnight-commander.org
 MC_LICENSE = GPL-3.0+
 MC_LICENSE_FILES = COPYING
-MC_DEPENDENCIES = libglib2 host-pkgconf $(TARGET_NLS_DEPENDENCIES)
-MC_CONF_ENV = \
-	CFLAGS="$(TARGET_CFLAGS) -std=c99" \
-	LIBS=$(TARGET_NLS_LIBS)
+MC_DEPENDENCIES = libglib2 host-pkgconf
 
 ifeq ($(BR2_PACKAGE_GPM),y)
 MC_CONF_OPTS += --with-gpm-mouse

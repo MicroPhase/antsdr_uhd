@@ -4,22 +4,18 @@
 #
 ################################################################################
 
-KVM_UNIT_TESTS_VERSION = 2022-03-08
-KVM_UNIT_TESTS_SOURCE = kvm-unit-tests-v$(KVM_UNIT_TESTS_VERSION).tar.bz2
-KVM_UNIT_TESTS_SITE = https://gitlab.com/kvm-unit-tests/kvm-unit-tests/-/archive/v$(KVM_UNIT_TESTS_VERSION)
-KVM_UNIT_TESTS_LICENSE = GPL-2.0, LGPL-2.0
+KVM_UNIT_TESTS_VERSION = kvm-unit-tests-20171020
+KVM_UNIT_TESTS_SITE = https://git.kernel.org/pub/scm/virt/kvm/kvm-unit-tests.git
+KVM_UNIT_TESTS_SITE_METHOD = git
+KVM_UNIT_TESTS_LICENSE = LGPL-2.0
 KVM_UNIT_TESTS_LICENSE_FILES = COPYRIGHT
 
-ifeq ($(BR2_aarch64)$(BR2_aarch64_be),y)
-KVM_UNIT_TESTS_ARCH = aarch64
-else ifeq ($(BR2_arm),y)
+ifeq ($(BR2_arm),y)
 KVM_UNIT_TESTS_ARCH = arm
 else ifeq ($(BR2_i386),y)
 KVM_UNIT_TESTS_ARCH = i386
 else ifeq ($(BR2_powerpc64)$(BR2_powerpc64le),y)
 KVM_UNIT_TESTS_ARCH = ppc64
-else ifeq ($(BR2_s390x),y)
-KVM_UNIT_TESTS_ARCH = s390x
 else ifeq ($(BR2_x86_64),y)
 KVM_UNIT_TESTS_ARCH = x86_64
 endif
@@ -39,7 +35,13 @@ KVM_UNIT_TESTS_CONF_OPTS =\
 # compiler. However, for x86-64, we use the host compiler, as
 # kvm-unit-tests builds 32 bit code, which Buildroot toolchains for
 # x86-64 cannot do.
-ifeq ($(BR2_x86_64),)
+ifeq ($(BR2_x86_64),y)
+# Arch Linux adds -fstack-protector even when building with -ffreestanding, but
+# it doesn't link with the stack-protector library when -nostdlib is passed,
+# which leads to a link error. Therefore, disable it explicitly to work around
+# this bug in Arch Linux. https://bugs.archlinux.org/task/64270
+KVM_UNIT_TESTS_MAKE_OPTS += EXTRA_CFLAGS=-fno-stack-protector
+else
 KVM_UNIT_TESTS_CONF_OPTS += --cross-prefix="$(TARGET_CROSS)"
 endif
 

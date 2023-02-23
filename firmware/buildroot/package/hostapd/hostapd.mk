@@ -4,17 +4,26 @@
 #
 ################################################################################
 
-HOSTAPD_VERSION = 2.10
+HOSTAPD_VERSION = 2.9
 HOSTAPD_SITE = http://w1.fi/releases
 HOSTAPD_SUBDIR = hostapd
 HOSTAPD_CONFIG = $(HOSTAPD_DIR)/$(HOSTAPD_SUBDIR)/.config
+HOSTAPD_PATCH = \
+	https://w1.fi/security/2020-1/0001-WPS-UPnP-Do-not-allow-event-subscriptions-with-URLs-.patch \
+	https://w1.fi/security/2020-1/0002-WPS-UPnP-Fix-event-message-generation-using-a-long-U.patch \
+	https://w1.fi/security/2020-1/0003-WPS-UPnP-Handle-HTTP-initiation-failures-for-events-.patch
 HOSTAPD_DEPENDENCIES = host-pkgconf
 HOSTAPD_CFLAGS = $(TARGET_CFLAGS)
 HOSTAPD_LICENSE = BSD-3-Clause
 HOSTAPD_LICENSE_FILES = README
 
-HOSTAPD_CPE_ID_VENDOR = w1.fi
-HOSTAPD_SELINUX_MODULES = hostapd
+# 0001-AP-Silently-ignore-management-frame-from-unexpected-.patch
+HOSTAPD_IGNORE_CVES += CVE-2019-16275
+
+# 0001-WPS-UPnP-Do-not-allow-event-subscriptions-with-URLs-.patch
+HOSTAPD_IGNORE_CVES += CVE-2020-12695
+
+HOSTAPD_CONFIG_SET =
 
 HOSTAPD_CONFIG_ENABLE = \
 	CONFIG_INTERNAL_LIBTOMMATH \
@@ -82,16 +91,13 @@ HOSTAPD_CONFIG_ENABLE += CONFIG_WPS
 endif
 
 ifeq ($(BR2_PACKAGE_HOSTAPD_WPA3),y)
-HOSTAPD_CONFIG_ENABLE += \
+HOSTAPD_CONFIG_SET += \
 	CONFIG_DPP \
-	CONFIG_SAE \
-	CONFIG_SAE_PK \
+	CONFIG_SAE
+HOSTAPD_CONFIG_ENABLE += \
 	CONFIG_OWE
 else
 HOSTAPD_CONFIG_DISABLE += \
-	CONFIG_DPP \
-	CONFIG_SAE \
-	CONFIG_SAE_PK \
 	CONFIG_OWE
 endif
 
@@ -100,9 +106,8 @@ HOSTAPD_CONFIG_ENABLE += CONFIG_NO_VLAN
 endif
 
 ifeq ($(BR2_PACKAGE_HOSTAPD_VLAN_DYNAMIC),y)
-HOSTAPD_CONFIG_ENABLE += \
-	CONFIG_FULL_DYNAMIC_VLAN \
-	NEED_LINUX_IOCTL
+HOSTAPD_CONFIG_ENABLE += CONFIG_FULL_DYNAMIC_VLAN
+HOSTAPD_CONFIG_SET += NEED_LINUX_IOCTL
 endif
 
 ifeq ($(BR2_PACKAGE_HOSTAPD_VLAN_NETLINK),y)
@@ -126,14 +131,9 @@ define HOSTAPD_CONFIGURE_CMDS
 	cp $(@D)/hostapd/defconfig $(HOSTAPD_CONFIG)
 	sed -i $(patsubst %,-e 's/^#\(%\)/\1/',$(HOSTAPD_CONFIG_ENABLE)) \
 		$(patsubst %,-e 's/^\(%\)/#\1/',$(HOSTAPD_CONFIG_DISABLE)) \
+		$(patsubst %,-e '1i%=y',$(HOSTAPD_CONFIG_SET)) \
 		$(patsubst %,-e %,$(HOSTAPD_CONFIG_EDITS)) \
 		$(HOSTAPD_CONFIG)
-	# set requested configuration options not listed in hostapd defconfig
-	for s in $(HOSTAPD_CONFIG_ENABLE) ; do \
-		if ! grep -q "^$${s}" $(HOSTAPD_CONFIG); then \
-			echo "$${s}=y" >> $(HOSTAPD_CONFIG) ; \
-		fi \
-	done
 endef
 
 define HOSTAPD_BUILD_CMDS

@@ -14,47 +14,13 @@ The source code is the UHD driver developed by Ettus, and we have added the driv
 ### ANTSDR-E310v2/ANTSDR-E200 for linux user
 - Step 1
   
-    Download the pre-built image from the [release](https://github.com/MicroPhase/antsdr_uhd/releases/tag/v0.1).
+    Download the pre-built image from the [release](https://github.com/MicroPhase/antsdr_uhd/releases/tag/v1.0).
 
 - Step 2
   
     Burn the pre-built image into a SD card.
-    Insert your SD card into you computer, using dmesg to get the sd card mount point.
+    Format sd card as fat32 partition,and copy all files in the build_sdimg directory to the sd card partition.
   
-    ```bash
-    mp@mp-dev:~$ dmesg
-    ....
-    [37670.989975] usb 1-1: new high-speed USB device number 10 using xhci_hcd
-    [37671.139058] usb 1-1: New USB device found, idVendor=14cd, idProduct=1212, bcdDevice= 1.00
-    [37671.139072] usb 1-1: New USB device strings: Mfr=1, Product=3, SerialNumber=2
-    [37671.139080] usb 1-1: Product: Mass Storage Device
-    [37671.139085] usb 1-1: Manufacturer: Generic
-    [37671.139090] usb 1-1: SerialNumber: 121220160204
-    [37671.141361] usb-storage 1-1:1.0: USB Mass Storage device detected
-    [37671.141873] scsi host6: usb-storage 1-1:1.0
-    [37672.154569] scsi 6:0:0:0: Direct-Access     Mass     Storage Device   1.00 PQ: 0 ANSI: 0 CCS
-    [37672.154976] sd 6:0:0:0: Attached scsi generic sg1 type 0
-    [37672.349510] sd 6:0:0:0: [sdb] 15499264 512-byte logical blocks: (7.94 GB/7.39 GiB)
-    [37672.349667] sd 6:0:0:0: [sdb] Write Protect is off
-    [37672.349669] sd 6:0:0:0: [sdb] Mode Sense: 03 00 00 00
-    [37672.349784] sd 6:0:0:0: [sdb] No Caching mode page found
-    [37672.349787] sd 6:0:0:0: [sdb] Assuming drive cache: write through
-    [37672.352052]  sdb: sdb1 sdb2
-    [37672.352912] sd 6:0:0:0: [sdb] Attached SCSI removable disk
-    [37672.998628] EXT4-fs (sdb2): recovery complete
-    [37673.002491] EXT4-fs (sdb2): mounted filesystem with ordered data mode. Opts: (null). Quota mode: none.
-    [37673.013769] FAT-fs (sdb1): Volume was not properly unmounted. Some data may be corrupt. Please run fsck.
-    ```
-    As you can see, the sdcard mount point is /dev/sdb. Then you can burn the sd card with dd command.
-    Actually, you can delete all the partition of your sd card first.
-    ```bash
-    dd if=/path/to/your/download/image of=/path/to/your/sd/mount point bs=2M
-    ```
-    for example:
-    ```bash
-    dd if=~/e200.img of=/dev/sdb bs=2M
-    sync
-    ```
 - Step 3
   
     Insert the SD card into the ANTSDR-E200/E310v2's SD card slot, and power on the device.
