@@ -4,19 +4,18 @@
 #
 ################################################################################
 
-INADYN_VERSION = 2.10.0
+INADYN_VERSION = 2.5
 INADYN_SITE = https://github.com/troglobit/inadyn/releases/download/v$(INADYN_VERSION)
+INADYN_SOURCE = inadyn-$(INADYN_VERSION).tar.xz
 INADYN_LICENSE = GPL-2.0+
 INADYN_LICENSE_FILES = COPYING
-INADYN_DEPENDENCIES = host-pkgconf libconfuse
+INADYN_DEPENDENCIES = host-pkgconf libconfuse libite
 
 ifeq ($(BR2_PACKAGE_OPENSSL),y)
 INADYN_CONF_OPTS += --enable-openssl
 INADYN_DEPENDENCIES += openssl
 else ifeq ($(BR2_PACKAGE_GNUTLS),y)
 INADYN_DEPENDENCIES += gnutls
-else ifeq ($BR2_PACKAGE_MBEDTLS, y)
-INADYN_DEPENDENCIES += mbedtls
 else
 INADYN_CONF_OPTS += --disable-ssl
 endif
@@ -33,7 +32,7 @@ define INADYN_INSTALL_INIT_SYSV
 endef
 
 define INADYN_INSTALL_INIT_SYSTEMD
-	$(INSTALL) -D -m 644 $(@D)/inadyn.service \
+	$(INSTALL) -D -m 644 package/inadyn/inadyn.service \
 		$(TARGET_DIR)/usr/lib/systemd/system/inadyn.service
 endef
 

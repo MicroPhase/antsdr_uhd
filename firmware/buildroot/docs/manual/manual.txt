@@ -38,8 +38,6 @@ include::common-usage.txt[]
 
 include::customize.txt[]
 
-include::integration.txt[]
-
 include::faq-troubleshooting.txt[]
 
 include::known-issues.txt[]

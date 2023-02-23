@@ -4,13 +4,12 @@
 #
 ################################################################################
 
-PERL_CRYPT_OPENSSL_RSA_VERSION = 0.33
+PERL_CRYPT_OPENSSL_RSA_VERSION = 0.31
 PERL_CRYPT_OPENSSL_RSA_SOURCE = Crypt-OpenSSL-RSA-$(PERL_CRYPT_OPENSSL_RSA_VERSION).tar.gz
 PERL_CRYPT_OPENSSL_RSA_SITE = $(BR2_CPAN_MIRROR)/authors/id/T/TO/TODDR
 PERL_CRYPT_OPENSSL_RSA_DEPENDENCIES = \
 	host-perl-crypt-openssl-guess \
-	perl-crypt-openssl-random \
-	openssl
+	perl-crypt-openssl-random
 PERL_CRYPT_OPENSSL_RSA_LICENSE = Artistic or GPL-1.0+
 PERL_CRYPT_OPENSSL_RSA_LICENSE_FILES = LICENSE
 PERL_CRYPT_OPENSSL_RSA_DISTNAME = Crypt-OpenSSL-RSA

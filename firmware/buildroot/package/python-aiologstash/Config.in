@@ -1,5 +1,6 @@
 config BR2_PACKAGE_PYTHON_AIOLOGSTASH
 	bool "python-aiologstash"
+	depends on BR2_PACKAGE_PYTHON3
 	select BR2_PACKAGE_PYTHON_ASYNC_TIMEOUT # runtime
 	select BR2_PACKAGE_PYTHON_LOGSTASH # runtime
 	help

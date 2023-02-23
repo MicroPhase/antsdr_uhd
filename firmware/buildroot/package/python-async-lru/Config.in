@@ -1,5 +1,6 @@
 config BR2_PACKAGE_PYTHON_ASYNC_LRU
 	bool "python-async-lru"
+	depends on BR2_PACKAGE_PYTHON3
 	help
 	  Simple lru_cache for asyncio.
 

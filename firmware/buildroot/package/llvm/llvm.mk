@@ -5,12 +5,11 @@
 ################################################################################
 
 # LLVM, Clang and lld should be version bumped together
-LLVM_VERSION = 11.1.0
+LLVM_VERSION = 9.0.1
 LLVM_SITE = https://github.com/llvm/llvm-project/releases/download/llvmorg-$(LLVM_VERSION)
 LLVM_SOURCE = llvm-$(LLVM_VERSION).src.tar.xz
 LLVM_LICENSE = Apache-2.0 with exceptions
 LLVM_LICENSE_FILES = LICENSE.TXT
-LLVM_CPE_ID_VENDOR = llvm
 LLVM_SUPPORTS_IN_SOURCE_BUILD = NO
 LLVM_INSTALL_STAGING = YES
 
@@ -41,13 +40,8 @@ HOST_LLVM_CONF_OPTS += -DCMAKE_INSTALL_RPATH="$(HOST_DIR)/lib"
 # Get target architecture
 LLVM_TARGET_ARCH = $(call qstrip,$(BR2_PACKAGE_LLVM_TARGET_ARCH))
 
-# Build backend for target architecture. This include backends like
-# AMDGPU. We need to special case RISCV.
-ifneq ($(filter riscv%,$(LLVM_TARGET_ARCH)),)
-LLVM_TARGETS_TO_BUILD = RISCV
-else
+# Build backend for target architecture. This include backends like AMDGPU.
 LLVM_TARGETS_TO_BUILD = $(LLVM_TARGET_ARCH)
-endif
 HOST_LLVM_CONF_OPTS += -DLLVM_TARGETS_TO_BUILD="$(subst $(space),;,$(LLVM_TARGETS_TO_BUILD))"
 LLVM_CONF_OPTS += -DLLVM_TARGETS_TO_BUILD="$(subst $(space),;,$(LLVM_TARGETS_TO_BUILD))"
 
@@ -65,11 +59,6 @@ LLVM_CONF_OPTS += -DLLVM_TARGET_ARCH=$(LLVM_TARGET_ARCH)
 # it thinks AMDGPU backend is not installed on the target.
 ifeq ($(BR2_PACKAGE_LLVM_AMDGPU),y)
 LLVM_TARGETS_TO_BUILD += AMDGPU
-endif
-
-# Build BPF backend
-ifeq ($(BR2_PACKAGE_LLVM_BPF),y)
-LLVM_TARGETS_TO_BUILD += BPF
 endif
 
 # Use native llvm-tblgen from host-llvm (needed for cross-compilation)
@@ -162,9 +151,15 @@ LLVM_CONF_OPTS += -DLLVM_ENABLE_PIC=ON
 HOST_LLVM_CONF_OPTS += -DCMAKE_BUILD_TYPE=Release
 LLVM_CONF_OPTS += -DCMAKE_BUILD_TYPE=Release
 
-# Compile llvm with the C++14 (ISO C++ 2014 standard).
-HOST_LLVM_CONF_OPTS += -DCMAKE_CXX_STANDARD=14
-LLVM_CONF_OPTS += -DCMAKE_CXX_STANDARD=14
+# Disable C++1y (ISO C++ 2014 standard)
+# Disable C++1z (ISO C++ 2017 standard)
+# Compile llvm with the C++11 (ISO C++ 2011 standard) which is the fallback.
+HOST_LLVM_CONF_OPTS += \
+	-DLLVM_ENABLE_CXX1Y=OFF \
+	-DLLVM_ENABLE_CXX1Z=OFF
+LLVM_CONF_OPTS += \
+	-DLLVM_ENABLE_CXX1Y=OFF \
+	-DLLVM_ENABLE_CXX1Z=OFF
 
 # Disabled, requires sys/ndir.h header
 # Disable debug in module
@@ -194,8 +189,11 @@ LLVM_CONF_OPTS += -DLLVM_DEFAULT_TARGET_TRIPLE=$(GNU_TARGET_NAME)
 # This solves "No available targets are compatible for this triple" with llvmpipe
 LLVM_CONF_OPTS += -DLLVM_HOST_TRIPLE=$(GNU_TARGET_NAME)
 
-# Building the Go and OCaml bindings is yet unsupported.
+# The Go bindings have no CMake rules at the moment, but better remove the
+# check preventively. Building the Go and OCaml bindings is yet unsupported.
 HOST_LLVM_CONF_OPTS += \
+	-DGO_EXECUTABLE=GO_EXECUTABLE-NOTFOUND \
+	-DOCAMLFIND=OCAMLFIND-NOTFOUND \
 	-DLLVM_ENABLE_BINDINGS=OFF
 
 # Builds a release host tablegen that gets used during the LLVM build.
@@ -219,7 +217,8 @@ HOST_LLVM_CONF_OPTS += \
 # We need to activate LLVM_INCLUDE_TOOLS, otherwise it does not generate
 # libLLVM.so
 LLVM_CONF_OPTS += \
-	-DLLVM_INCLUDE_TOOLS=ON
+	-DLLVM_INCLUDE_TOOLS=ON \
+	-DLLVM_BUILD_TOOLS=OFF
 
 ifeq ($(BR2_PACKAGE_LLVM_RTTI),y)
 HOST_LLVM_CONF_OPTS += -DLLVM_ENABLE_RTTI=ON
@@ -235,11 +234,13 @@ endif
 HOST_LLVM_CONF_OPTS += \
 	-DLLVM_BUILD_EXTERNAL_COMPILER_RT=OFF \
 	-DLLVM_BUILD_RUNTIME=OFF \
-	-DLLVM_INCLUDE_RUNTIMES=OFF
+	-DLLVM_INCLUDE_RUNTIMES=OFF \
+	-DLLVM_POLLY_BUILD=OFF
 LLVM_CONF_OPTS += \
 	-DLLVM_BUILD_EXTERNAL_COMPILER_RT=OFF \
 	-DLLVM_BUILD_RUNTIME=OFF \
-	-DLLVM_INCLUDE_RUNTIMES=OFF
+	-DLLVM_INCLUDE_RUNTIMES=OFF \
+	-DLLVM_POLLY_BUILD=OFF
 
 HOST_LLVM_CONF_OPTS += \
 	-DLLVM_ENABLE_WARNINGS=ON \
@@ -282,25 +283,11 @@ LLVM_CONF_OPTS += \
 # directories from STAGING_DIR.
 # output/staging/usr/bin/llvm-config --includedir
 # output/staging/usr/include
-define LLVM_COPY_LLVM_CONFIG_TO_STAGING_DIR
+define HOST_LLVM_COPY_LLVM_CONFIG_TO_STAGING_DIR
 	$(INSTALL) -D -m 0755 $(HOST_DIR)/bin/llvm-config \
 		$(STAGING_DIR)/usr/bin/llvm-config
 endef
-HOST_LLVM_POST_INSTALL_HOOKS = LLVM_COPY_LLVM_CONFIG_TO_STAGING_DIR
-
-# The llvm-symbolizer binary is used by the Compiler-RT Fuzzer
-# and AddressSanitizer tools on the target for stack traces.
-# If we set -DLLVM_BUILD_TOOLS=ON this will also install the llvm-config
-# target binary to STAGING_DIR, which means we can no longer run it.
-# Therefore, overwrite it again with the host llvm-config.
-ifeq ($(BR2_PACKAGE_COMPILER_RT),y)
-LLVM_CONF_OPTS += \
-	-DLLVM_BUILD_TOOLS=ON
-LLVM_POST_INSTALL_STAGING_HOOKS = LLVM_COPY_LLVM_CONFIG_TO_STAGING_DIR
-else
-LLVM_CONF_OPTS += \
-	-DLLVM_BUILD_TOOLS=OFF
-endif
+HOST_LLVM_POST_INSTALL_HOOKS = HOST_LLVM_COPY_LLVM_CONFIG_TO_STAGING_DIR
 
 # By default llvm-tblgen is built and installed on the target but it is
 # not necessary. Also erase LLVMHello.so from /usr/lib

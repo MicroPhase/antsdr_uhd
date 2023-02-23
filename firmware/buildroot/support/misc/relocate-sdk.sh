@@ -1,20 +1,15 @@
 #!/bin/sh
-
-if [ "$#" -gt 1 ]; then
-    echo "Usage: $0 [path]"
-    echo "Run this script to relocate the buildroot SDK to the current location"
-    echo "If [path] is given, sets the location to [path] (without moving it)"
+#
+if [ "$#" -ne 0 ]; then
+    echo "Run this script to relocate the buildroot SDK at that location"
     exit 1
 fi
 
-cd "$(dirname "$(readlink -f "$0")")"
-if [ "$#" -eq 1 ]; then
-    NEWPATH="$1"
-else
-    NEWPATH="${PWD}"
-fi
-
 LOCFILE="share/buildroot/sdk-location"
+FILEPATH="$(readlink -f "$0")"
+NEWPATH="$(dirname "${FILEPATH}")"
+
+cd "${NEWPATH}"
 if [ ! -r "${LOCFILE}" ]; then
     echo "Previous location of the buildroot SDK not found!"
     exit 1

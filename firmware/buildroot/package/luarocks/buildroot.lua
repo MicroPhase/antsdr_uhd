@@ -265,10 +265,10 @@ local function generate_hash (rockspec, lcname, rock_file, licenses, digest)
    local f = assert(io.open(fname, 'w'))
    util.printout('write ' .. fname)
    f:write('# computed by luarocks/buildroot\n')
-   f:write('sha256  ' .. digest[rock_file] .. '  ' .. rock_file .. '\n')
+   f:write('sha256 ' .. digest[rock_file] .. '  ' .. rock_file .. '\n')
    for i = 1, #licenses do
       local file = licenses[i]
-      f:write('sha256  ' .. digest[file] .. '  ' .. subdir .. '/' .. file .. '\n')
+      f:write('sha256 ' .. digest[file] .. '  ' .. subdir .. '/' .. file .. '\n')
    end
    f:close()
 end
@@ -380,8 +380,8 @@ function buildroot.command(args)
    if #licenses == 0 then
       for i = 1, #files do
          local v = files[i]
-         if v:match('^docs?/LICENSE')
-            or v:match('^docs?/license')
+         if v:match('^doc/LICENSE')
+            or v:match('^doc/license')
             or v:match('^doc/us/license') then
             licenses[#licenses+1] = v
             digest[v], err = get_digest(v)

@@ -4,11 +4,10 @@
 #
 ################################################################################
 
-I2PD_VERSION = 2.43.0
+I2PD_VERSION = 2.29.0
 I2PD_SITE = $(call github,PurpleI2P,i2pd,$(I2PD_VERSION))
 I2PD_LICENSE = BSD-3-Clause
 I2PD_LICENSE_FILES = LICENSE
-I2PD_CPE_ID_VENDOR = i2pd
 I2PD_SUBDIR = build
 I2PD_DEPENDENCIES = \
 	boost \
@@ -16,6 +15,11 @@ I2PD_DEPENDENCIES = \
 	zlib
 
 I2PD_CONF_OPTS += -DWITH_GUI=OFF
+
+# Before CMake 3.10, passing THREADS_PTHREAD_ARG=OFF was needed to
+# disable a try_run() call in the FindThreads tests, which caused a
+# build failure when cross-compiling.
+I2PD_CONF_OPTS += -DTHREADS_PTHREAD_ARG=OFF
 
 ifeq ($(BR2_TOOLCHAIN_HAS_LIBATOMIC),y)
 I2PD_CONF_OPTS += \

@@ -1,5 +1,6 @@
 config BR2_PACKAGE_QT5WEBCHANNEL
 	bool "qt5webchannel"
+	select BR2_PACKAGE_QT5BASE
 	select BR2_PACKAGE_QT5WEBSOCKETS
 	help
 	  Qt is a cross-platform application and UI framework for
@@ -9,4 +10,4 @@ config BR2_PACKAGE_QT5WEBCHANNEL
 	  a server (QML/C++ application) and a client
 	  (HTML/JavaScript or QML application).
 
-	  https://doc.qt.io/qt-5/qtwebchannel-index.html
+	  http://doc.qt.io/qt-5/qtwebchannel-index.html

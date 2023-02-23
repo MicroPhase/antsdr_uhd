@@ -18,6 +18,7 @@ add_files {
     ./ip/fifo_4k_2clk/fifo_4k_2clk.xci
     ./ip/fifo_short_2clk/fifo_short_2clk.xci
     ./ip/gen_clks/gen_clks.xci 
+    ./ip/vio_0/vio_0.xci
 
     ../lib/ngc/hbdec2.ngc
     ../lib/ngc/hbdec1.ngc
@@ -118,6 +119,7 @@ update_compile_order -fileset sources_1
 # add constrain file
 add_files -fileset constrs_1 -norecurse ./xdc/u220.xdc
 
+set_property STEPS.WRITE_BITSTREAM.ARGS.BIN_FILE true [get_runs impl_1]
 # generate bit stream
 launch_runs impl_1 -to_step write_bitstream -jobs 6
 wait_on_run impl_1 

@@ -93,12 +93,19 @@ module antsdr_u220 (
 
         // AD936x - Always on 40MHz clock:
         input  wire	 			CLK_40MHz_FPGA  ,
-        output wire             clk_sel,
 
         // PPS or 10 MHz 
         input  wire             PPS_IN_EXT      ,
         input  wire             PPS_IN_INT      ,
         input  wire             CLKIN_10MHz     ,
+        output wire             REF_CLK_REQ     ,
+
+        output wire             PPS_LED         ,
+        output wire             REF_LOCKED      ,
+
+        output wire             GPS_nRST        ,
+        output wire             GPS_UART_TX     ,
+        input  wire             GPS_UART_RX     ,
 
         // Clock disciplining / AD5662 controls
         output wire             CLK_40M_DAC_nSYNC,
@@ -109,13 +116,9 @@ module antsdr_u220 (
         output wire             tx_amp_en1,
         output wire             tx_amp_en2,
         output wire             FE_RX1_SEL1,
-        output wire             FE_RX1_SEL2,
         output wire             FE_RX2_SEL1,
-        output wire             FE_RX2_SEL2,
         output wire             FE_TXRX1_SEL1,
-        output wire             FE_TXRX1_SEL2,
-        output wire             FE_TXRX2_SEL1,
-        output wire             FE_TXRX2_SEL2
+        output wire             FE_TXRX2_SEL1
 
     );
 
@@ -136,8 +139,6 @@ module antsdr_u220 (
     ///////////////////////////////////////////////////////////////////////
     wire locked;
 
-    assign clk_sel = 1'b1;
-
 
     // Synchronous reset for the bus_clk domain
     reset_sync bus_reset_gen (
@@ -147,6 +148,8 @@ module antsdr_u220 (
     );
 
     assign global_rst = bus_rst;
+
+    assign GPS_nRST = 1'b1;
 
     /////////////////////////////////////////////////////////////////////
     //
@@ -200,6 +203,9 @@ module antsdr_u220 (
 
     assign refsel = (pps_select == 2'b01 || pps_select == 2'b10) ? 2'b11 : 
                     (pps_select == 2'b00)? 2'b00: 2'b01;
+    assign REF_CLK_REQ = 1'b1;
+    assign PPS_LED = lpps;
+    assign REF_LOCKED = ext_ref_locked;
 
     gen_clks u_gen_clocks_main(
         .clk_out1(),
@@ -228,10 +234,18 @@ module antsdr_u220 (
         .sclk    ( CLK_40M_DAC_SCLK    ),
         .mosi    ( CLK_40M_DAC_DIN    ),
         .sync_n  ( CLK_40M_DAC_nSYNC  ),
-        .dac_dflt  ( 16'h7fff  )
+        .dac_dflt  ( 16'hBfff  )
     );
 
-
+    vio_0 u_vio_0 (
+        .clk(bus_clk),              // input wire clk
+        .probe_in0(pps_select),  // input wire [1 : 0] probe_in0
+        .probe_in1(is10meg),  // input wire [0 : 0] probe_in1
+        .probe_in2(ispps),  // input wire [0 : 0] probe_in2
+        .probe_in3(ext_ref_locked),  // input wire [0 : 0] probe_in3
+        .probe_in4(ref_sel),  // input wire [0 : 0] probe_in4
+        .probe_in5(lpps)  // input wire [0 : 0] probe_in5
+      );
     ///////////////////////////////////////////////////////////////////////
     // AD936x I/O
     ///////////////////////////////////////////////////////////////////////
@@ -299,11 +313,16 @@ module antsdr_u220 (
        fe0_gpio <= swap_atr_n ? radio1_gpio : radio0_gpio;
        fe1_gpio <= swap_atr_n ? radio0_gpio : radio1_gpio;
     end
- 
-    // assign {tx_amp_en1, SFDX1_RX, SFDX1_TX, SRX1_RX, SRX1_TX} = fe0_gpio[7:3];
-    // assign {tx_amp_en2, SFDX2_RX, SFDX2_TX, SRX2_RX, SRX2_TX} = fe1_gpio[7:3];
-    assign {tx_amp_en1, FE_RX1_SEL2, FE_TXRX1_SEL2, FE_RX1_SEL1, FE_TXRX1_SEL1} = fe0_gpio[7:3];
-    assign {tx_amp_en2, FE_RX2_SEL1, FE_TXRX2_SEL1, FE_RX2_SEL2, FE_TXRX2_SEL2} = fe1_gpio[7:3];
+    wire SFDX1_RX, SFDX1_TX, SRX1_RX, SRX1_TX;
+    wire SFDX2_RX, SFDX2_TX, SRX2_RX, SRX2_TX;
+    assign {tx_amp_en1, SFDX1_RX, SFDX1_TX, SRX1_RX, SRX1_TX} = fe0_gpio[7:3];
+    assign {tx_amp_en2, SFDX2_RX, SFDX2_TX, SRX2_RX, SRX2_TX} = fe1_gpio[7:3];
+    // assign {tx_amp_en1, FE_RX1_SEL2, FE_TXRX1_SEL2, FE_RX1_SEL1, FE_TXRX1_SEL1} = fe0_gpio[7:3];
+    // assign {tx_amp_en2, FE_RX2_SEL1, FE_TXRX2_SEL1, FE_RX2_SEL2, FE_TXRX2_SEL2} = fe1_gpio[7:3];
+    assign FE_TXRX1_SEL1 = (SFDX1_TX==1'b0 && SRX1_TX==1'b1) ? 1'b0 : 1'b1;
+    assign FE_RX1_SEL1 = (SFDX1_RX==1'b0 && SRX1_RX==1'b1) ? 1'b0 : 1'b1;
+    assign FE_TXRX2_SEL1 = (SFDX2_TX==1'b0 && SRX2_TX==1'b1) ? 1'b1 : 1'b0 ;
+    assign FE_RX2_SEL1 = (SFDX2_RX==1'b0 && SRX2_RX==1'b1) ? 1'b1 : 1'b0; 
    
  
     wire [31:0] misc_outs; reg [31:0] misc_outs_r;
@@ -340,6 +359,7 @@ module antsdr_u220 (
         .tx0(tx_data0), .tx1(tx_data1),
         .fe0_gpio_out(radio0_gpio), .fe1_gpio_out(radio1_gpio),
         .fp_gpio_in(fp_gpio_in), .fp_gpio_out(fp_gpio_out), .fp_gpio_ddr(fp_gpio_ddr),
+        .rxd(GPS_UART_RX), .txd(GPS_UART_TX),
 
         .pps_ref(lpps),
         .pps_fpga_int(pps_fpga_int),

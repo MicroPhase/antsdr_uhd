@@ -4,4 +4,4 @@ config BR2_PACKAGE_PERL_TYPE_TINY
 	help
 	  tiny, yet Moo(se)-compatible type constraint.
 
-	  https://typetiny.toby.ink/
+	  http://typetiny.toby.ink/

@@ -1,20 +1,10 @@
-******************************************
-Xilinx ZCU102 / ZCU106 boards - ZynqMP SoC
-******************************************
+********************************
+Xilinx ZCU106 board - ZynqMP SoC
+********************************
 
-This document describes the Buildroot support for the ZCU102 and
-ZCU106 boards by Xilinx, based on the Zynq UltraScale+ MPSoC (aka
-ZynqMP).  It has been tested with the ZCU102 and ZCU106 production
-boards.
-
-Evaluation board features can be found here with the links below.
-
-ZCU102:
-https://www.xilinx.com/products/boards-and-kits/zcu102.html
-
-ZCU106:
-https://www.xilinx.com/products/boards-and-kits/zcu106.html
-
+This document describes the Buildroot support for the ZCU106 board by
+Xilinx, based on the Zynq UltraScale+ MPSoC (aka ZynqMP). It has been
+tested with the EK-U1-ZCU106-ES2 pre-production board.
 
 How to build it
 ===============
@@ -42,7 +32,7 @@ After building, you should get a tree like this:
     +-- rootfs.ext4 -> rootfs.ext2
     +-- sdcard.img
     +-- system.dtb -> zynqmp-zcu106-revA.dtb
-    +-- u-boot.itb
+    +-- u-boot.bin
     `-- zynqmp-zcu106-revA.dtb
 
 How to write the SD card

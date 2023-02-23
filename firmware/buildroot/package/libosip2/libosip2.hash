@@ -1,5 +1,5 @@
 # Locally calculated after checking pgp signature
-sha256  fe82fe841608266ac15a5c1118216da00c554d5006e2875a8ac3752b1e6adc79  libosip2-5.3.1.tar.gz
+sha256	c9a18b0c760506d150017cdb1fa5c1cefe12b8dcbbf9a7e784eb75af376e96cd	libosip2-3.6.0.tar.gz
 
 # Hash for license file:
-sha256  8d9e95ed0e48df46dc758eb0d86df611f771eab4eed94bebb77dca87f1c897de  COPYING
+sha256	8d9e95ed0e48df46dc758eb0d86df611f771eab4eed94bebb77dca87f1c897de	COPYING

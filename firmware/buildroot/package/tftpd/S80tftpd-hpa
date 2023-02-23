@@ -11,8 +11,6 @@ DAEMON=/usr/sbin/$NAME
 PIDFILE=/var/run/$NAME.pid
 SCRIPTNAME=/etc/init.d/S80tftpd-hpa
 
-[ -r "/etc/default/$NAME" ] && . "/etc/default/$NAME"
-
 #
 #	Function that starts the daemon/service.
 #

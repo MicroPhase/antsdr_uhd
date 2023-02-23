@@ -5,7 +5,7 @@ config BR2_PACKAGE_SQLITE
 	  self-contained, embeddable, zero-configuration SQL database
 	  engine.
 
-	  https://www.sqlite.org/
+	  http://www.sqlite.org/
 
 if BR2_PACKAGE_SQLITE
 

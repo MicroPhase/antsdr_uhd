@@ -92,9 +92,9 @@ all:
 .PHONY: all
 
 # Set and export the version string
-export BR2_VERSION := 2023.02-git
+export BR2_VERSION := 2020.02.8
 # Actual time the release is cut (for reproducible builds)
-BR2_VERSION_EPOCH = 1669308000
+BR2_VERSION_EPOCH = 1605567000
 
 # Save running make version since it's clobbered by the make package
 RUNNING_MAKE_VERSION := $(MAKE_VERSION)
@@ -125,7 +125,7 @@ endif
 noconfig_targets := menuconfig nconfig gconfig xconfig config oldconfig randconfig \
 	defconfig %_defconfig allyesconfig allnoconfig alldefconfig syncconfig release \
 	randpackageconfig allyespackageconfig allnopackageconfig \
-	print-version olddefconfig distclean manual manual-% check-package check-flake8
+	print-version olddefconfig distclean manual manual-% check-package
 
 # Some global targets do not trigger a build, but are used to collect
 # metadata, or do various checks. When such targets are triggered,
@@ -141,7 +141,7 @@ nobuild_targets := source %-source \
 	clean distclean help show-targets graph-depends \
 	%-graph-depends %-show-depends %-show-version \
 	graph-build graph-size list-defconfigs \
-	savedefconfig update-defconfig printvars show-vars
+	savedefconfig update-defconfig printvars
 ifeq ($(MAKECMDGOALS),)
 BR_BUILDING = y
 else ifneq ($(filter-out $(nobuild_targets),$(MAKECMDGOALS)),)
@@ -229,8 +229,6 @@ LEGAL_MANIFEST_CSV_HOST = $(LEGAL_INFO_DIR)/host-manifest.csv
 LEGAL_WARNINGS = $(LEGAL_INFO_DIR)/.warnings
 LEGAL_REPORT = $(LEGAL_INFO_DIR)/README
 
-CPE_UPDATES_DIR = $(BASE_DIR)/cpe-updates
-
 BR2_CONFIG = $(CONFIG_DIR)/.config
 
 # Pull in the user's configuration file
@@ -286,16 +284,12 @@ ifndef HOSTCC
 HOSTCC := gcc
 HOSTCC := $(shell which $(HOSTCC) || type -p $(HOSTCC) || echo gcc)
 endif
-ifndef HOSTCC_NOCCACHE
 HOSTCC_NOCCACHE := $(HOSTCC)
-endif
 ifndef HOSTCXX
 HOSTCXX := g++
 HOSTCXX := $(shell which $(HOSTCXX) || type -p $(HOSTCXX) || echo g++)
 endif
-ifndef HOSTCXX_NOCCACHE
 HOSTCXX_NOCCACHE := $(HOSTCXX)
-endif
 ifndef HOSTCPP
 HOSTCPP := cpp
 endif
@@ -396,9 +390,6 @@ unexport DESTDIR
 # Causes breakage with packages that needs host-ruby
 unexport RUBYOPT
 
-# Compilation of perl-related packages will fail otherwise
-unexport PERL_MM_OPT
-
 include package/pkg-utils.mk
 include package/doc-asciidoc.mk
 
@@ -429,7 +420,6 @@ unexport O
 unexport GCC_COLORS
 unexport PLATFORM
 unexport OS
-unexport DEVICE_TREE
 
 GNU_HOST_NAME := $(shell support/gnuconfig/config.guess)
 
@@ -441,8 +431,21 @@ QUIET := $(if $(findstring s,$(filter-out --%,$(MAKEFLAGS))),-q)
 
 # Strip off the annoying quoting
 ARCH := $(call qstrip,$(BR2_ARCH))
-NORMALIZED_ARCH := $(call qstrip,$(BR2_NORMALIZED_ARCH))
-KERNEL_ARCH := $(call qstrip,$(BR2_NORMALIZED_ARCH))
+
+KERNEL_ARCH := $(shell echo "$(ARCH)" | sed -e "s/-.*//" \
+	-e s/i.86/i386/ -e s/sun4u/sparc64/ \
+	-e s/arcle/arc/ \
+	-e s/arceb/arc/ \
+	-e s/arm.*/arm/ -e s/sa110/arm/ \
+	-e s/aarch64.*/arm64/ \
+	-e s/nds32.*/nds32/ \
+	-e s/or1k/openrisc/ \
+	-e s/parisc64/parisc/ \
+	-e s/powerpc64.*/powerpc/ \
+	-e s/ppc.*/powerpc/ -e s/mips.*/mips/ \
+	-e s/riscv.*/riscv/ \
+	-e s/sh.*/sh/ \
+	-e s/microblazeel/microblaze/)
 
 ZCAT := $(call qstrip,$(BR2_ZCAT))
 BZCAT := $(call qstrip,$(BR2_BZCAT))
@@ -481,7 +484,8 @@ BR_CACHE_DIR ?= $(call qstrip,$(BR2_CCACHE_DIR))
 export BR_CACHE_DIR
 HOSTCC = $(CCACHE) $(HOSTCC_NOCCACHE)
 HOSTCXX = $(CCACHE) $(HOSTCXX_NOCCACHE)
-export BR2_USE_CCACHE ?= 1
+else
+export BR_NO_CCACHE
 endif
 
 # Scripts in support/ or post-build scripts may need to reference
@@ -567,10 +571,12 @@ ifeq ($(BR_FORCE_CHECK_DEPENDENCIES),YES)
 
 define CHECK_ONE_DEPENDENCY
 ifeq ($$($(2)_TYPE),target)
+ifeq ($$($(2)_IS_VIRTUAL),)
 ifneq ($$($$($(2)_KCONFIG_VAR)),y)
 $$(error $$($(2)_NAME) is in the dependency chain of $$($(1)_NAME) that \
 has added it to its _DEPENDENCIES variable without selecting it or \
 depending on it from Config.in)
+endif
 endif
 endif
 endef
@@ -586,9 +592,6 @@ $(BUILD_DIR)/buildroot-config/auto.conf: $(BR2_CONFIG)
 
 .PHONY: prepare
 prepare: $(BUILD_DIR)/buildroot-config/auto.conf
-	@$(foreach s, $(call qstrip,$(BR2_ROOTFS_PRE_BUILD_SCRIPT)), \
-		$(call MESSAGE,"Executing pre-build script $(s)"); \
-		$(EXTRA_ENV) $(s) $(TARGET_DIR) $(call qstrip,$(BR2_ROOTFS_POST_SCRIPT_ARGS))$(sep))
 
 .PHONY: world
 world: target-post-image
@@ -649,17 +652,40 @@ STRIP_FIND_SPECIAL_LIBS_CMD = \
 	\( -name 'ld-*.so*' -o -name 'libpthread*.so*' \) \
 	-print0
 
-# Generate locale data.
+ifeq ($(BR2_ECLIPSE_REGISTER),y)
+define TOOLCHAIN_ECLIPSE_REGISTER
+	./support/scripts/eclipse-register-toolchain `readlink -f $(O)` \
+		$(notdir $(TARGET_CROSS)) $(BR2_ARCH)
+endef
+TARGET_FINALIZE_HOOKS += TOOLCHAIN_ECLIPSE_REGISTER
+endif
+
+# Generate locale data. Basically, we call the localedef program
+# (built by the host-localedef package) for each locale. The input
+# data comes preferably from the toolchain, or if the toolchain does
+# not have them (Linaro toolchains), we use the ones available on the
+# host machine.
 ifeq ($(BR2_TOOLCHAIN_USES_GLIBC),y)
 GLIBC_GENERATE_LOCALES = $(call qstrip,$(BR2_GENERATE_LOCALE))
 ifneq ($(GLIBC_GENERATE_LOCALES),)
 PACKAGES += host-localedef
 
 define GENERATE_GLIBC_LOCALES
-	+$(MAKE) -f support/misc/gen-glibc-locales.mk \
-		ENDIAN=$(call LOWERCASE,$(BR2_ENDIAN)) \
-		LOCALES="$(GLIBC_GENERATE_LOCALES)" \
-		Q=$(Q)
+	$(Q)mkdir -p $(TARGET_DIR)/usr/lib/locale/
+	$(Q)for locale in $(GLIBC_GENERATE_LOCALES) ; do \
+		inputfile=`echo $${locale} | cut -f1 -d'.'` ; \
+		charmap=`echo $${locale} | cut -f2 -d'.' -s` ; \
+		if test -z "$${charmap}" ; then \
+			charmap="UTF-8" ; \
+		fi ; \
+		echo "Generating locale $${inputfile}.$${charmap}" ; \
+		I18NPATH=$(STAGING_DIR)/usr/share/i18n:/usr/share/i18n \
+		$(HOST_DIR)/bin/localedef \
+			--prefix=$(TARGET_DIR) \
+			--$(call LOWERCASE,$(BR2_ENDIAN))-endian \
+			-i $${inputfile} -f $${charmap} \
+			$${locale} ; \
+	done
 endef
 TARGET_FINALIZE_HOOKS += GENERATE_GLIBC_LOCALES
 endif
@@ -675,7 +701,8 @@ LOCALE_NOPURGE = $(call qstrip,$(BR2_ENABLE_LOCALE_WHITELIST))
 # in the whitelist file. If it doesn't, kill it.
 # Finally, specifically for X11, regenerate locale.dir from the whitelist.
 define PURGE_LOCALES
-	printf '%s\n' $(LOCALE_NOPURGE) locale-archive > $(LOCALE_WHITELIST)
+	rm -f $(LOCALE_WHITELIST)
+	for i in $(LOCALE_NOPURGE) locale-archive; do echo $$i >> $(LOCALE_WHITELIST); done
 
 	for dir in $(addprefix $(TARGET_DIR),/usr/share/locale /usr/share/X11/locale /usr/lib/locale); \
 	do \
@@ -726,11 +753,10 @@ target-finalize: $(PACKAGES) $(TARGET_DIR) host-finalize
 	$(foreach hook,$(TARGET_FINALIZE_HOOKS),$($(hook))$(sep))
 	rm -rf $(TARGET_DIR)/usr/include $(TARGET_DIR)/usr/share/aclocal \
 		$(TARGET_DIR)/usr/lib/pkgconfig $(TARGET_DIR)/usr/share/pkgconfig \
-		$(TARGET_DIR)/usr/lib/cmake $(TARGET_DIR)/usr/share/cmake \
-		$(TARGET_DIR)/usr/lib/rpm $(TARGET_DIR)/usr/doc
+		$(TARGET_DIR)/usr/lib/cmake $(TARGET_DIR)/usr/share/cmake
 	find $(TARGET_DIR)/usr/{lib,share}/ -name '*.cmake' -print0 | xargs -0 rm -f
 	find $(TARGET_DIR)/lib/ $(TARGET_DIR)/usr/lib/ $(TARGET_DIR)/usr/libexec/ \
-		\( -name '*.a' -o -name '*.la' -o -name '*.prl' \) -print0 | xargs -0 rm -f
+		\( -name '*.a' -o -name '*.la' \) -print0 | xargs -0 rm -f
 ifneq ($(BR2_PACKAGE_GDB),y)
 	rm -rf $(TARGET_DIR)/usr/share/gdb
 endif
@@ -802,14 +828,6 @@ endif # merged /usr
 
 	touch $(TARGET_DIR)/usr
 
-# Note: this will run in the filesystem context, so will use a copy
-# of target/, not the real one, so the files are still available on
-# re-builds (foo-rebuild, etc...)
-define ROOTFS_RM_HWDB_DATA
-	rm -rf $(TARGET_DIR)/usr/lib/udev/hwdb.d/ $(TARGET_DIR)/etc/udev/hwdb.d/
-endef
-ROOTFS_PRE_CMD_HOOKS += ROOTFS_RM_HWDB_DATA
-
 .PHONY: target-post-image
 target-post-image: $(TARGETS_ROOTFS) target-finalize staging-finalize
 	@rm -f $(ROOTFS_COMMON_TAR)
@@ -873,9 +891,6 @@ graph-build: $(O)/build/build-time.log
 				   --type=pie-$(t) --input=$(<) \
 				   --output=$(GRAPHS_DIR)/build.pie-$(t).$(BR_GRAPH_OUT) \
 				   $(if $(BR2_GRAPH_ALT),--alternate-colors)$(sep))
-	./support/scripts/graph-build-time --type=timeline --input=$(<) \
-		--output=$(GRAPHS_DIR)/build.timeline.$(BR_GRAPH_OUT) \
-		$(if $(BR2_GRAPH_ALT),--alternate-colors)
 
 .PHONY: graph-depends-requirements
 graph-depends-requirements:
@@ -920,22 +935,6 @@ show-info:
 			) } \
 		) \
 	)
-
-.PHONY: pkg-stats
-pkg-stats:
-	@cd "$(CONFIG_DIR)" ; \
-	$(TOPDIR)/support/scripts/pkg-stats -c \
-		--json $(O)/pkg-stats.json \
-		--html $(O)/pkg-stats.html \
-		--nvd-path $(DL_DIR)/buildroot-nvd
-
-.PHONY: missing-cpe
-missing-cpe:
-	$(Q)mkdir -p $(CPE_UPDATES_DIR)
-	$(Q)cd "$(CONFIG_DIR)" ; \
-	$(TOPDIR)/support/scripts/gen-missing-cpe \
-		--nvd-path $(DL_DIR)/buildroot-nvd \
-		--output $(CPE_UPDATES_DIR)
 
 else # ifeq ($(BR2_HAVE_DOT_CONFIG),y)
 
@@ -1027,7 +1026,7 @@ savedefconfig: $(BUILD_DIR)/buildroot-config/conf outputmakefile
 	@$(COMMON_CONFIG_ENV) $< \
 		--savedefconfig=$(if $(DEFCONFIG),$(DEFCONFIG),$(CONFIG_DIR)/defconfig) \
 		$(CONFIG_CONFIG_IN)
-	@$(SED) '/^BR2_DEFCONFIG=/d' $(if $(DEFCONFIG),$(DEFCONFIG),$(CONFIG_DIR)/defconfig)
+	@$(SED) '/BR2_DEFCONFIG=/d' $(if $(DEFCONFIG),$(DEFCONFIG),$(CONFIG_DIR)/defconfig)
 
 .PHONY: defconfig savedefconfig update-defconfig
 
@@ -1055,55 +1054,23 @@ endif
 # Makefiles. Alternatively, if a non-empty VARS variable is passed,
 # only the variables matching the make pattern passed in VARS are
 # displayed.
-# show-vars does the same, but as a JSON dictionnary.
-#
-# Note: we iterate of .VARIABLES and filter each variable individually,
-# to workaround a bug in make 4.3; see https://savannah.gnu.org/bugs/?59093
 .PHONY: printvars
 printvars:
-ifndef VARS
-	$(error Please pass a non-empty VARS to 'make printvars')
-endif
 	@:
 	$(foreach V, \
-		$(sort $(foreach X, $(.VARIABLES), $(filter $(VARS),$(X)))), \
+		$(sort $(filter $(VARS),$(.VARIABLES))), \
 		$(if $(filter-out environment% default automatic, \
 				$(origin $V)), \
 		$(if $(QUOTED_VARS),\
 			$(info $V='$(subst ','\'',$(if $(RAW_VARS),$(value $V),$($V)))'), \
 			$(info $V=$(if $(RAW_VARS),$(value $V),$($V))))))
-# ')))) # Syntax colouring...
-
-# See details above, same as for printvars
-.PHONY: show-vars
-show-vars: VARS?=%
-show-vars:
-	@:
-	$(foreach i, \
-		$(call clean-json, { \
-			$(foreach V, \
-				$(.VARIABLES), \
-				$(and $(filter $(VARS),$(V)) \
-					, \
-					$(filter-out environment% default automatic, $(origin $V)) \
-					, \
-					"$V": { \
-						"expanded": $(call mk-json-str,$($V))$(comma) \
-						"raw": $(call mk-json-str,$(value $V)) \
-					}$(comma) \
-				) \
-			) \
-		} ) \
-		, \
-		$(info $(i)) \
-	)
+# ' Syntax colouring...
 
 .PHONY: clean
 clean:
 	rm -rf $(BASE_TARGET_DIR) $(BINARIES_DIR) $(HOST_DIR) $(HOST_DIR_SYMLINK) \
 		$(BUILD_DIR) $(BASE_DIR)/staging \
-		$(LEGAL_INFO_DIR) $(GRAPHS_DIR) $(PER_PACKAGE_DIR) $(CPE_UPDATES_DIR) \
-		$(O)/pkg-stats.*
+		$(LEGAL_INFO_DIR) $(GRAPHS_DIR) $(PER_PACKAGE_DIR)
 
 .PHONY: distclean
 distclean: clean
@@ -1164,7 +1131,6 @@ help:
 	@echo '  <pkg>-dirclean         - Remove <pkg> build directory'
 	@echo '  <pkg>-reconfigure      - Restart the build from the configure step'
 	@echo '  <pkg>-rebuild          - Restart the build from the build step'
-	@echo '  <pkg>-reinstall        - Restart the build from the install step'
 	$(foreach p,$(HELP_PACKAGES), \
 		@echo $(sep) \
 		@echo '$($(p)_NAME):' $(sep) \
@@ -1187,11 +1153,7 @@ help:
 	@echo '  external-deps          - list external packages used'
 	@echo '  legal-info             - generate info about license compliance'
 	@echo '  show-info              - generate info about packages, as a JSON blurb'
-	@echo '  pkg-stats              - generate info about packages as JSON and HTML'
-	@echo '  missing-cpe            - generate XML snippets for missing CPE identifiers'
 	@echo '  printvars              - dump internal variables selected with VARS=...'
-	@echo '  show-vars              - dump all internal variables as a JSON blurb; use VARS=...'
-	@echo '                           to limit the list to variables names matching that pattern'
 	@echo
 	@echo '  make V=0|1             - 0 => quiet build (default), 1 => verbose build'
 	@echo '  make O=dir             - Locate all output files in "dir", including .config'
@@ -1240,23 +1202,19 @@ release:
 	$(MAKE) O=$(OUT) distclean
 	tar rf $(OUT).tar $(OUT)
 	gzip -9 -c < $(OUT).tar > $(OUT).tar.gz
-	xz -9 -c < $(OUT).tar > $(OUT).tar.xz
+	bzip2 -9 -c < $(OUT).tar > $(OUT).tar.bz2
 	rm -rf $(OUT) $(OUT).tar
 
 print-version:
 	@echo $(BR2_VERSION_FULL)
 
-check-flake8:
-	$(Q)git ls-tree -r --name-only HEAD \
-	| xargs file \
-	| grep 'Python script' \
-	| cut -d':' -f1 \
-	| xargs -- python3 -m flake8 --statistics
-
 check-package:
-	find $(TOPDIR) -type f \( -name '*.mk' -o -name '*.hash' -o -name 'Config.*' -o -name '*.patch' \) \
-		-a -not -name '*.orig' -a -not -name '*.rej' \
-		-exec ./utils/check-package --exclude=Sob {} +
+	find $(TOPDIR) -type f \( -name '*.mk' -o -name '*.hash' -o -name 'Config.*' \) \
+		-exec ./utils/check-package {} +
+
+.PHONY: .gitlab-ci.yml
+.gitlab-ci.yml: .gitlab-ci.yml.in
+	./support/scripts/generate-gitlab-ci-yml $< > $@
 
 include docs/manual/manual.mk
 -include $(foreach dir,$(BR2_EXTERNAL_DIRS),$(sort $(wildcard $(dir)/docs/*/*.mk)))

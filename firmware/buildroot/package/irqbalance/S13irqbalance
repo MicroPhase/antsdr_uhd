@@ -10,8 +10,6 @@ PID="/var/run/irqbalance.pid"
 case "$1" in
     start)
 	printf "Starting irqbalance: "
-	# for irqbalance socket /run/irqbalance/irqbalance<pid>.sock
-	mkdir -p /run/irqbalance
 	start-stop-daemon -S -q -x $EXEC -- $ARGS
 	if [ $? != 0 ]; then
 	    echo "FAILED"

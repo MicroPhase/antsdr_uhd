@@ -4,28 +4,30 @@
 #
 ################################################################################
 
-GNURADIO_VERSION = 3.10.4.0
-GNURADIO_SITE = $(call github,gnuradio,gnuradio,v$(GNURADIO_VERSION))
+GNURADIO_VERSION = 3.8.0.0
+GNURADIO_SITE = https://gnuradio.org/releases/gnuradio
 GNURADIO_LICENSE = GPL-3.0+
 GNURADIO_LICENSE_FILES = COPYING
 
 GNURADIO_SUPPORTS_IN_SOURCE_BUILD = NO
 
+# host-python-mako and host-python-six are needed for volk to compile
 GNURADIO_DEPENDENCIES = \
-	host-python3 \
+	$(if $(BR2_PACKAGE_PYTHON3),host-python3,host-python) \
+	host-python-mako \
+	host-python-six \
+	host-swig \
 	boost \
 	log4cpp \
-	gmp \
-	spdlog \
-	volk
+	gmp
 
 GNURADIO_CONF_OPTS = \
-	-DPYTHON_EXECUTABLE=$(HOST_DIR)/bin/python3 \
+	-DPYTHON_EXECUTABLE=$(HOST_DIR)/bin/python \
 	-DENABLE_DEFAULT=OFF \
 	-DENABLE_VOLK=ON \
 	-DENABLE_GNURADIO_RUNTIME=ON \
-	-DENABLE_INTERNAL_VOLK=OFF \
 	-DENABLE_TESTING=OFF \
+	-DENABLE_GR_QTGUI=OFF \
 	-DXMLTO_EXECUTABLE=NOTFOUND
 
 # For third-party blocks, the gnuradio libraries are mandatory at
@@ -85,12 +87,6 @@ else
 GNURADIO_CONF_OPTS += -DENABLE_GR_DIGITAL=OFF
 endif
 
-ifeq ($(BR2_PACKAGE_GNURADIO_DTV),y)
-GNURADIO_CONF_OPTS += -DENABLE_GR_DTV=ON
-else
-GNURADIO_CONF_OPTS += -DENABLE_GR_DTV=OFF
-endif
-
 ifeq ($(BR2_PACKAGE_GNURADIO_FEC),y)
 GNURADIO_DEPENDENCIES += gsl
 GNURADIO_CONF_OPTS += -DENABLE_GR_FEC=ON
@@ -112,35 +108,22 @@ GNURADIO_CONF_OPTS += -DENABLE_GR_FILTER=OFF
 endif
 
 ifeq ($(BR2_PACKAGE_GNURADIO_PYTHON),y)
-GNURADIO_DEPENDENCIES += python3 python-pybind \
-	host-python-numpy host-python-packaging
+GNURADIO_DEPENDENCIES += $(if $(BR2_PACKAGE_PYTHON3),python3,python)
 GNURADIO_CONF_OPTS += -DENABLE_PYTHON=ON
-# mandatory to install python modules in site-packages and to use
-# correct path for python libraries
-GNURADIO_CONF_OPTS += -DGR_PYTHON_RELATIVE=ON \
-	-DGR_PYTHON_DIR=lib/python$(PYTHON3_VERSION_MAJOR)/site-packages
 else
 GNURADIO_CONF_OPTS += -DENABLE_PYTHON=OFF
 endif
 
-ifeq ($(BR2_PACKAGE_GNURADIO_QTGUI),y)
-GNURADIO_DEPENDENCIES += qt5base python-pyqt5 qwt
-GNURADIO_CONF_OPTS += -DENABLE_GR_QTGUI=ON
+ifeq ($(BR2_PACKAGE_GNURADIO_PAGER),y)
+GNURADIO_CONF_OPTS += -DENABLE_GR_PAGER=ON
 else
-GNURADIO_CONF_OPTS += -DENABLE_GR_QTGUI=OFF
+GNURADIO_CONF_OPTS += -DENABLE_GR_PAGER=OFF
 endif
 
 ifeq ($(BR2_PACKAGE_GNURADIO_TRELLIS),y)
 GNURADIO_CONF_OPTS += -DENABLE_GR_TRELLIS=ON
 else
 GNURADIO_CONF_OPTS += -DENABLE_GR_TRELLIS=OFF
-endif
-
-ifeq ($(BR2_PACKAGE_GNURADIO_UHD),y)
-GNURADIO_DEPENDENCIES += uhd
-GNURADIO_CONF_OPTS += -DENABLE_GR_UHD=ON
-else
-GNURADIO_CONF_OPTS += -DENABLE_GR_UHD=OFF
 endif
 
 ifeq ($(BR2_PACKAGE_GNURADIO_UTILS),y)
