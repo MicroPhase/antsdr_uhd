@@ -1,6 +1,0 @@
-config BR2_PACKAGE_LIBAD9361_IIO
-	bool "libad9361-iio"
-	select BR2_PACKAGE_LIBIIO
-	help
-	  This is a simple library used for userspace, which manages multi-chip sync, on platforms (FMCOMMS5) where multiple AD9361 devices are used.
-	  https://github.com/analogdevicesinc/libad9361-iio

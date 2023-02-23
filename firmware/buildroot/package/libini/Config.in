@@ -1,6 +1,0 @@
-config BR2_PACKAGE_LIBINI
-	bool "libini"
-	help
-	  Libini is a simple library to read INI configuration files.
-
-	  See: https://github.com/pcercuei/libini/
