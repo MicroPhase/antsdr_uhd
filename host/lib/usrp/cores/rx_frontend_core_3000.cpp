@@ -12,6 +12,7 @@
 #include <uhdlib/usrp/cores/rx_frontend_core_3000.hpp>
 #include <cmath>
 #include <functional>
+#include <boost/math/special_functions/sign.hpp>
 
 using namespace uhd;
 

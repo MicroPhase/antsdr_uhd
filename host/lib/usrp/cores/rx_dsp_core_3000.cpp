@@ -16,6 +16,8 @@
 #include <cmath>
 #include <functional>
 
+#include <boost/math/special_functions/sign.hpp>
+
 #define REG_DSP_RX_FREQ _dsp_base + 0
 #define REG_DSP_RX_SCALE_IQ _dsp_base + 4
 #define REG_DSP_RX_DECIM _dsp_base + 8
