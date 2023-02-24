@@ -19,7 +19,7 @@ python3-ruamel.yaml
 cd host/
 mkdir build
 cd build
-cmake ../
+cmake -DENABLE_X400=OFF -DENABLE_N320=OFF -DENABLE_B100=OFF -DENABLE_B200=OFF -DENABLE_X300=OFF -DENABLE_USRP2=OFF -DENABLE_USRP1=OFF -DENABLE_N300=OFF -DENABLE_E320=OFF -DENABLE_E300=OFF ../
 ```
 - **Make**
 ```sh
@@ -28,7 +28,7 @@ make
 - **Install**
 ```sh
 sudo make install
-sudo ldconifg
+sudo ldconfig
 ```
 The default installation path: /usr/local/lib/uhd
 
