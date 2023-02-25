@@ -1,0 +1,32 @@
+#!/bin/sh
+
+case "$1" in
+  start)
+	if grep "AD-QUADMXFE" /sys/firmware/devicetree/base/model; then
+		printf "Checking FRU EEPROM: "
+		if ! fru-dump -b -i /sys/bus/i2c/devices/2-0050/eeprom; then
+			if grep "AD-QUADMXFE1-EBZ Rev.B" /sys/firmware/devicetree/base/model; then
+				cat /root/AD-QUADMXFE1-EBZ-B-FRU.bin > /sys/bus/i2c/devices/2-0050/eeprom
+			elif grep "AD-QUADMXFE1-EBZ Rev.C" /sys/firmware/devicetree/base/model; then
+				cat /root/AD-QUADMXFE1-EBZ-FRU.bin > /sys/bus/i2c/devices/2-0050/eeprom
+			elif grep "AD-QUADMXFE2-EBZ" /sys/firmware/devicetree/base/model; then
+				cat /root/AD-QUADMXFE2-EBZ-FRU.bin > /sys/bus/i2c/devices/2-0050/eeprom
+			elif grep "AD-QUADMXFE3-EBZ" /sys/firmware/devicetree/base/model; then
+				cat /root/AD-QUADMXFE3-EBZ-FRU.bin > /sys/bus/i2c/devices/2-0050/eeprom
+			fi
+		fi
+	fi
+        ;;
+  stop)
+        ;;
+  restart|reload)
+        "$0" stop
+        "$0" start
+        ;;
+  *)
+        echo "Usage: $0 {start|stop|restart}"
+        exit 1
+esac
+
+exit $?
+

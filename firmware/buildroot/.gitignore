@@ -1,0 +1,17 @@
+/output
+/dl
+/.auto.deps
+/.config.cmd
+/.config.old
+/..config.tmp
+/.config
+*.depend
+*.o
+/*.patch
+/*.diff
+*.orig
+*.rej
+*~
+*.pyc
+*.swp
+board/*/VERSIONS
