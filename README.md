@@ -1,59 +1,35 @@
 # ANTSDR UHD 
 This repo contains both the uhd host driver and firmware for microphase antsdr devices.
+The related host driver, FPGA rtl code, and Linux kernel in this GitHub repository are sourced from [Ettus Research](https://github.com/EttusResearch). MicroPhase has modified the code to adapt it to AntSDR devices.
+
+## How can I obtain an AntSDR device
+Chinese users can get AntSDR devices on [Taobao](https://detail.tmall.com/item.htm?id=691247858909&spm=a1z10.1-b-s.w4004-24631307567.16.6da2364eKszAoW&skuId=4909539824797).
+Overseas users can obtain it on [CrowdSupply](https://www.crowdsupply.com/microphase-technology/antsdr-e200), and this is currently the only official channel.
+
 
 ## Directories
 
 ### firmware/
 The source code is the firmware that runs on the e200 device and communicates between the fpga and the UHD.
-The directory contains fpga source code, firmware uboot and linux kernel source code. The root file system is made by petalinux. And you must use this file system to support the firmware to work. 
+The directory contains fpga source code, firmware uboot and linux kernel source code and buildroot filesystem.
 
 ### host/
-The source code is the UHD driver developed by Ettus, and we have added the driver interface of E200 based on its source code.
+The source code is the UHD driver developed by [Ettus](https://github.com/EttusResearch), and we have added the driver interface of E200 based on its source code.
 
 ## Quick start guide
 ### ANTSDR-E310v2/ANTSDR-E200 for linux user
 - Step 1
-  
-    Download the pre-built image from the [release](https://github.com/MicroPhase/antsdr_uhd/releases/tag/v1.0).
+  Download the latest firmware v1.0/build_sdimg.zip file from our [github release](https://github.com/MicroPhase/antsdr_uhd/releases/tag/v1.0).
 
 - Step 2
-  
-    Burn the pre-built image into a SD card.
-    Format sd card as fat32 partition,and copy all files in the build_sdimg directory to the sd card partition.
-  
+  Unzip this zip file, and copy all this files(bitstream, devicetree, linux kernel, boot.bin and so on) into a fat32 SD card, and insert this SD card into the slot.
+
 - Step 3
-  
-    Insert the SD card into the ANTSDR-E200/E310v2's SD card slot, and power on the device.
-    The Led will flash when the system is running.
-    By default the ANTSDR has a static IP address 192.168.1.10, you can ping this address to check the network status.
+  Follow this [link](https://github.com/MicroPhase/antsdr_uhd/blob/master/host/README.md) to build the host driver.
 
-- Step 4 
+- Step 4
+  Power on the device, The led will flash when the system is running. By default the AntSDR has a static IP address 192.168.1.10, you can ping this address to check the network status if your computer and device are in the same network segment. Or you can use uhd_find_devices to find the device.
   
-    Follow This [link](./host/README.md) to build and install the host uhd driver for ANTSDR-E200/E310V2.
-
-### ANTSDR-E310v2/ANTSDR-E200 for windows user
-
-- Step 1
-  
-    Download the pre-built image from the [release](https://github.com/MicroPhase/antsdr_uhd/releases/tag/v0.1).
-
-- Step 2
-  
-    Burn the pre-built image into a SD card.
-    You can use win32disk manger or other tools to burn the sd card.
-- Step 3
-  
-    Insert the SD card into the ANTSDR-E200/E310v2's SD card slot, and power on the device.
-    The Led will flash when the system is running.
-    By default the ANTSDR has a static IP address 192.168.1.10, you can ping this address to check the nnetwork status.
-
-- Step 4 
-  
-    Download the windows uhd driver **uhd_3.15.0.0-0-0e6d9cd3_Win64.exe** from the [release](https://github.com/MicroPhase/antsdr_uhd/releases/tag/v0.1).
-    Install the .exe on your computer.
-
 
 ## NOTE
 The ethernet of ANTSDR-E200 or ANTSDR-E310V2 can only works at 1000M speed, make sure the connection speed of your computer to the device is 1000M.
-
-  
