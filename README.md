@@ -44,7 +44,7 @@ The source code is the UHD driver developed by [Ettus](https://github.com/EttusR
 ## NOTE
 The ethernet of ANTSDR-E200 or ANTSDR-E310V2 can only works at 1000M speed, make sure the connection speed of your computer to the device is 1000M.
 
-## Related Links
+## Related Links(documentation or supported projects)
 - [Online Doc](https://antsdr-doc-en.readthedocs.io/en/latest/index.html): Online documentation about ANTSDR E200
 - [IIO firmware](https://github.com/MicroPhase/antsdr-fw-patch)：Source repository compatible with plutosdr firmware
 - [DragonOS](https://cemaxecuter.com/)：Out of the box OS for SDRs
