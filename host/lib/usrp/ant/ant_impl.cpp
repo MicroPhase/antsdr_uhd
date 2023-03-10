@@ -295,7 +295,8 @@ ant_impl::ant_impl(const uhd::device_addr_t &device_addr)
                 );
 
         _gpsdo_capable = 0;
-
+        if(device_addr["product"] == "E310  v2")
+            _gpsdo_capable = 1;
         ////////////////////////////////////////////////////////////////////
         // Set up frontend mapping
         ////////////////////////////////////////////////////////////////////
