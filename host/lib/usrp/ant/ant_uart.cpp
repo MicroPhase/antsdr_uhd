@@ -23,7 +23,7 @@ struct b200_uart_impl : ant_uart
         : _xport(xport)
         , _sid(sid)
         , _count(0)
-        , _baud_div(std::floor(ANT_BUS_CLOCK_RATE / 115200 + 0.5))
+        , _baud_div(std::floor(ANT_BUS_CLOCK_RATE / 9600 + 0.5))
         , _line_queue(4096)
     {
         /*NOP*/
