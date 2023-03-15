@@ -215,7 +215,7 @@ static device_addrs_t ant_find(const device_addr_t& hint)
                     mp_addr["product"] = "E200";
                 else
                     mp_addr["product"] = board_str;
-                mp_addr["serial"] = serial_str;
+                mp_addr["serial"] = serial_str.substr(0,32);
                 mp_addr["name"] = "ANTSDR-E200";
                 // found the device,open up for communication!
                 ant_addrs.push_back(mp_addr);
