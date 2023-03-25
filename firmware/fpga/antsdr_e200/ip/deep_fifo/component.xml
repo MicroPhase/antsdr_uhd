@@ -524,15 +524,12 @@
         <spirit:language>Verilog</spirit:language>
         <spirit:modelName>deepfifo_module</spirit:modelName>
         <spirit:fileSetRef>
-          <spirit:localName>xilinx_anylanguagesynthesis_xilinx_com_ip_fifo_generator_13_2__ref_view_fileset</spirit:localName>
-        </spirit:fileSetRef>
-        <spirit:fileSetRef>
           <spirit:localName>xilinx_anylanguagesynthesis_view_fileset</spirit:localName>
         </spirit:fileSetRef>
         <spirit:parameters>
           <spirit:parameter>
             <spirit:name>viewChecksum</spirit:name>
-            <spirit:value>7f4e97b8</spirit:value>
+            <spirit:value>68c7dd6b</spirit:value>
           </spirit:parameter>
         </spirit:parameters>
       </spirit:view>
@@ -543,15 +540,12 @@
         <spirit:language>Verilog</spirit:language>
         <spirit:modelName>deepfifo_module</spirit:modelName>
         <spirit:fileSetRef>
-          <spirit:localName>xilinx_anylanguagebehavioralsimulation_xilinx_com_ip_fifo_generator_13_2__ref_view_fileset</spirit:localName>
-        </spirit:fileSetRef>
-        <spirit:fileSetRef>
           <spirit:localName>xilinx_anylanguagebehavioralsimulation_view_fileset</spirit:localName>
         </spirit:fileSetRef>
         <spirit:parameters>
           <spirit:parameter>
             <spirit:name>viewChecksum</spirit:name>
-            <spirit:value>7f4e97b8</spirit:value>
+            <spirit:value>68c7dd6b</spirit:value>
           </spirit:parameter>
         </spirit:parameters>
       </spirit:view>
@@ -565,7 +559,7 @@
         <spirit:parameters>
           <spirit:parameter>
             <spirit:name>viewChecksum</spirit:name>
-            <spirit:value>7257a545</spirit:value>
+            <spirit:value>4bcf52e2</spirit:value>
           </spirit:parameter>
         </spirit:parameters>
       </spirit:view>
@@ -628,7 +622,7 @@
         <spirit:wire>
           <spirit:direction>in</spirit:direction>
           <spirit:vector>
-            <spirit:left spirit:format="long" spirit:resolve="dependent" spirit:dependency="(spirit:decode(id(&apos;MODELPARAM_VALUE.C_M_AXI_DATA_WIDTH&apos;)) - 1)">63</spirit:left>
+            <spirit:left spirit:format="long" spirit:resolve="dependent" spirit:dependency="(spirit:decode(id(&apos;MODELPARAM_VALUE.FIFO_DATA_WIDTH&apos;)) - 1)">63</spirit:left>
             <spirit:right spirit:format="long">0</spirit:right>
           </spirit:vector>
           <spirit:wireTypeDefs>
@@ -694,7 +688,7 @@
         <spirit:wire>
           <spirit:direction>out</spirit:direction>
           <spirit:vector>
-            <spirit:left spirit:format="long" spirit:resolve="dependent" spirit:dependency="(spirit:decode(id(&apos;MODELPARAM_VALUE.C_M_AXI_DATA_WIDTH&apos;)) - 1)">63</spirit:left>
+            <spirit:left spirit:format="long" spirit:resolve="dependent" spirit:dependency="(spirit:decode(id(&apos;MODELPARAM_VALUE.FIFO_DATA_WIDTH&apos;)) - 1)">63</spirit:left>
             <spirit:right spirit:format="long">0</spirit:right>
           </spirit:vector>
           <spirit:wireTypeDefs>
@@ -754,7 +748,7 @@
         <spirit:wire>
           <spirit:direction>out</spirit:direction>
           <spirit:vector>
-            <spirit:left spirit:format="long" spirit:resolve="dependent" spirit:dependency="(spirit:decode(id(&apos;MODELPARAM_VALUE.C_M_AXI_ID_WIDTH&apos;)) - 1)">0</spirit:left>
+            <spirit:left spirit:format="long" spirit:resolve="dependent" spirit:dependency="(spirit:decode(id(&apos;MODELPARAM_VALUE.C_M_AXI_ID_WIDTH&apos;)) - 1)">3</spirit:left>
             <spirit:right spirit:format="long">0</spirit:right>
           </spirit:vector>
           <spirit:wireTypeDefs>
@@ -903,7 +897,7 @@
         <spirit:wire>
           <spirit:direction>out</spirit:direction>
           <spirit:vector>
-            <spirit:left spirit:format="long" spirit:resolve="dependent" spirit:dependency="(spirit:decode(id(&apos;MODELPARAM_VALUE.C_M_AXI_AWUSER_WIDTH&apos;)) - 1)">0</spirit:left>
+            <spirit:left spirit:format="long" spirit:resolve="dependent" spirit:dependency="(spirit:decode(id(&apos;MODELPARAM_VALUE.C_M_AXI_AWUSER_WIDTH&apos;)) - 1)">3</spirit:left>
             <spirit:right spirit:format="long">0</spirit:right>
           </spirit:vector>
           <spirit:wireTypeDefs>
@@ -996,7 +990,7 @@
         <spirit:wire>
           <spirit:direction>out</spirit:direction>
           <spirit:vector>
-            <spirit:left spirit:format="long" spirit:resolve="dependent" spirit:dependency="(spirit:decode(id(&apos;MODELPARAM_VALUE.C_M_AXI_WUSER_WIDTH&apos;)) - 1)">0</spirit:left>
+            <spirit:left spirit:format="long" spirit:resolve="dependent" spirit:dependency="(spirit:decode(id(&apos;MODELPARAM_VALUE.C_M_AXI_WUSER_WIDTH&apos;)) - 1)">3</spirit:left>
             <spirit:right spirit:format="long">0</spirit:right>
           </spirit:vector>
           <spirit:wireTypeDefs>
@@ -1042,7 +1036,7 @@
         <spirit:wire>
           <spirit:direction>in</spirit:direction>
           <spirit:vector>
-            <spirit:left spirit:format="long" spirit:resolve="dependent" spirit:dependency="(spirit:decode(id(&apos;MODELPARAM_VALUE.C_M_AXI_ID_WIDTH&apos;)) - 1)">0</spirit:left>
+            <spirit:left spirit:format="long" spirit:resolve="dependent" spirit:dependency="(spirit:decode(id(&apos;MODELPARAM_VALUE.C_M_AXI_ID_WIDTH&apos;)) - 1)">3</spirit:left>
             <spirit:right spirit:format="long">0</spirit:right>
           </spirit:vector>
           <spirit:wireTypeDefs>
@@ -1082,7 +1076,7 @@
         <spirit:wire>
           <spirit:direction>in</spirit:direction>
           <spirit:vector>
-            <spirit:left spirit:format="long" spirit:resolve="dependent" spirit:dependency="(spirit:decode(id(&apos;MODELPARAM_VALUE.C_M_AXI_BUSER_WIDTH&apos;)) - 1)">0</spirit:left>
+            <spirit:left spirit:format="long" spirit:resolve="dependent" spirit:dependency="(spirit:decode(id(&apos;MODELPARAM_VALUE.C_M_AXI_BUSER_WIDTH&apos;)) - 1)">3</spirit:left>
             <spirit:right spirit:format="long">0</spirit:right>
           </spirit:vector>
           <spirit:wireTypeDefs>
@@ -1131,7 +1125,7 @@
         <spirit:wire>
           <spirit:direction>out</spirit:direction>
           <spirit:vector>
-            <spirit:left spirit:format="long" spirit:resolve="dependent" spirit:dependency="(spirit:decode(id(&apos;MODELPARAM_VALUE.C_M_AXI_ID_WIDTH&apos;)) - 1)">0</spirit:left>
+            <spirit:left spirit:format="long" spirit:resolve="dependent" spirit:dependency="(spirit:decode(id(&apos;MODELPARAM_VALUE.C_M_AXI_ID_WIDTH&apos;)) - 1)">3</spirit:left>
             <spirit:right spirit:format="long">0</spirit:right>
           </spirit:vector>
           <spirit:wireTypeDefs>
@@ -1280,7 +1274,7 @@
         <spirit:wire>
           <spirit:direction>out</spirit:direction>
           <spirit:vector>
-            <spirit:left spirit:format="long" spirit:resolve="dependent" spirit:dependency="(spirit:decode(id(&apos;MODELPARAM_VALUE.C_M_AXI_ARUSER_WIDTH&apos;)) - 1)">0</spirit:left>
+            <spirit:left spirit:format="long" spirit:resolve="dependent" spirit:dependency="(spirit:decode(id(&apos;MODELPARAM_VALUE.C_M_AXI_ARUSER_WIDTH&apos;)) - 1)">3</spirit:left>
             <spirit:right spirit:format="long">0</spirit:right>
           </spirit:vector>
           <spirit:wireTypeDefs>
@@ -1326,7 +1320,7 @@
         <spirit:wire>
           <spirit:direction>in</spirit:direction>
           <spirit:vector>
-            <spirit:left spirit:format="long" spirit:resolve="dependent" spirit:dependency="(spirit:decode(id(&apos;MODELPARAM_VALUE.C_M_AXI_ID_WIDTH&apos;)) - 1)">0</spirit:left>
+            <spirit:left spirit:format="long" spirit:resolve="dependent" spirit:dependency="(spirit:decode(id(&apos;MODELPARAM_VALUE.C_M_AXI_ID_WIDTH&apos;)) - 1)">3</spirit:left>
             <spirit:right spirit:format="long">0</spirit:right>
           </spirit:vector>
           <spirit:wireTypeDefs>
@@ -1402,7 +1396,7 @@
         <spirit:wire>
           <spirit:direction>in</spirit:direction>
           <spirit:vector>
-            <spirit:left spirit:format="long" spirit:resolve="dependent" spirit:dependency="(spirit:decode(id(&apos;MODELPARAM_VALUE.C_M_AXI_RUSER_WIDTH&apos;)) - 1)">0</spirit:left>
+            <spirit:left spirit:format="long" spirit:resolve="dependent" spirit:dependency="(spirit:decode(id(&apos;MODELPARAM_VALUE.C_M_AXI_RUSER_WIDTH&apos;)) - 1)">3</spirit:left>
             <spirit:right spirit:format="long">0</spirit:right>
           </spirit:vector>
           <spirit:wireTypeDefs>
@@ -1449,11 +1443,6 @@
     </spirit:ports>
     <spirit:modelParameters>
       <spirit:modelParameter xsi:type="spirit:nameValueTypeType" spirit:dataType="integer">
-        <spirit:name>log2_fifo_data_width</spirit:name>
-        <spirit:displayName>Log2 Fifo Data Width</spirit:displayName>
-        <spirit:value spirit:format="long" spirit:resolve="generated" spirit:id="MODELPARAM_VALUE.log2_fifo_data_width">6</spirit:value>
-      </spirit:modelParameter>
-      <spirit:modelParameter spirit:dataType="integer">
         <spirit:name>log2_ram_size_addr</spirit:name>
         <spirit:displayName>Log2 Ram Size Addr</spirit:displayName>
         <spirit:value spirit:format="long" spirit:resolve="generated" spirit:id="MODELPARAM_VALUE.log2_ram_size_addr">26</spirit:value>
@@ -1474,6 +1463,11 @@
         <spirit:value spirit:format="long" spirit:resolve="generated" spirit:id="MODELPARAM_VALUE.fifo_post_threshold">128</spirit:value>
       </spirit:modelParameter>
       <spirit:modelParameter spirit:dataType="integer">
+        <spirit:name>FIFO_DATA_WIDTH</spirit:name>
+        <spirit:displayName>Fifo Data Width</spirit:displayName>
+        <spirit:value spirit:format="long" spirit:resolve="generated" spirit:id="MODELPARAM_VALUE.FIFO_DATA_WIDTH">64</spirit:value>
+      </spirit:modelParameter>
+      <spirit:modelParameter spirit:dataType="integer">
         <spirit:name>C_M_AXI_TARGET_SLAVE_BASE_ADDR</spirit:name>
         <spirit:displayName>C M Axi Target Slave Base Addr</spirit:displayName>
         <spirit:value spirit:format="bitString" spirit:resolve="generated" spirit:id="MODELPARAM_VALUE.C_M_AXI_TARGET_SLAVE_BASE_ADDR" spirit:bitStringLength="32">0x00000000</spirit:value>
@@ -1486,7 +1480,7 @@
       <spirit:modelParameter spirit:dataType="integer">
         <spirit:name>C_M_AXI_ID_WIDTH</spirit:name>
         <spirit:displayName>C M Axi Id Width</spirit:displayName>
-        <spirit:value spirit:format="long" spirit:resolve="generated" spirit:id="MODELPARAM_VALUE.C_M_AXI_ID_WIDTH">1</spirit:value>
+        <spirit:value spirit:format="long" spirit:resolve="generated" spirit:id="MODELPARAM_VALUE.C_M_AXI_ID_WIDTH">4</spirit:value>
       </spirit:modelParameter>
       <spirit:modelParameter spirit:dataType="integer">
         <spirit:name>C_M_AXI_ADDR_WIDTH</spirit:name>
@@ -1501,27 +1495,27 @@
       <spirit:modelParameter spirit:dataType="integer">
         <spirit:name>C_M_AXI_AWUSER_WIDTH</spirit:name>
         <spirit:displayName>C M Axi Awuser Width</spirit:displayName>
-        <spirit:value spirit:format="long" spirit:resolve="generated" spirit:id="MODELPARAM_VALUE.C_M_AXI_AWUSER_WIDTH">1</spirit:value>
+        <spirit:value spirit:format="long" spirit:resolve="generated" spirit:id="MODELPARAM_VALUE.C_M_AXI_AWUSER_WIDTH">4</spirit:value>
       </spirit:modelParameter>
       <spirit:modelParameter spirit:dataType="integer">
         <spirit:name>C_M_AXI_ARUSER_WIDTH</spirit:name>
         <spirit:displayName>C M Axi Aruser Width</spirit:displayName>
-        <spirit:value spirit:format="long" spirit:resolve="generated" spirit:id="MODELPARAM_VALUE.C_M_AXI_ARUSER_WIDTH">1</spirit:value>
+        <spirit:value spirit:format="long" spirit:resolve="generated" spirit:id="MODELPARAM_VALUE.C_M_AXI_ARUSER_WIDTH">4</spirit:value>
       </spirit:modelParameter>
       <spirit:modelParameter spirit:dataType="integer">
         <spirit:name>C_M_AXI_WUSER_WIDTH</spirit:name>
         <spirit:displayName>C M Axi Wuser Width</spirit:displayName>
-        <spirit:value spirit:format="long" spirit:resolve="generated" spirit:id="MODELPARAM_VALUE.C_M_AXI_WUSER_WIDTH">1</spirit:value>
+        <spirit:value spirit:format="long" spirit:resolve="generated" spirit:id="MODELPARAM_VALUE.C_M_AXI_WUSER_WIDTH">4</spirit:value>
       </spirit:modelParameter>
       <spirit:modelParameter spirit:dataType="integer">
         <spirit:name>C_M_AXI_RUSER_WIDTH</spirit:name>
         <spirit:displayName>C M Axi Ruser Width</spirit:displayName>
-        <spirit:value spirit:format="long" spirit:resolve="generated" spirit:id="MODELPARAM_VALUE.C_M_AXI_RUSER_WIDTH">1</spirit:value>
+        <spirit:value spirit:format="long" spirit:resolve="generated" spirit:id="MODELPARAM_VALUE.C_M_AXI_RUSER_WIDTH">4</spirit:value>
       </spirit:modelParameter>
       <spirit:modelParameter spirit:dataType="integer">
         <spirit:name>C_M_AXI_BUSER_WIDTH</spirit:name>
         <spirit:displayName>C M Axi Buser Width</spirit:displayName>
-        <spirit:value spirit:format="long" spirit:resolve="generated" spirit:id="MODELPARAM_VALUE.C_M_AXI_BUSER_WIDTH">1</spirit:value>
+        <spirit:value spirit:format="long" spirit:resolve="generated" spirit:id="MODELPARAM_VALUE.C_M_AXI_BUSER_WIDTH">4</spirit:value>
       </spirit:modelParameter>
     </spirit:modelParameters>
   </spirit:model>
@@ -1531,41 +1525,38 @@
       <spirit:enumeration>ACTIVE_HIGH</spirit:enumeration>
       <spirit:enumeration>ACTIVE_LOW</spirit:enumeration>
     </spirit:choice>
+    <spirit:choice>
+      <spirit:name>choice_list_a3ba13b6</spirit:name>
+      <spirit:enumeration>8</spirit:enumeration>
+      <spirit:enumeration>16</spirit:enumeration>
+      <spirit:enumeration>32</spirit:enumeration>
+      <spirit:enumeration>64</spirit:enumeration>
+      <spirit:enumeration>256</spirit:enumeration>
+    </spirit:choice>
+    <spirit:choice>
+      <spirit:name>choice_list_eba88d7c</spirit:name>
+      <spirit:enumeration>9</spirit:enumeration>
+      <spirit:enumeration>10</spirit:enumeration>
+      <spirit:enumeration>11</spirit:enumeration>
+      <spirit:enumeration>12</spirit:enumeration>
+    </spirit:choice>
   </spirit:choices>
   <spirit:fileSets>
     <spirit:fileSet>
       <spirit:name>xilinx_anylanguagesynthesis_view_fileset</spirit:name>
       <spirit:file>
-        <spirit:name>src/fifo_64x512/fifo_64x512.xci</spirit:name>
-        <spirit:userFileType>xci</spirit:userFileType>
-      </spirit:file>
-      <spirit:file>
         <spirit:name>src/deep_fifo_core.v</spirit:name>
         <spirit:fileType>verilogSource</spirit:fileType>
       </spirit:file>
       <spirit:file>
         <spirit:name>src/deepfifo_module.v</spirit:name>
         <spirit:fileType>verilogSource</spirit:fileType>
-        <spirit:userFileType>CHECKSUM_0e9dbdb7</spirit:userFileType>
+        <spirit:userFileType>CHECKSUM_a97b1c5e</spirit:userFileType>
       </spirit:file>
-    </spirit:fileSet>
-    <spirit:fileSet>
-      <spirit:name>xilinx_anylanguagesynthesis_xilinx_com_ip_fifo_generator_13_2__ref_view_fileset</spirit:name>
-      <spirit:vendorExtensions>
-        <xilinx:subCoreRef>
-          <xilinx:componentRef xilinx:vendor="xilinx.com" xilinx:library="ip" xilinx:name="fifo_generator" xilinx:version="13.2">
-            <xilinx:mode xilinx:name="create_mode"/>
-          </xilinx:componentRef>
-        </xilinx:subCoreRef>
-      </spirit:vendorExtensions>
     </spirit:fileSet>
     <spirit:fileSet>
       <spirit:name>xilinx_anylanguagebehavioralsimulation_view_fileset</spirit:name>
       <spirit:file>
-        <spirit:name>src/fifo_64x512/fifo_64x512.xci</spirit:name>
-        <spirit:userFileType>xci</spirit:userFileType>
-      </spirit:file>
-      <spirit:file>
         <spirit:name>src/deep_fifo_core.v</spirit:name>
         <spirit:fileType>verilogSource</spirit:fileType>
       </spirit:file>
@@ -1573,23 +1564,13 @@
         <spirit:name>src/deepfifo_module.v</spirit:name>
         <spirit:fileType>verilogSource</spirit:fileType>
       </spirit:file>
-    </spirit:fileSet>
-    <spirit:fileSet>
-      <spirit:name>xilinx_anylanguagebehavioralsimulation_xilinx_com_ip_fifo_generator_13_2__ref_view_fileset</spirit:name>
-      <spirit:vendorExtensions>
-        <xilinx:subCoreRef>
-          <xilinx:componentRef xilinx:vendor="xilinx.com" xilinx:library="ip" xilinx:name="fifo_generator" xilinx:version="13.2">
-            <xilinx:mode xilinx:name="create_mode"/>
-          </xilinx:componentRef>
-        </xilinx:subCoreRef>
-      </spirit:vendorExtensions>
     </spirit:fileSet>
     <spirit:fileSet>
       <spirit:name>xilinx_xpgui_view_fileset</spirit:name>
       <spirit:file>
         <spirit:name>xgui/deepfifo_module_v1_0.tcl</spirit:name>
         <spirit:fileType>tclSource</spirit:fileType>
-        <spirit:userFileType>CHECKSUM_7257a545</spirit:userFileType>
+        <spirit:userFileType>CHECKSUM_4bcf52e2</spirit:userFileType>
         <spirit:userFileType>XGUI_VERSION_2</spirit:userFileType>
       </spirit:file>
     </spirit:fileSet>
@@ -1597,29 +1578,29 @@
   <spirit:description>deepfifo_module_v1_0</spirit:description>
   <spirit:parameters>
     <spirit:parameter>
-      <spirit:name>log2_fifo_data_width</spirit:name>
-      <spirit:displayName>Log2 Fifo Data Width</spirit:displayName>
-      <spirit:value spirit:format="long" spirit:resolve="user" spirit:id="PARAM_VALUE.log2_fifo_data_width">6</spirit:value>
-    </spirit:parameter>
-    <spirit:parameter>
       <spirit:name>log2_ram_size_addr</spirit:name>
-      <spirit:displayName>Log2 Ram Size Addr</spirit:displayName>
+      <spirit:displayName>Log2 Ram Size Addr(deep fifo size, ex:64M set to 26)</spirit:displayName>
       <spirit:value spirit:format="long" spirit:resolve="user" spirit:id="PARAM_VALUE.log2_ram_size_addr">26</spirit:value>
     </spirit:parameter>
     <spirit:parameter>
       <spirit:name>log2_fifo_words</spirit:name>
-      <spirit:displayName>Log2 Fifo Words</spirit:displayName>
-      <spirit:value spirit:format="long" spirit:resolve="user" spirit:id="PARAM_VALUE.log2_fifo_words">9</spirit:value>
+      <spirit:displayName>Log2 Fifo Words(the fifo deepth,ex: 512 set to 9)</spirit:displayName>
+      <spirit:value spirit:format="long" spirit:resolve="user" spirit:id="PARAM_VALUE.log2_fifo_words" spirit:choiceRef="choice_list_eba88d7c">9</spirit:value>
     </spirit:parameter>
     <spirit:parameter>
       <spirit:name>fifo_pre_threshold</spirit:name>
-      <spirit:displayName>Fifo Pre Threshold</spirit:displayName>
+      <spirit:displayName>Fifo Pre Threshold(enter deep fifo mode for pre fifo)</spirit:displayName>
       <spirit:value spirit:format="long" spirit:resolve="user" spirit:id="PARAM_VALUE.fifo_pre_threshold">128</spirit:value>
     </spirit:parameter>
     <spirit:parameter>
       <spirit:name>fifo_post_threshold</spirit:name>
-      <spirit:displayName>Fifo Post Threshold</spirit:displayName>
+      <spirit:displayName>Fifo Post Threshold(quit deep fifo mode for post fifo)</spirit:displayName>
       <spirit:value spirit:format="long" spirit:resolve="user" spirit:id="PARAM_VALUE.fifo_post_threshold">128</spirit:value>
+    </spirit:parameter>
+    <spirit:parameter>
+      <spirit:name>FIFO_DATA_WIDTH</spirit:name>
+      <spirit:displayName>Fifo Data Width(deep fifo data width,ex:64bit set to 64)</spirit:displayName>
+      <spirit:value spirit:format="long" spirit:resolve="user" spirit:id="PARAM_VALUE.FIFO_DATA_WIDTH" spirit:choiceRef="choice_list_a3ba13b6">64</spirit:value>
     </spirit:parameter>
     <spirit:parameter>
       <spirit:name>C_M_AXI_TARGET_SLAVE_BASE_ADDR</spirit:name>
@@ -1634,7 +1615,7 @@
     <spirit:parameter>
       <spirit:name>C_M_AXI_ID_WIDTH</spirit:name>
       <spirit:displayName>C M Axi Id Width</spirit:displayName>
-      <spirit:value spirit:format="long" spirit:resolve="user" spirit:id="PARAM_VALUE.C_M_AXI_ID_WIDTH">1</spirit:value>
+      <spirit:value spirit:format="long" spirit:resolve="user" spirit:id="PARAM_VALUE.C_M_AXI_ID_WIDTH">4</spirit:value>
     </spirit:parameter>
     <spirit:parameter>
       <spirit:name>C_M_AXI_ADDR_WIDTH</spirit:name>
@@ -1649,27 +1630,27 @@
     <spirit:parameter>
       <spirit:name>C_M_AXI_AWUSER_WIDTH</spirit:name>
       <spirit:displayName>C M Axi Awuser Width</spirit:displayName>
-      <spirit:value spirit:format="long" spirit:resolve="user" spirit:id="PARAM_VALUE.C_M_AXI_AWUSER_WIDTH">1</spirit:value>
+      <spirit:value spirit:format="long" spirit:resolve="user" spirit:id="PARAM_VALUE.C_M_AXI_AWUSER_WIDTH">4</spirit:value>
     </spirit:parameter>
     <spirit:parameter>
       <spirit:name>C_M_AXI_ARUSER_WIDTH</spirit:name>
       <spirit:displayName>C M Axi Aruser Width</spirit:displayName>
-      <spirit:value spirit:format="long" spirit:resolve="user" spirit:id="PARAM_VALUE.C_M_AXI_ARUSER_WIDTH">1</spirit:value>
+      <spirit:value spirit:format="long" spirit:resolve="user" spirit:id="PARAM_VALUE.C_M_AXI_ARUSER_WIDTH">4</spirit:value>
     </spirit:parameter>
     <spirit:parameter>
       <spirit:name>C_M_AXI_WUSER_WIDTH</spirit:name>
       <spirit:displayName>C M Axi Wuser Width</spirit:displayName>
-      <spirit:value spirit:format="long" spirit:resolve="user" spirit:id="PARAM_VALUE.C_M_AXI_WUSER_WIDTH">1</spirit:value>
+      <spirit:value spirit:format="long" spirit:resolve="user" spirit:id="PARAM_VALUE.C_M_AXI_WUSER_WIDTH">4</spirit:value>
     </spirit:parameter>
     <spirit:parameter>
       <spirit:name>C_M_AXI_RUSER_WIDTH</spirit:name>
       <spirit:displayName>C M Axi Ruser Width</spirit:displayName>
-      <spirit:value spirit:format="long" spirit:resolve="user" spirit:id="PARAM_VALUE.C_M_AXI_RUSER_WIDTH">1</spirit:value>
+      <spirit:value spirit:format="long" spirit:resolve="user" spirit:id="PARAM_VALUE.C_M_AXI_RUSER_WIDTH">4</spirit:value>
     </spirit:parameter>
     <spirit:parameter>
       <spirit:name>C_M_AXI_BUSER_WIDTH</spirit:name>
       <spirit:displayName>C M Axi Buser Width</spirit:displayName>
-      <spirit:value spirit:format="long" spirit:resolve="user" spirit:id="PARAM_VALUE.C_M_AXI_BUSER_WIDTH">1</spirit:value>
+      <spirit:value spirit:format="long" spirit:resolve="user" spirit:id="PARAM_VALUE.C_M_AXI_BUSER_WIDTH">4</spirit:value>
     </spirit:parameter>
     <spirit:parameter>
       <spirit:name>Component_Name</spirit:name>
@@ -1679,28 +1660,27 @@
   <spirit:vendorExtensions>
     <xilinx:coreExtensions>
       <xilinx:supportedFamilies>
+        <xilinx:family xilinx:lifeCycle="Production">virtex7</xilinx:family>
+        <xilinx:family xilinx:lifeCycle="Production">qvirtex7</xilinx:family>
+        <xilinx:family xilinx:lifeCycle="Production">versal</xilinx:family>
+        <xilinx:family xilinx:lifeCycle="Production">kintex7</xilinx:family>
+        <xilinx:family xilinx:lifeCycle="Production">kintex7l</xilinx:family>
+        <xilinx:family xilinx:lifeCycle="Production">qkintex7</xilinx:family>
+        <xilinx:family xilinx:lifeCycle="Production">qkintex7l</xilinx:family>
+        <xilinx:family xilinx:lifeCycle="Production">akintex7</xilinx:family>
+        <xilinx:family xilinx:lifeCycle="Production">artix7</xilinx:family>
+        <xilinx:family xilinx:lifeCycle="Production">artix7l</xilinx:family>
+        <xilinx:family xilinx:lifeCycle="Production">aartix7</xilinx:family>
+        <xilinx:family xilinx:lifeCycle="Production">qartix7</xilinx:family>
         <xilinx:family xilinx:lifeCycle="Production">zynq</xilinx:family>
-        <xilinx:family xilinx:lifeCycle="Beta">artix7</xilinx:family>
-        <xilinx:family xilinx:lifeCycle="Beta">artix7l</xilinx:family>
-        <xilinx:family xilinx:lifeCycle="Beta">qartix7</xilinx:family>
-        <xilinx:family xilinx:lifeCycle="Beta">qkintex7</xilinx:family>
-        <xilinx:family xilinx:lifeCycle="Beta">qkintex7l</xilinx:family>
-        <xilinx:family xilinx:lifeCycle="Beta">kintexu</xilinx:family>
-        <xilinx:family xilinx:lifeCycle="Beta">kintexuplus</xilinx:family>
-        <xilinx:family xilinx:lifeCycle="Beta">qvirtex7</xilinx:family>
-        <xilinx:family xilinx:lifeCycle="Beta">virtexuplus</xilinx:family>
-        <xilinx:family xilinx:lifeCycle="Beta">qzynq</xilinx:family>
-        <xilinx:family xilinx:lifeCycle="Beta">zynquplus</xilinx:family>
-        <xilinx:family xilinx:lifeCycle="Beta">kintex7</xilinx:family>
-        <xilinx:family xilinx:lifeCycle="Beta">kintex7l</xilinx:family>
-        <xilinx:family xilinx:lifeCycle="Beta">spartan7</xilinx:family>
-        <xilinx:family xilinx:lifeCycle="Beta">virtex7</xilinx:family>
-        <xilinx:family xilinx:lifeCycle="Beta">virtexu</xilinx:family>
-        <xilinx:family xilinx:lifeCycle="Beta">virtexuplusHBM</xilinx:family>
-        <xilinx:family xilinx:lifeCycle="Beta">aartix7</xilinx:family>
-        <xilinx:family xilinx:lifeCycle="Beta">akintex7</xilinx:family>
-        <xilinx:family xilinx:lifeCycle="Beta">aspartan7</xilinx:family>
-        <xilinx:family xilinx:lifeCycle="Beta">azynq</xilinx:family>
+        <xilinx:family xilinx:lifeCycle="Production">qzynq</xilinx:family>
+        <xilinx:family xilinx:lifeCycle="Production">azynq</xilinx:family>
+        <xilinx:family xilinx:lifeCycle="Production">virtexu</xilinx:family>
+        <xilinx:family xilinx:lifeCycle="Production">zynquplus</xilinx:family>
+        <xilinx:family xilinx:lifeCycle="Production">virtexuplus</xilinx:family>
+        <xilinx:family xilinx:lifeCycle="Production">virtexuplusHBM</xilinx:family>
+        <xilinx:family xilinx:lifeCycle="Production">kintexuplus</xilinx:family>
+        <xilinx:family xilinx:lifeCycle="Production">kintexu</xilinx:family>
       </xilinx:supportedFamilies>
       <xilinx:taxonomies>
         <xilinx:taxonomy>/UserIP</xilinx:taxonomy>
@@ -1708,69 +1688,126 @@
       <xilinx:displayName>deepfifo_module_v1_0</xilinx:displayName>
       <xilinx:definitionSource>package_project</xilinx:definitionSource>
       <xilinx:xpmLibraries>
-        <xilinx:xpmLibrary>XPM_CDC</xilinx:xpmLibrary>
-        <xilinx:xpmLibrary>XPM_MEMORY</xilinx:xpmLibrary>
+        <xilinx:xpmLibrary>XPM_FIFO</xilinx:xpmLibrary>
       </xilinx:xpmLibraries>
-      <xilinx:coreRevision>7</xilinx:coreRevision>
-      <xilinx:coreCreationDateTime>2022-10-09T05:39:04Z</xilinx:coreCreationDateTime>
+      <xilinx:coreRevision>11</xilinx:coreRevision>
+      <xilinx:coreCreationDateTime>2023-03-14T01:31:16Z</xilinx:coreCreationDateTime>
       <xilinx:tags>
-        <xilinx:tag xilinx:name="ui.data.coregen.dd@5809743c_ARCHIVE_LOCATION">/home/mp/wcc_demo/u220_b205_network/ip_repo/deep_fifo</xilinx:tag>
-        <xilinx:tag xilinx:name="ui.data.coregen.dd@d013ba4_ARCHIVE_LOCATION">/home/mp/wcc_demo/u220_b205_network/ip_repo/deep_fifo</xilinx:tag>
-        <xilinx:tag xilinx:name="ui.data.coregen.dd@69525e9_ARCHIVE_LOCATION">/home/mp/wcc_demo/u220_b205_network/ip_repo/deep_fifo</xilinx:tag>
-        <xilinx:tag xilinx:name="ui.data.coregen.dd@f7ed51a_ARCHIVE_LOCATION">/home/mp/wcc_demo/u220_b205_network/ip_repo/deep_fifo</xilinx:tag>
-        <xilinx:tag xilinx:name="ui.data.coregen.dd@2807e08f_ARCHIVE_LOCATION">/home/mp/wcc_demo/u220_b205_network/ip_repo/deep_fifo</xilinx:tag>
-        <xilinx:tag xilinx:name="ui.data.coregen.dd@6082c173_ARCHIVE_LOCATION">/home/mp/wcc_demo/u220_b205_network/ip_repo/deep_fifo</xilinx:tag>
-        <xilinx:tag xilinx:name="ui.data.coregen.dd@4f7a4124_ARCHIVE_LOCATION">/home/mp/wcc_demo/u220_b205_network/ip_repo/deep_fifo</xilinx:tag>
-        <xilinx:tag xilinx:name="ui.data.coregen.dd@72ee5011_ARCHIVE_LOCATION">/home/mp/wcc_demo/u220_b205_network/ip_repo/deep_fifo</xilinx:tag>
-        <xilinx:tag xilinx:name="ui.data.coregen.dd@2c0b2b4e_ARCHIVE_LOCATION">/home/mp/wcc_demo/u220_b205_network/ip_repo/deep_fifo</xilinx:tag>
-        <xilinx:tag xilinx:name="ui.data.coregen.dd@7f3ed6d3_ARCHIVE_LOCATION">/home/mp/wcc_demo/u220_b205_network/ip_repo/deep_fifo</xilinx:tag>
-        <xilinx:tag xilinx:name="ui.data.coregen.dd@77b52242_ARCHIVE_LOCATION">/home/mp/wcc_demo/u220_b205_network/ip_repo/deep_fifo</xilinx:tag>
-        <xilinx:tag xilinx:name="ui.data.coregen.dd@46dea622_ARCHIVE_LOCATION">/home/mp/wcc_demo/u220_b205_network/ip_repo/deep_fifo</xilinx:tag>
-        <xilinx:tag xilinx:name="ui.data.coregen.dd@7ef7b5d2_ARCHIVE_LOCATION">/home/mp/wcc_demo/u220_b205_network/ip_repo/deep_fifo</xilinx:tag>
-        <xilinx:tag xilinx:name="ui.data.coregen.dd@5599a5ec_ARCHIVE_LOCATION">/home/mp/wcc_demo/u220_b205_network/ip_repo/deep_fifo</xilinx:tag>
-        <xilinx:tag xilinx:name="ui.data.coregen.dd@4490192e_ARCHIVE_LOCATION">/home/mp/wcc_demo/u220_b205_network/ip_repo/deep_fifo</xilinx:tag>
-        <xilinx:tag xilinx:name="ui.data.coregen.dd@1a756e9a_ARCHIVE_LOCATION">/home/mp/wcc_demo/u220_b205_network/ip_repo/deep_fifo</xilinx:tag>
-        <xilinx:tag xilinx:name="ui.data.coregen.dd@5afbbaeb_ARCHIVE_LOCATION">/home/mp/wcc_demo/u220_b205_network/ip_repo/deep_fifo</xilinx:tag>
-        <xilinx:tag xilinx:name="ui.data.coregen.dd@5ca8989c_ARCHIVE_LOCATION">/home/mp/wcc_demo/u220_b205_network/ip_repo/deep_fifo</xilinx:tag>
-        <xilinx:tag xilinx:name="ui.data.coregen.dd@12258a80_ARCHIVE_LOCATION">/home/mp/wcc_demo/u220_b205_network/ip_repo/deep_fifo</xilinx:tag>
-        <xilinx:tag xilinx:name="ui.data.coregen.dd@b634563_ARCHIVE_LOCATION">/home/mp/wcc_demo/u220_b205_network/ip_repo/deep_fifo</xilinx:tag>
-        <xilinx:tag xilinx:name="ui.data.coregen.dd@34ac02fc_ARCHIVE_LOCATION">/home/mp/wcc_demo/u220_b205_network/ip_repo/deep_fifo</xilinx:tag>
-        <xilinx:tag xilinx:name="ui.data.coregen.dd@4f17aeb5_ARCHIVE_LOCATION">/home/mp/wcc_demo/u220_b205_network/ip_repo/deep_fifo</xilinx:tag>
-        <xilinx:tag xilinx:name="ui.data.coregen.dd@12d1e549_ARCHIVE_LOCATION">/home/mp/wcc_demo/u220_b205_network/ip_repo/deep_fifo</xilinx:tag>
-        <xilinx:tag xilinx:name="ui.data.coregen.dd@2d19dc69_ARCHIVE_LOCATION">/home/mp/wcc_demo/u220_b205_network/ip_repo/deep_fifo</xilinx:tag>
-        <xilinx:tag xilinx:name="ui.data.coregen.dd@27602f6f_ARCHIVE_LOCATION">/home/mp/wcc_demo/u220_b205_network/ip_repo/deep_fifo</xilinx:tag>
-        <xilinx:tag xilinx:name="ui.data.coregen.dd@692c1a3_ARCHIVE_LOCATION">/home/mp/wcc_demo/u220_b205_network/ip_repo/deep_fifo</xilinx:tag>
-        <xilinx:tag xilinx:name="ui.data.coregen.dd@33bad4dd_ARCHIVE_LOCATION">/home/mp/wcc_demo/e200_net/ip/deep_fifo</xilinx:tag>
-        <xilinx:tag xilinx:name="ui.data.coregen.dd@4458465c_ARCHIVE_LOCATION">/home/mp/wcc_demo/e200_net/ip/deep_fifo</xilinx:tag>
-        <xilinx:tag xilinx:name="ui.data.coregen.dd@dbba6ec_ARCHIVE_LOCATION">/home/mp/wcc_demo/e200_net/ip/deep_fifo</xilinx:tag>
-        <xilinx:tag xilinx:name="ui.data.coregen.dd@324f3032_ARCHIVE_LOCATION">/home/mp/wcc_demo/e200_net/ip/deep_fifo</xilinx:tag>
-        <xilinx:tag xilinx:name="ui.data.coregen.dd@62357121_ARCHIVE_LOCATION">/home/mp/wcc_demo/e200_net/ip/deep_fifo</xilinx:tag>
-        <xilinx:tag xilinx:name="ui.data.coregen.dd@7ab8dac_ARCHIVE_LOCATION">/home/mp/wcc_demo/git_antsdr_uhd/antsdr_uhd_project/fpga/antsdr_e200/ip/deep_fifo</xilinx:tag>
-        <xilinx:tag xilinx:name="ui.data.coregen.dd@63d1ec42_ARCHIVE_LOCATION">/home/mp/wcc_demo/git_antsdr_uhd/antsdr_uhd_project/fpga/antsdr_e200/ip/deep_fifo</xilinx:tag>
-        <xilinx:tag xilinx:name="ui.data.coregen.dd@50bfdff8_ARCHIVE_LOCATION">/home/mp/wcc_demo/git_antsdr_uhd/antsdr_uhd_project/fpga/antsdr_e200/ip/deep_fifo</xilinx:tag>
-        <xilinx:tag xilinx:name="ui.data.coregen.dd@5c5a2ff5_ARCHIVE_LOCATION">/home/mp/wcc_demo/git_antsdr_uhd/antsdr_uhd_project/fpga/antsdr_e200/ip/deep_fifo</xilinx:tag>
-        <xilinx:tag xilinx:name="ui.data.coregen.dd@178f2c92_ARCHIVE_LOCATION">/home/mp/wcc_demo/git_antsdr_uhd/antsdr_uhd_project/fpga/antsdr_e200/ip/deep_fifo</xilinx:tag>
-        <xilinx:tag xilinx:name="ui.data.coregen.dd@2d9ca7f4_ARCHIVE_LOCATION">/home/mp/wcc_demo/git_antsdr_uhd/antsdr_uhd_project/fpga/antsdr_e200/ip/deep_fifo</xilinx:tag>
-        <xilinx:tag xilinx:name="ui.data.coregen.dd@6ab570c3_ARCHIVE_LOCATION">/home/mp/wcc_demo/git_antsdr_uhd/antsdr_uhd_project/fpga/antsdr_e200/ip/deep_fifo</xilinx:tag>
-        <xilinx:tag xilinx:name="ui.data.coregen.dd@3ce38b0a_ARCHIVE_LOCATION">/home/mp/wcc_demo/git_antsdr_uhd/antsdr_uhd_project/fpga/antsdr_e200/ip/deep_fifo</xilinx:tag>
-        <xilinx:tag xilinx:name="ui.data.coregen.dd@280ac049_ARCHIVE_LOCATION">/home/mp/wcc_demo/git_antsdr_uhd/antsdr_uhd_project/fpga/antsdr_e200/ip/deep_fifo</xilinx:tag>
-        <xilinx:tag xilinx:name="ui.data.coregen.dd@6d4a67fb_ARCHIVE_LOCATION">/home/mp/wcc_demo/git_antsdr_uhd/antsdr_uhd_project/fpga/antsdr_e200/ip/deep_fifo</xilinx:tag>
-        <xilinx:tag xilinx:name="ui.data.coregen.dd@cdb7dac_ARCHIVE_LOCATION">/home/mp/wcc_demo/git_antsdr_uhd/antsdr_uhd_project/fpga/antsdr_e200/ip/deep_fifo</xilinx:tag>
-        <xilinx:tag xilinx:name="ui.data.coregen.dd@63221d33_ARCHIVE_LOCATION">/home/mp/wcc_demo/git_antsdr_uhd/antsdr_uhd_project/fpga/antsdr_e200/ip/deep_fifo</xilinx:tag>
-        <xilinx:tag xilinx:name="ui.data.coregen.dd@657951a_ARCHIVE_LOCATION">/home/mp/wcc_demo/git_antsdr_uhd/antsdr_uhd_project/fpga/antsdr_e200/ip/deep_fifo</xilinx:tag>
-        <xilinx:tag xilinx:name="ui.data.coregen.dd@476d4572_ARCHIVE_LOCATION">/home/mp/wcc_demo/git_antsdr_uhd/antsdr_uhd_project/fpga/antsdr_e200/ip/deep_fifo</xilinx:tag>
-        <xilinx:tag xilinx:name="ui.data.coregen.dd@517ad2be_ARCHIVE_LOCATION">/home/mp/wcc_demo/git_antsdr_uhd/antsdr_uhd_project/fpga/antsdr_e200/ip/deep_fifo</xilinx:tag>
-        <xilinx:tag xilinx:name="ui.data.coregen.dd@2fb1925c_ARCHIVE_LOCATION">/home/mp/wcc_demo/git_antsdr_uhd/antsdr_uhd_project/fpga/antsdr_e200/ip/deep_fifo</xilinx:tag>
+        <xilinx:tag xilinx:name="ui.data.coregen.df@58d8b923_ARCHIVE_LOCATION">/home/wcc/mp_demo/package_ip</xilinx:tag>
+        <xilinx:tag xilinx:name="ui.data.coregen.df@6a315b89_ARCHIVE_LOCATION">/home/wcc/mp_demo/package_ip</xilinx:tag>
+        <xilinx:tag xilinx:name="ui.data.coregen.df@39f0cba_ARCHIVE_LOCATION">/home/wcc/mp_demo/package_ip</xilinx:tag>
+        <xilinx:tag xilinx:name="ui.data.coregen.df@1e9c5683_ARCHIVE_LOCATION">/home/wcc/mp_demo/package_ip</xilinx:tag>
+        <xilinx:tag xilinx:name="ui.data.coregen.df@1a36d561_ARCHIVE_LOCATION">/home/wcc/mp_demo/package_ip</xilinx:tag>
+        <xilinx:tag xilinx:name="ui.data.coregen.df@226b2ad5_ARCHIVE_LOCATION">/home/wcc/mp_demo/package_ip</xilinx:tag>
+        <xilinx:tag xilinx:name="ui.data.coregen.df@5d1cb467_ARCHIVE_LOCATION">/home/wcc/mp_demo/package_ip</xilinx:tag>
+        <xilinx:tag xilinx:name="ui.data.coregen.df@72a0df93_ARCHIVE_LOCATION">/home/wcc/mp_demo/package_ip</xilinx:tag>
+        <xilinx:tag xilinx:name="ui.data.coregen.df@514ed478_ARCHIVE_LOCATION">/home/wcc/mp_demo/package_ip</xilinx:tag>
+        <xilinx:tag xilinx:name="ui.data.coregen.df@19ca081f_ARCHIVE_LOCATION">/home/wcc/mp_demo/package_ip</xilinx:tag>
+        <xilinx:tag xilinx:name="ui.data.coregen.df@74f564e_ARCHIVE_LOCATION">/home/wcc/mp_demo/package_ip</xilinx:tag>
+        <xilinx:tag xilinx:name="ui.data.coregen.df@1bc56b33_ARCHIVE_LOCATION">/home/wcc/mp_demo/package_ip</xilinx:tag>
+        <xilinx:tag xilinx:name="ui.data.coregen.df@7b864294_ARCHIVE_LOCATION">/home/wcc/mp_demo/package_ip</xilinx:tag>
+        <xilinx:tag xilinx:name="ui.data.coregen.df@581e5f5c_ARCHIVE_LOCATION">/home/wcc/mp_demo/package_ip</xilinx:tag>
+        <xilinx:tag xilinx:name="ui.data.coregen.df@519ef14f_ARCHIVE_LOCATION">/home/wcc/mp_demo/package_ip</xilinx:tag>
+        <xilinx:tag xilinx:name="ui.data.coregen.df@3118c8f1_ARCHIVE_LOCATION">/home/wcc/mp_demo/package_ip</xilinx:tag>
+        <xilinx:tag xilinx:name="ui.data.coregen.df@76d61cb9_ARCHIVE_LOCATION">/home/wcc/mp_demo/package_ip</xilinx:tag>
+        <xilinx:tag xilinx:name="ui.data.coregen.df@587c3090_ARCHIVE_LOCATION">/home/wcc/mp_demo/package_ip</xilinx:tag>
+        <xilinx:tag xilinx:name="ui.data.coregen.df@2c121b6e_ARCHIVE_LOCATION">/home/wcc/mp_demo/package_ip</xilinx:tag>
+        <xilinx:tag xilinx:name="ui.data.coregen.df@71d92bb8_ARCHIVE_LOCATION">/home/wcc/mp_demo/package_ip</xilinx:tag>
+        <xilinx:tag xilinx:name="ui.data.coregen.df@27eec59a_ARCHIVE_LOCATION">/home/wcc/mp_demo/package_ip</xilinx:tag>
+        <xilinx:tag xilinx:name="ui.data.coregen.df@50de41ed_ARCHIVE_LOCATION">/home/wcc/mp_demo/A7-Lite/deep_fifo_test/deep_fifo</xilinx:tag>
+        <xilinx:tag xilinx:name="ui.data.coregen.df@6dee8d74_ARCHIVE_LOCATION">/home/wcc/mp_demo/A7-Lite/deep_fifo_test/deep_fifo</xilinx:tag>
+        <xilinx:tag xilinx:name="ui.data.coregen.df@50f006b2_ARCHIVE_LOCATION">/home/wcc/mp_demo/A7-Lite/deep_fifo_test/deep_fifo</xilinx:tag>
+        <xilinx:tag xilinx:name="ui.data.coregen.df@4b09169b_ARCHIVE_LOCATION">/home/wcc/mp_demo/A7-Lite/deep_fifo_test/deep_fifo</xilinx:tag>
+        <xilinx:tag xilinx:name="ui.data.coregen.df@77b4b454_ARCHIVE_LOCATION">/home/wcc/mp_demo/A7-Lite/deep_fifo_test/deep_fifo</xilinx:tag>
+        <xilinx:tag xilinx:name="ui.data.coregen.df@7dbf0f_ARCHIVE_LOCATION">/home/wcc/mp_demo/A7-Lite/deep_fifo_test/deep_fifo</xilinx:tag>
+        <xilinx:tag xilinx:name="ui.data.coregen.df@722ee065_ARCHIVE_LOCATION">/home/wcc/mp_demo/A7-Lite/deep_fifo_test/deep_fifo</xilinx:tag>
+        <xilinx:tag xilinx:name="ui.data.coregen.df@29eb1e49_ARCHIVE_LOCATION">/home/wcc/mp_demo/A7-Lite/deep_fifo_test/deep_fifo</xilinx:tag>
+        <xilinx:tag xilinx:name="ui.data.coregen.df@22ba0835_ARCHIVE_LOCATION">/home/wcc/mp_demo/A7-Lite/deep_fifo_test/deep_fifo</xilinx:tag>
+        <xilinx:tag xilinx:name="ui.data.coregen.df@153653f2_ARCHIVE_LOCATION">/home/wcc/mp_demo/A7-Lite/deep_fifo_test/deep_fifo</xilinx:tag>
+        <xilinx:tag xilinx:name="ui.data.coregen.df@7215572a_ARCHIVE_LOCATION">/home/wcc/mp_demo/A7-Lite/deep_fifo_test/deep_fifo</xilinx:tag>
+        <xilinx:tag xilinx:name="ui.data.coregen.df@696e8b10_ARCHIVE_LOCATION">/home/wcc/mp_demo/A7-Lite/deep_fifo_test/deep_fifo</xilinx:tag>
+        <xilinx:tag xilinx:name="ui.data.coregen.df@1e99a753_ARCHIVE_LOCATION">/home/wcc/mp_demo/A7-Lite/deep_fifo_test/deep_fifo</xilinx:tag>
+        <xilinx:tag xilinx:name="ui.data.coregen.df@41544380_ARCHIVE_LOCATION">/home/wcc/mp_demo/A7-Lite/deep_fifo_test/deep_fifo</xilinx:tag>
+        <xilinx:tag xilinx:name="ui.data.coregen.df@3e40afec_ARCHIVE_LOCATION">/home/wcc/mp_demo/A7-Lite/deep_fifo_test/deep_fifo</xilinx:tag>
+        <xilinx:tag xilinx:name="ui.data.coregen.df@5c7ff1bf_ARCHIVE_LOCATION">/home/wcc/mp_demo/A7-Lite/deep_fifo_test/deep_fifo</xilinx:tag>
+        <xilinx:tag xilinx:name="ui.data.coregen.df@fb95b93_ARCHIVE_LOCATION">/home/wcc/mp_demo/A7-Lite/deep_fifo_test/deep_fifo</xilinx:tag>
+        <xilinx:tag xilinx:name="ui.data.coregen.df@355866c6_ARCHIVE_LOCATION">/home/wcc/mp_demo/A7-Lite/deep_fifo_test/deep_fifo</xilinx:tag>
+        <xilinx:tag xilinx:name="ui.data.coregen.df@2061e353_ARCHIVE_LOCATION">/home/wcc/mp_demo/A7-Lite/deep_fifo_test/deep_fifo</xilinx:tag>
+        <xilinx:tag xilinx:name="ui.data.coregen.df@4ec4537e_ARCHIVE_LOCATION">/home/wcc/mp_demo/A7-Lite/deep_fifo_test/deep_fifo</xilinx:tag>
+        <xilinx:tag xilinx:name="ui.data.coregen.df@beb7382_ARCHIVE_LOCATION">/home/wcc/mp_demo/A7-Lite/deep_fifo_test/deep_fifo</xilinx:tag>
+        <xilinx:tag xilinx:name="ui.data.coregen.df@49b57aab_ARCHIVE_LOCATION">/home/wcc/mp_demo/A7-Lite/deep_fifo_test/deep_fifo</xilinx:tag>
+        <xilinx:tag xilinx:name="ui.data.coregen.df@72c866b8_ARCHIVE_LOCATION">/home/wcc/mp_demo/A7-Lite/deep_fifo_test/deep_fifo</xilinx:tag>
+        <xilinx:tag xilinx:name="ui.data.coregen.df@1e223441_ARCHIVE_LOCATION">/home/wcc/mp_demo/A7-Lite/deep_fifo_test/deep_fifo</xilinx:tag>
+        <xilinx:tag xilinx:name="ui.data.coregen.df@6cddee72_ARCHIVE_LOCATION">/home/wcc/mp_demo/A7-Lite/deep_fifo_test/deep_fifo</xilinx:tag>
+        <xilinx:tag xilinx:name="ui.data.coregen.df@6a73c1e1_ARCHIVE_LOCATION">/home/wcc/mp_demo/A7-Lite/deep_fifo_test/deep_fifo</xilinx:tag>
+        <xilinx:tag xilinx:name="ui.data.coregen.df@247b66d8_ARCHIVE_LOCATION">/home/wcc/mp_demo/A7-Lite/deep_fifo_test/deep_fifo</xilinx:tag>
+        <xilinx:tag xilinx:name="ui.data.coregen.df@3564a41b_ARCHIVE_LOCATION">/home/wcc/mp_demo/A7-Lite/deep_fifo_test/deep_fifo</xilinx:tag>
+        <xilinx:tag xilinx:name="ui.data.coregen.df@3c7078a9_ARCHIVE_LOCATION">/home/wcc/mp_demo/A7-Lite/deep_fifo_test/deep_fifo</xilinx:tag>
+        <xilinx:tag xilinx:name="ui.data.coregen.df@1e4fe078_ARCHIVE_LOCATION">/home/wcc/mp_demo/A7-Lite/deep_fifo_test/deep_fifo</xilinx:tag>
+        <xilinx:tag xilinx:name="ui.data.coregen.df@40c59420_ARCHIVE_LOCATION">/home/wcc/mp_demo/A7-Lite/deep_fifo_test/deep_fifo</xilinx:tag>
+        <xilinx:tag xilinx:name="ui.data.coregen.df@64940f9f_ARCHIVE_LOCATION">/home/wcc/mp_demo/A7-Lite/deep_fifo_test/deep_fifo</xilinx:tag>
+        <xilinx:tag xilinx:name="ui.data.coregen.df@1c6c843a_ARCHIVE_LOCATION">/home/wcc/mp_demo/A7-Lite/deep_fifo_test/deep_fifo</xilinx:tag>
+        <xilinx:tag xilinx:name="ui.data.coregen.df@3f4400a_ARCHIVE_LOCATION">/home/wcc/mp_demo/A7-Lite/deep_fifo_test/deep_fifo</xilinx:tag>
+        <xilinx:tag xilinx:name="ui.data.coregen.df@6d6710cf_ARCHIVE_LOCATION">/home/wcc/mp_demo/A7-Lite/deep_fifo_test/deep_fifo</xilinx:tag>
+        <xilinx:tag xilinx:name="ui.data.coregen.df@623c4497_ARCHIVE_LOCATION">/home/wcc/mp_demo/A7-Lite/deep_fifo_test/deep_fifo</xilinx:tag>
+        <xilinx:tag xilinx:name="ui.data.coregen.df@6f9f97a5_ARCHIVE_LOCATION">/home/wcc/mp_demo/A7-Lite/deep_fifo_test/deep_fifo</xilinx:tag>
+        <xilinx:tag xilinx:name="ui.data.coregen.df@53dd9e9b_ARCHIVE_LOCATION">/home/wcc/mp_demo/A7-Lite/deep_fifo_test/deep_fifo</xilinx:tag>
+        <xilinx:tag xilinx:name="ui.data.coregen.df@47827e8a_ARCHIVE_LOCATION">/home/wcc/mp_demo/A7-Lite/deep_fifo_test/deep_fifo</xilinx:tag>
+        <xilinx:tag xilinx:name="ui.data.coregen.df@da2724e_ARCHIVE_LOCATION">/home/wcc/mp_demo/A7-Lite/deep_fifo_test/deep_fifo</xilinx:tag>
+        <xilinx:tag xilinx:name="ui.data.coregen.df@501e1ec5_ARCHIVE_LOCATION">/home/wcc/mp_demo/A7-Lite/deep_fifo_test/deep_fifo</xilinx:tag>
+        <xilinx:tag xilinx:name="ui.data.coregen.df@19105651_ARCHIVE_LOCATION">/home/wcc/mp_demo/A7-Lite/deep_fifo_test/deep_fifo</xilinx:tag>
+        <xilinx:tag xilinx:name="ui.data.coregen.df@391c40bc_ARCHIVE_LOCATION">/home/wcc/mp_demo/A7-Lite/deep_fifo_test/deep_fifo</xilinx:tag>
+        <xilinx:tag xilinx:name="ui.data.coregen.df@71f3e2ba_ARCHIVE_LOCATION">/home/wcc/mp_demo/A7-Lite/deep_fifo_test/deep_fifo</xilinx:tag>
+        <xilinx:tag xilinx:name="ui.data.coregen.df@382dbca8_ARCHIVE_LOCATION">/home/wcc/mp_demo/A7-Lite/deep_fifo_test/deep_fifo</xilinx:tag>
+        <xilinx:tag xilinx:name="ui.data.coregen.df@2c8eb949_ARCHIVE_LOCATION">/home/wcc/mp_demo/A7-Lite/deep_fifo_test/deep_fifo</xilinx:tag>
+        <xilinx:tag xilinx:name="ui.data.coregen.df@543c247_ARCHIVE_LOCATION">/home/wcc/mp_demo/A7-Lite/deep_fifo_test/deep_fifo</xilinx:tag>
+        <xilinx:tag xilinx:name="ui.data.coregen.df@26cdb68d_ARCHIVE_LOCATION">/home/wcc/mp_demo/A7-Lite/deep_fifo_test/deep_fifo</xilinx:tag>
+        <xilinx:tag xilinx:name="ui.data.coregen.df@239f17dc_ARCHIVE_LOCATION">/home/wcc/mp_demo/A7-Lite/deep_fifo_test/deep_fifo</xilinx:tag>
+        <xilinx:tag xilinx:name="ui.data.coregen.df@3859022d_ARCHIVE_LOCATION">/home/wcc/mp_demo/A7-Lite/deep_fifo_test/deep_fifo</xilinx:tag>
+        <xilinx:tag xilinx:name="ui.data.coregen.df@33ebf1de_ARCHIVE_LOCATION">/home/wcc/mp_demo/A7-Lite/deep_fifo_test/deep_fifo</xilinx:tag>
+        <xilinx:tag xilinx:name="ui.data.coregen.df@6e70de52_ARCHIVE_LOCATION">/home/wcc/mp_demo/A7-Lite/deep_fifo_test/deep_fifo</xilinx:tag>
+        <xilinx:tag xilinx:name="ui.data.coregen.df@5e20eecb_ARCHIVE_LOCATION">/home/wcc/mp_demo/A7-Lite/deep_fifo_test/deep_fifo</xilinx:tag>
+        <xilinx:tag xilinx:name="ui.data.coregen.df@513cc161_ARCHIVE_LOCATION">/home/wcc/mp_demo/A7-Lite/deep_fifo_test/deep_fifo</xilinx:tag>
+        <xilinx:tag xilinx:name="ui.data.coregen.df@44080be7_ARCHIVE_LOCATION">/home/wcc/mp_demo/A7-Lite/deep_fifo_test/deep_fifo</xilinx:tag>
+        <xilinx:tag xilinx:name="ui.data.coregen.df@5bf54611_ARCHIVE_LOCATION">/home/wcc/mp_demo/A7-Lite/deep_fifo_test/deep_fifo</xilinx:tag>
+        <xilinx:tag xilinx:name="ui.data.coregen.df@736a5c7b_ARCHIVE_LOCATION">/home/wcc/mp_demo/A7-Lite/deep_fifo_test/deep_fifo</xilinx:tag>
+        <xilinx:tag xilinx:name="ui.data.coregen.df@71cf14aa_ARCHIVE_LOCATION">/home/wcc/mp_demo/A7-Lite/deep_fifo_test/deep_fifo</xilinx:tag>
+        <xilinx:tag xilinx:name="ui.data.coregen.dd@3e568c7_ARCHIVE_LOCATION">/home/wcc/wcc_demo/git_antsdr_uhd/fpga_pre/antsdr_e310v2/ip/deep_fifo</xilinx:tag>
+        <xilinx:tag xilinx:name="ui.data.coregen.dd@73aeb53d_ARCHIVE_LOCATION">/home/wcc/wcc_demo/git_antsdr_uhd/fpga_pre/antsdr_e310v2/ip/deep_fifo</xilinx:tag>
+        <xilinx:tag xilinx:name="ui.data.coregen.dd@6a4f3025_ARCHIVE_LOCATION">/home/wcc/wcc_demo/git_antsdr_uhd/fpga_pre/antsdr_e310v2/ip/deep_fifo</xilinx:tag>
+        <xilinx:tag xilinx:name="ui.data.coregen.dd@6726447d_ARCHIVE_LOCATION">/home/wcc/wcc_demo/git_antsdr_uhd/fpga_pre/antsdr_e310v2/ip/deep_fifo</xilinx:tag>
+        <xilinx:tag xilinx:name="ui.data.coregen.dd@6e3453d6_ARCHIVE_LOCATION">/home/wcc/wcc_demo/git_antsdr_uhd/fpga_pre/antsdr_e310v2/ip/deep_fifo</xilinx:tag>
+        <xilinx:tag xilinx:name="ui.data.coregen.dd@51e5bf57_ARCHIVE_LOCATION">/home/wcc/wcc_demo/git_antsdr_uhd/fpga_pre/antsdr_e310v2/ip/deep_fifo</xilinx:tag>
+        <xilinx:tag xilinx:name="ui.data.coregen.dd@583b416e_ARCHIVE_LOCATION">/home/wcc/wcc_demo/git_antsdr_uhd/fpga_pre/antsdr_e310v2/ip/deep_fifo</xilinx:tag>
+        <xilinx:tag xilinx:name="ui.data.coregen.dd@382cb0b3_ARCHIVE_LOCATION">/home/wcc/wcc_demo/git_antsdr_uhd/fpga_pre/antsdr_e310v2/ip/deep_fifo</xilinx:tag>
+        <xilinx:tag xilinx:name="ui.data.coregen.dd@302bd01c_ARCHIVE_LOCATION">/home/wcc/wcc_demo/git_antsdr_uhd/fpga_pre/antsdr_e310v2/ip/deep_fifo</xilinx:tag>
+        <xilinx:tag xilinx:name="ui.data.coregen.dd@17734767_ARCHIVE_LOCATION">/home/wcc/wcc_demo/git_antsdr_uhd/fpga_pre/antsdr_e310v2/ip/deep_fifo</xilinx:tag>
+        <xilinx:tag xilinx:name="ui.data.coregen.dd@1f0c2092_ARCHIVE_LOCATION">/home/wcc/wcc_demo/git_antsdr_uhd/fpga_pre/antsdr_e310v2/ip/deep_fifo</xilinx:tag>
+        <xilinx:tag xilinx:name="ui.data.coregen.dd@76a48b8c_ARCHIVE_LOCATION">/home/wcc/wcc_demo/git_antsdr_uhd/fpga_pre/antsdr_e310v2/ip/deep_fifo</xilinx:tag>
+        <xilinx:tag xilinx:name="ui.data.coregen.dd@1e8d8b2d_ARCHIVE_LOCATION">/home/wcc/wcc_demo/git_antsdr_uhd/fpga_pre/antsdr_e310v2/ip/deep_fifo</xilinx:tag>
+        <xilinx:tag xilinx:name="ui.data.coregen.dd@358b09a1_ARCHIVE_LOCATION">/home/wcc/wcc_demo/git_antsdr_uhd/fpga_pre/antsdr_e310v2/ip/deep_fifo</xilinx:tag>
+        <xilinx:tag xilinx:name="ui.data.coregen.dd@3eb43413_ARCHIVE_LOCATION">/home/wcc/wcc_demo/git_antsdr_uhd/fpga_pre/antsdr_e310v2/ip/deep_fifo</xilinx:tag>
+        <xilinx:tag xilinx:name="ui.data.coregen.dd@40a52e36_ARCHIVE_LOCATION">/home/wcc/wcc_demo/git_antsdr_uhd/fpga_pre/antsdr_e310v2/ip/deep_fifo</xilinx:tag>
+        <xilinx:tag xilinx:name="ui.data.coregen.dd@98ad2a1_ARCHIVE_LOCATION">/home/wcc/wcc_demo/git_antsdr_uhd/fpga_pre/antsdr_e310v2/ip/deep_fifo</xilinx:tag>
+        <xilinx:tag xilinx:name="ui.data.coregen.dd@5c0f6a92_ARCHIVE_LOCATION">/home/wcc/wcc_demo/git_antsdr_uhd/fpga_pre/antsdr_e310v2/ip/deep_fifo</xilinx:tag>
+        <xilinx:tag xilinx:name="ui.data.coregen.dd@4f817482_ARCHIVE_LOCATION">/home/wcc/wcc_demo/git_antsdr_uhd/fpga_pre/antsdr_e310v2/ip/deep_fifo</xilinx:tag>
+        <xilinx:tag xilinx:name="ui.data.coregen.dd@3f746afb_ARCHIVE_LOCATION">/home/wcc/wcc_demo/git_antsdr_uhd/fpga_pre/antsdr_e310v2/ip/deep_fifo</xilinx:tag>
+        <xilinx:tag xilinx:name="ui.data.coregen.dd@1bb90d16_ARCHIVE_LOCATION">/home/wcc/wcc_demo/git_antsdr_uhd/fpga_pre/antsdr_e310v2/ip/deep_fifo</xilinx:tag>
+        <xilinx:tag xilinx:name="ui.data.coregen.dd@11eb033b_ARCHIVE_LOCATION">/home/wcc/wcc_demo/git_antsdr_uhd/fpga_pre/antsdr_e310v2/ip/deep_fifo</xilinx:tag>
+        <xilinx:tag xilinx:name="ui.data.coregen.dd@7ddf7ab0_ARCHIVE_LOCATION">/home/wcc/wcc_demo/git_antsdr_uhd/fpga_pre/antsdr_e310v2/ip/deep_fifo</xilinx:tag>
+        <xilinx:tag xilinx:name="ui.data.coregen.dd@2fe239c6_ARCHIVE_LOCATION">/home/wcc/wcc_demo/git_antsdr_uhd/fpga_pre/antsdr_e310v2/ip/deep_fifo</xilinx:tag>
+        <xilinx:tag xilinx:name="ui.data.coregen.dd@7e87b231_ARCHIVE_LOCATION">/home/wcc/wcc_demo/git_antsdr_uhd/fpga_pre/antsdr_e310v2/ip/deep_fifo</xilinx:tag>
+        <xilinx:tag xilinx:name="ui.data.coregen.dd@64220472_ARCHIVE_LOCATION">/home/wcc/wcc_demo/git_antsdr_uhd/fpga_pre/antsdr_e310v2/ip/deep_fifo</xilinx:tag>
       </xilinx:tags>
     </xilinx:coreExtensions>
     <xilinx:packagingInfo>
       <xilinx:xilinxVersion>2019.1</xilinx:xilinxVersion>
       <xilinx:checksum xilinx:scope="busInterfaces" xilinx:value="7be98ec3"/>
       <xilinx:checksum xilinx:scope="addressSpaces" xilinx:value="b98e8389"/>
-      <xilinx:checksum xilinx:scope="fileGroups" xilinx:value="8e20397d"/>
-      <xilinx:checksum xilinx:scope="ports" xilinx:value="fb6c434d"/>
-      <xilinx:checksum xilinx:scope="hdlParameters" xilinx:value="677e1e66"/>
-      <xilinx:checksum xilinx:scope="parameters" xilinx:value="173ad246"/>
+      <xilinx:checksum xilinx:scope="fileGroups" xilinx:value="d329759d"/>
+      <xilinx:checksum xilinx:scope="ports" xilinx:value="3f323fe8"/>
+      <xilinx:checksum xilinx:scope="hdlParameters" xilinx:value="7f53c32f"/>
+      <xilinx:checksum xilinx:scope="parameters" xilinx:value="847cb444"/>
     </xilinx:packagingInfo>
   </spirit:vendorExtensions>
 </spirit:component>

@@ -21,17 +21,17 @@ add_files {
     ./ip/fifo_short_2clk/fifo_short_2clk.xci
     ./ip/axi64_8k_2clk_fifo/axi64_8k_2clk_fifo.xci
     ./ip/gen_clks/gen_clks.xci
-    ./ip/vio_0/vio_0.xci
 
-    ./top/b200_core.v
-    ./top/e200_eth_if_core.v
-    ./top/e200_rgmii_wrapper.v
-    ./top/ppsloop.v
-    ./top/antsdr_e310v2.v
+   ./top/b200_core.v
+   ./top/e200_eth_if_core.v
+   ./top/e200_rgmii_wrapper.v
+   ./top/ppsloop.v
+   ./top/antsdr_e310v2.v
 
     ../lib/ngc/hbdec2.ngc
     ../lib/ngc/hbdec1.ngc
     ../lib/dsp/acc.v
+    ../lib/control/ad5640_spi.v
     ../lib/control/ad5662_auto_spi.v
     ../lib/dsp/add2.v
     ../lib/dsp/add2_and_clip.v
@@ -83,6 +83,7 @@ add_files {
     ../lib/dsp/cordic_stage.v
     ../lib/dsp/cordic_z24.v
     ../lib/simple_gemac/crc.v
+    ../lib/control_200/cvita_uart.v
     ../lib/dsp/ddc_chain.v
     ../lib/control/deep_fifo_to_radio.v
     ../lib/simple_gemac/delay_line.v
@@ -107,6 +108,7 @@ add_files {
     ../lib/control/map/kv_map.v
     ../lib/simple_gemac/ll8_to_axi64.v
     ../lib/simple_gemac/ll8_to_txmac.v
+    ../lib/control/ltc2630_spi.v
     ../lib/simple_gemac/mdio.v
     ../lib/control/mdio_master.v
     ../lib/vita_200/new_rx_control.v
@@ -119,9 +121,9 @@ add_files {
     ../lib/radio_200/radio_legacy.v
     ../lib/control/ram_2port_impl.vh
     ../lib/control/ram_2port.v
-    ../lib/control/rgmii_if_idelay.v
     ../lib/control/regport_resp_mux.v
     ../lib/control/reset_sync.v
+    ../lib/control/rgmii_if_idelay.v
     ../lib/rgmii/rgmii_phy.v
     ../lib/rgmii/rgmii_to_gmii.v
     ../lib/dsp/round.v
@@ -135,12 +137,13 @@ add_files {
     ../lib/simple_gemac/simple_gemac_tx.v
     ../lib/simple_gemac/simple_gemac_wrapper.v
     ../lib/control/simple_spi_core.v
+    ../lib/wishbone/simple_uart_rx.v
+    ../lib/wishbone/simple_uart_tx.v
     ../lib/dsp/small_hb_dec.v
     ../lib/dsp/small_hb_int.v
     ../lib/packet_proc_200/source_flow_control_legacy.v
     ../lib/dsp/srl.v
     ../lib/control/stream_aggregation.v
-    ../lib/control/ltc2630_spi.v
     ../lib/control/stream_split.v
     ../lib/control/synchronizer.v
     ../lib/control/synchronizer_impl.v
@@ -155,6 +158,7 @@ add_files {
     ../lib/route_table/xport_arbiter.v
     ../lib/route_table/xport_route.v
     ../lib/packet_proc/arp_responder/arp_responder.vhd
+
 }
 update_compile_order -fileset sources_1
 

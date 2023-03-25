@@ -381,8 +381,14 @@ proc create_root_design { parentCell } {
   # Create instance: deepfifo_module_0, and set properties
   set deepfifo_module_0 [ create_bd_cell -type ip -vlnv user.org:user:deepfifo_module:1.0 deepfifo_module_0 ]
   set_property -dict [ list \
+   CONFIG.C_M_AXI_ARUSER_WIDTH {4} \
+   CONFIG.C_M_AXI_AWUSER_WIDTH {4} \
    CONFIG.C_M_AXI_BURST_LEN {256} \
+   CONFIG.C_M_AXI_BUSER_WIDTH {4} \
+   CONFIG.C_M_AXI_ID_WIDTH {4} \
+   CONFIG.C_M_AXI_RUSER_WIDTH {4} \
    CONFIG.C_M_AXI_TARGET_SLAVE_BASE_ADDR {0x18000000} \
+   CONFIG.C_M_AXI_WUSER_WIDTH {4} \
    CONFIG.log2_ram_size_addr {26} \
  ] $deepfifo_module_0
 

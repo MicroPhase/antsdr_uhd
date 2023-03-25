@@ -163,12 +163,12 @@ module b200_core
         .o_tdata({u0i_ctrl_tlast, u0i_ctrl_tdata}), .o_tvalid(u0i_ctrl_tvalid), .o_tready(u0i_ctrl_tready), .occupied()
     );
 
-    // cvita_uart #(.SIZE(7)) uart
-    // (
-    //     .clk(bus_clk), .rst(bus_rst), .rxd(rxd), .txd(txd),
-    //     .i_tdata(u0i_ctrl_tdata), .i_tlast(u0i_ctrl_tlast), .i_tvalid(u0i_ctrl_tvalid), .i_tready(u0i_ctrl_tready),
-    //     .o_tdata(u0_resp_tdata), .o_tlast(u0_resp_tlast), .o_tvalid(u0_resp_tvalid), .o_tready(u0_resp_tready)
-    // );
+    cvita_uart #(.SIZE(7)) uart
+    (
+        .clk(bus_clk), .rst(bus_rst), .rxd(rxd), .txd(txd),
+        .i_tdata(u0i_ctrl_tdata), .i_tlast(u0i_ctrl_tlast), .i_tvalid(u0i_ctrl_tvalid), .i_tready(u0i_ctrl_tready),
+        .o_tdata(u0_resp_tdata), .o_tlast(u0_resp_tlast), .o_tvalid(u0_resp_tvalid), .o_tready(u0_resp_tready)
+    );
 
     /*******************************************************************
      * Misc controls
