@@ -45,11 +45,11 @@
 // --------------------------------------------------------------------------------
 module deepfifo_module
 #(
-	parameter log2_fifo_data_width = 6,
 	parameter log2_ram_size_addr = 26,
 	parameter log2_fifo_words = 9,
 	parameter fifo_pre_threshold = 128,	
 	parameter fifo_post_threshold = 128,
+	parameter FIFO_DATA_WIDTH = 64,
 
 	parameter  C_M_AXI_TARGET_SLAVE_BASE_ADDR	= 32'h00000000,
 	parameter integer C_M_AXI_BURST_LEN	= 128,
@@ -60,7 +60,7 @@ module deepfifo_module
 	parameter integer C_M_AXI_ARUSER_WIDTH	= 1,
 	parameter integer C_M_AXI_WUSER_WIDTH	= 1,
 	parameter integer C_M_AXI_RUSER_WIDTH	= 1,
-	parameter integer C_M_AXI_BUSER_WIDTH	= 1
+	parameter integer C_M_AXI_BUSER_WIDTH	= 1 
 )(
 
 	//----------------sysrest------------------
@@ -70,12 +70,12 @@ module deepfifo_module
 
 	input 	wire							fifo_pre_tvalid		,
 	output 	wire    						fifo_pre_tready		,
-	input 	wire[C_M_AXI_DATA_WIDTH -1:0]	fifo_pre_tdata		,
+	input 	wire[FIFO_DATA_WIDTH -1:0]		fifo_pre_tdata		,
 	output 	wire [log2_fifo_words-1:0] 		fifo_pre_wr_count	,
 
 	output 	wire							fifo_post_tvalid 	,
 	input 	wire							fifo_post_tready 	,
-	output 	wire[C_M_AXI_DATA_WIDTH -1:0]	fifo_post_tdata  	,
+	output 	wire[FIFO_DATA_WIDTH -1:0]		fifo_post_tdata  	,
 	output 	wire [log2_fifo_words-1:0] 		fifo_post_rd_count	,
 
 
@@ -129,25 +129,31 @@ module deepfifo_module
 	output wire  M_AXI_RREADY
 );	
 
+	localparam FIFO_PRE_WR_DEPTH = 1 << log2_fifo_words;
+	localparam FIFO_PRE_RD_DEPTH = FIFO_PRE_WR_DEPTH*FIFO_DATA_WIDTH/C_M_AXI_DATA_WIDTH;
+	localparam FIFO_PRE_RD_DATA_COUNT_WIDTH = $clog2(FIFO_PRE_WR_DEPTH*FIFO_DATA_WIDTH/C_M_AXI_DATA_WIDTH)+1;
+
+
+	localparam FIFO_POST_WR_DEPTH = FIFO_PRE_RD_DEPTH;
+	localparam FIFO_POST_WR_DATA_COUNT_WIDTH = FIFO_PRE_RD_DATA_COUNT_WIDTH;
 
 	wire 	    					fifo_pre_wr_en			;
 	wire 	    					fifo_pre_full			;
-	wire [C_M_AXI_DATA_WIDTH -1:0] 	fifo_pre_din			;
+	wire [FIFO_DATA_WIDTH -1:0] 	fifo_pre_din			;
 	
-
 	wire  			        		fifo_pre_rd_en			;
 	wire 			            	fifo_pre_empty			;
 	wire [C_M_AXI_DATA_WIDTH-1:0] 	fifo_pre_dout			;
-	wire [log2_fifo_words-1:0] 		fifo_pre_rd_count		;
+	wire [FIFO_PRE_RD_DATA_COUNT_WIDTH-1:0] 		fifo_pre_rd_count		;
 	
 	wire  			        		fifo_post_wr_en			;
 	wire 			            	fifo_post_full			;
 	wire  [C_M_AXI_DATA_WIDTH-1:0] 	fifo_post_din			;
-	wire [log2_fifo_words-1:0] 		fifo_post_wr_count		;
+	wire [FIFO_POST_WR_DATA_COUNT_WIDTH-1:0] 		fifo_post_wr_count		;
 
 	wire         					fifo_post_rd_en			;
 	wire         					fifo_post_empty			;
-	wire [C_M_AXI_DATA_WIDTH -1:0] 	fifo_post_dout			;
+	wire [FIFO_DATA_WIDTH -1:0] 	fifo_post_dout			;
 	
 
 
@@ -158,32 +164,63 @@ module deepfifo_module
 	wire 			fifo_post_rd_rst_busy;
 
 
-	localparam PRE_FIFO_DEPTH  = 1 << log2_fifo_words;
+
 
     assign fifo_pre_tready = (~fifo_pre_full);
     assign fifo_pre_wr_en = fifo_pre_tready & fifo_pre_tvalid;
     assign fifo_pre_din = fifo_pre_tdata;
 
-	fifo_64x512 fifo_pre (
-		.rst			(~sys_rst_n				), 
-		.wr_clk			(fifo_clk				), 
-		.rd_clk			(M_AXI_ACLK				), 
-		.din			(fifo_pre_din			), 
-		.wr_en			(fifo_pre_wr_en			), 
-		.rd_en			(fifo_pre_rd_en			), 
-		.dout			(fifo_pre_dout			), 
-		.full			(fifo_pre_full			), 
-		.empty			(fifo_pre_empty			),   
-		.rd_data_count	(fifo_pre_rd_count		), 
-		.wr_data_count	(fifo_pre_wr_count		), 
-		.wr_rst_busy	(fifo_pre_wr_rst_busy	), 
-		.rd_rst_busy	(fifo_pre_rd_rst_busy	)  
+
+	xpm_fifo_async #(
+		.CDC_SYNC_STAGES	(2),       
+		.DOUT_RESET_VALUE	("0"),    
+		.ECC_MODE			("no_ecc"),       
+		.FIFO_MEMORY_TYPE	("auto"), 
+		.FIFO_READ_LATENCY	(0),     
+		.FIFO_WRITE_DEPTH	(FIFO_PRE_WR_DEPTH),   
+		.FULL_RESET_VALUE	(0),      
+		.PROG_FULL_THRESH	(FIFO_PRE_WR_DEPTH-(FIFO_PRE_WR_DEPTH>>2)),     
+		.RD_DATA_COUNT_WIDTH(FIFO_PRE_RD_DATA_COUNT_WIDTH),   
+		.READ_DATA_WIDTH	(C_M_AXI_DATA_WIDTH), // AXI_STREAM_MASTER_WIDTH*8),      
+		.READ_MODE			("fwft"),         
+		.RELATED_CLOCKS		(0),        
+		.SIM_ASSERT_CHK		(0),        
+		.USE_ADV_FEATURES	("0707"), 
+		.WAKEUP_TIME		(0),           
+		.WRITE_DATA_WIDTH	(FIFO_DATA_WIDTH),     
+		.WR_DATA_COUNT_WIDTH	(log2_fifo_words)    
+	)
+	xpm_fifo_async_inst_pre (
+		.almost_empty		(),
+		.almost_full		(),
+		.data_valid			(),
+		.dbiterr			(),
+		.dout				(fifo_pre_dout),
+		.empty				(fifo_pre_empty),
+		.full				(fifo_pre_full),
+		.overflow			(),
+		.rd_data_count		(fifo_pre_rd_count),
+		.rd_rst_busy		(fifo_pre_rd_rst_busy),
+		.sbiterr			(),
+		.underflow			(),
+		.wr_ack				(),
+		.wr_data_count		(fifo_pre_wr_count),
+		.wr_rst_busy		(fifo_pre_wr_rst_busy),
+		.din				(fifo_pre_din),
+		.injectdbiterr		(0),
+		.injectsbiterr		(0),
+		.rd_clk				(M_AXI_ACLK),
+		.rd_en				(fifo_pre_rd_en),
+		.rst				(~sys_rst_n),
+		.sleep				(0),
+		.wr_clk				(fifo_clk),
+		.wr_en				(fifo_pre_wr_en)
 	);
 
 
 	deep_fifo_core #(
 		.log2_ram_size_addr(log2_ram_size_addr),
-		.log2_fifo_words(log2_fifo_words),
+		.FIFO_POST_WR_DATA_COUNT_WIDTH(FIFO_POST_WR_DATA_COUNT_WIDTH),
 		.fifo_pre_threshold(fifo_pre_threshold),	
 		.fifo_post_threshold(fifo_post_threshold),	
 
@@ -255,26 +292,54 @@ module deepfifo_module
 
 
 
-
-	fifo_64x512 fifo_post (
-		.rst			(~sys_rst_n				), 
-		.wr_clk			(M_AXI_ACLK				), 
-		.rd_clk			(fifo_clk				), 
-		.din			(fifo_post_din			), 
-		.wr_en			(fifo_post_wr_en		), 
-		.rd_en			(fifo_post_rd_en		), 
-		.dout			(fifo_post_dout			), 
-		.full			(fifo_post_full			), 
-		.empty			(fifo_post_empty		),   
-		.rd_data_count	(fifo_post_rd_count		), 
-		.wr_data_count	(fifo_post_wr_count		), 
-		.wr_rst_busy	(fifo_post_wr_rst_busy	), 
-		.rd_rst_busy	(fifo_post_rd_rst_busy	)  
+	xpm_fifo_async #(
+		.CDC_SYNC_STAGES	(2),       
+		.DOUT_RESET_VALUE	("0"),    
+		.ECC_MODE			("no_ecc"),       
+		.FIFO_MEMORY_TYPE	("auto"), 
+		.FIFO_READ_LATENCY	(0),     
+		.FIFO_WRITE_DEPTH	(FIFO_POST_WR_DEPTH),   
+		.FULL_RESET_VALUE	(0),      
+		.PROG_FULL_THRESH	(FIFO_POST_WR_DEPTH-(FIFO_POST_WR_DEPTH>>2)),     
+		.RD_DATA_COUNT_WIDTH(log2_fifo_words),   
+		.READ_DATA_WIDTH	(FIFO_DATA_WIDTH), // AXI_STREAM_MASTER_WIDTH*8),      
+		.READ_MODE			("fwft"),         
+		.RELATED_CLOCKS		(0),        
+		.SIM_ASSERT_CHK		(0),        
+		.USE_ADV_FEATURES	("0707"), 
+		.WAKEUP_TIME		(0),           
+		.WRITE_DATA_WIDTH	(C_M_AXI_DATA_WIDTH),     
+		.WR_DATA_COUNT_WIDTH(FIFO_POST_WR_DATA_COUNT_WIDTH)    
+	)
+	xpm_fifo_async_inst_post (
+		.almost_empty		(),
+		.almost_full		(),
+		.data_valid			(),
+		.dbiterr			(),
+		.dout				(fifo_post_dout),
+		.empty				(fifo_post_empty),
+		.full				(fifo_post_full),
+		.overflow			(),
+		.rd_data_count		(fifo_post_rd_count),
+		.rd_rst_busy		(fifo_post_rd_rst_busy),
+		.sbiterr			(),
+		.underflow			(),
+		.wr_ack				(),
+		.wr_data_count		(fifo_post_wr_count),
+		.wr_rst_busy		(fifo_post_wr_rst_busy),
+		.din				(fifo_post_din),
+		.injectdbiterr		(0),
+		.injectsbiterr		(0),
+		.rd_clk				(fifo_clk),
+		.rd_en				(fifo_post_rd_en),
+		.rst				(~sys_rst_n),
+		.sleep				(0),
+		.wr_clk				(M_AXI_ACLK),
+		.wr_en				(fifo_post_wr_en)
 	);
 
 	assign fifo_post_rd_en = (fifo_post_tvalid & fifo_post_tready);
 	assign fifo_post_tvalid = (~fifo_post_empty);
 	assign fifo_post_tdata = fifo_post_dout;
-
 
 endmodule

@@ -13,9 +13,10 @@ set_property  -dict {PACKAGE_PIN  U9   IOSTANDARD  LVCMOS33} [get_ports  PPS_IN_
 set_property  -dict {PACKAGE_PIN  L16  IOSTANDARD  LVCMOS18} [get_ports  CLK_40MHz_FPGA]  ;
 set_property  -dict {PACKAGE_PIN  J18  IOSTANDARD  LVCMOS18} [get_ports  CLKIN_10MHz]  ;
 
-set_property  -dict {PACKAGE_PIN  Y8   IOSTANDARD  LVCMOS33} [get_ports  PPS_LED]  ;
-set_property  -dict {PACKAGE_PIN  Y6   IOSTANDARD  LVCMOS33} [get_ports  REF_LOCKED]  ;
-set_property  -dict {PACKAGE_PIN  Y9   IOSTANDARD  LVCMOS33} [get_ports  PPS_GPS]  ;
+set_property  -dict {PACKAGE_PIN  Y8   IOSTANDARD  LVCMOS33} [get_ports  GPS_LOCK]  ;
+set_property  -dict {PACKAGE_PIN  Y6   IOSTANDARD  LVCMOS33} [get_ports  REF_PPS_LOCK]  ;
+set_property  -dict {PACKAGE_PIN  Y9   IOSTANDARD  LVCMOS33} [get_ports  REF_10M_LOCK]  ;
+
 #################################################################################################################
 #
 # RF switch and PA
@@ -35,6 +36,9 @@ set_property  -dict {PACKAGE_PIN  Y11  IOSTANDARD  LVCMOS33} [get_ports  tx_amp_
 #################################################################################################################
 set_property  -dict {PACKAGE_PIN  W8   IOSTANDARD  LVCMOS33} [get_ports  GPS_NRST]  ;
 set_property  -dict {PACKAGE_PIN  W9   IOSTANDARD  LVCMOS33} [get_ports  GPS_PWEN]  ;
+
+set_property  -dict {PACKAGE_PIN  Y13  IOSTANDARD  LVCMOS33} [get_ports  GPS_RX]  ;
+set_property  -dict {PACKAGE_PIN  W10  IOSTANDARD  LVCMOS33} [get_ports  GPS_TX]  ;
 
 
 #################################################################################################################
@@ -59,7 +63,7 @@ set_property  -dict {PACKAGE_PIN  B19   IOSTANDARD  LVCMOS18} [get_ports  eth_ph
 set_property  -dict {PACKAGE_PIN  A20   IOSTANDARD  LVCMOS18} [get_ports  mdio]         ;
 set_property  -dict {PACKAGE_PIN  B20   IOSTANDARD  LVCMOS18} [get_ports  mdc]          ;
 
-create_clock -period  8.000          [get_ports RGMII_rxc] 
+create_clock -period  8.000          [get_ports rgmii_rxc] 
 
 #################################################################################################################
 #

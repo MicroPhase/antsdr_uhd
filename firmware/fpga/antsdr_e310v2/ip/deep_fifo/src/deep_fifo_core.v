@@ -51,7 +51,7 @@
 	(
 		// Users to add parameters here
 		parameter log2_ram_size_addr = 26,
-		parameter log2_fifo_words = 9,
+		parameter FIFO_POST_WR_DATA_COUNT_WIDTH = 9,
 		parameter fifo_pre_threshold = 128,	
 		parameter fifo_post_threshold = 256,
 		// User parameters ends
@@ -83,12 +83,12 @@
 		output 	 			        		fifo_pre_rd_en,
 		input 			            		fifo_pre_empty,
 		input [C_M_AXI_DATA_WIDTH-1:0] 	    fifo_pre_dout,
-		input [log2_fifo_words-1:0] 		fifo_pre_rd_count,
+		input [FIFO_POST_WR_DATA_COUNT_WIDTH-1:0] 		fifo_pre_rd_count,
 
 		output 	 			        		fifo_post_wr_en,
 		input 			            		fifo_post_full,
 		output [C_M_AXI_DATA_WIDTH-1:0] 	fifo_post_din,
-		input [log2_fifo_words-1:0] 		fifo_post_wr_count,
+		input [FIFO_POST_WR_DATA_COUNT_WIDTH-1:0] 		fifo_post_wr_count,
 		// User ports ends
 		// Do not modify the ports beyond this line
 

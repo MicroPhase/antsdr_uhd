@@ -383,7 +383,7 @@ module antsdr_e200 (
 
 
     ppsloop #(
-        .DEVICE("E200")
+        .DEVICE("LTC2630")
     )u_ppsloop(
         .reset   ( 1'b0   ),
         .xoclk   ( CLK_40MHz_FPGA   ),
@@ -402,15 +402,15 @@ module antsdr_e200 (
         .dac_dflt  ( 16'hBfff  )
     );
 
-    vio_0 your_instance_name (
-        .clk(bus_clk),              // input wire clk
-        .probe_in0(pps_select),  // input wire [1 : 0] probe_in0
-        .probe_in1(is10meg),  // input wire [0 : 0] probe_in1
-        .probe_in2(ispps),  // input wire [0 : 0] probe_in2
-        .probe_in3(ext_ref_locked),  // input wire [0 : 0] probe_in3
-        .probe_in4(ref_sel),  // input wire [0 : 0] probe_in4
-        .probe_in5(lpps)  // input wire [0 : 0] probe_in5
-      );
+    // vio_0 your_instance_name (
+    //     .clk(bus_clk),              // input wire clk
+    //     .probe_in0(pps_select),  // input wire [1 : 0] probe_in0
+    //     .probe_in1(is10meg),  // input wire [0 : 0] probe_in1
+    //     .probe_in2(ispps),  // input wire [0 : 0] probe_in2
+    //     .probe_in3(ext_ref_locked),  // input wire [0 : 0] probe_in3
+    //     .probe_in4(ref_sel),  // input wire [0 : 0] probe_in4
+    //     .probe_in5(lpps)  // input wire [0 : 0] probe_in5
+    //   );
     ///////////////////////////////////////////////////////////////////////
     // AD936x I/O
     ///////////////////////////////////////////////////////////////////////

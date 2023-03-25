@@ -1,13 +1,8 @@
 /antsdr_e200/ip
-!/antsdr_e200/ip/deep_fifo
-!/antsdr_e200/ip/getdna
-!/antsdr_e200/ip/**.xci
 /antsdr_e310v2/ip
-!/antsdr_e310v2/ip/deep_fifo
-!/antsdr_e310v2/ip/getdna
-!/antsdr_e310v2/ip/**.xci
-/antsdr_u220/ip
-!/antsdr_u220/ip/**.xci
+/antsdr_u220_200t/ip
+/antsdr_u220_100t/ip
+/antsdr_t300/ip
 ipcache
 *.ip_user_files
 *.cache
