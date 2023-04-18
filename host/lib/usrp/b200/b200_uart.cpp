@@ -19,11 +19,11 @@ using namespace uhd::transport;
 
 struct b200_uart_impl : b200_uart
 {
-    b200_uart_impl(zero_copy_if::sptr xport, const uint32_t sid)
+    b200_uart_impl(zero_copy_if::sptr xport, const uint32_t sid,int baud)
         : _xport(xport)
         , _sid(sid)
         , _count(0)
-        , _baud_div(std::floor(B200_BUS_CLOCK_RATE / 115200 + 0.5))
+        , _baud_div(std::floor(B200_BUS_CLOCK_RATE / baud + 0.5))
         , _line_queue(4096)
     {
         /*NOP*/
@@ -95,7 +95,7 @@ struct b200_uart_impl : b200_uart
 };
 
 
-b200_uart::sptr b200_uart::make(zero_copy_if::sptr xport, const uint32_t sid)
+b200_uart::sptr b200_uart::make(zero_copy_if::sptr xport, const uint32_t sid,int baud)
 {
-    return b200_uart::sptr(new b200_uart_impl(xport, sid));
+    return b200_uart::sptr(new b200_uart_impl(xport, sid,baud));
 }
