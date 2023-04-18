@@ -56,7 +56,7 @@ module cvita_uart
     (
         .clk(clk), .rst(rst | ~rxd_enable),
         .fifo_out(rx_char), .fifo_read(fifo_read), .fifo_level(), .fifo_empty(fifo_empty),
-        .clkdiv(16'd10417), .rx(rxd)
+        .clkdiv(clkdiv), .rx(rxd)
     );
 
     //packet generation - holds rx character
@@ -121,7 +121,7 @@ module cvita_uart
     (
         .clk(clk), .rst(rst),
         .fifo_in(tx_char), .fifo_write(fifo_write), .fifo_level(), .fifo_full(fifo_full),
-        .clkdiv(16'd10417), .baudclk(), .tx(txd)
+        .clkdiv(clkdiv), .baudclk(), .tx(txd)
     );
 
     //state machine to manage control and tx uart
