@@ -535,8 +535,15 @@ b200_impl::b200_impl(
     _async_task_data.reset(new AsyncTaskData());
     _async_task_data->async_md.reset(new async_md_type(1000 /*messages deep*/));
     if (_gpsdo_capable) {
-        _async_task_data->gpsdo_uart =
-            b200_uart::make(_ctrl_transport, B200_TX_GPS_UART_SID);
+        if(device_addr["name"] == "u220"){
+            _async_task_data->gpsdo_uart =
+            b200_uart::make(_ctrl_transport, B200_TX_GPS_UART_SID,9600);
+        }
+        else{
+            _async_task_data->gpsdo_uart =
+            b200_uart::make(_ctrl_transport, B200_TX_GPS_UART_SID,115200);
+        }
+        
     }
     _async_task = uhd::msg_task::make(std::bind(
         &b200_impl::handle_async_task, this, _ctrl_transport, _async_task_data));
