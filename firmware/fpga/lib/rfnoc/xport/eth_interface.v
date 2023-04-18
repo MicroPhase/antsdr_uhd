@@ -7,6 +7,7 @@
 
 module eth_interface #(
   parameter [15:0] PROTOVER    = {8'd1, 8'd0},
+  parameter [31:0] DEFAULT_IP_ADDR_INT   = {8'd192, 8'd168, 8'd1, 8'd10},
   parameter        MTU         = 10,
   parameter        NODE_INST   = 0,
   parameter        RT_TBL_SIZE = 6,
@@ -76,7 +77,7 @@ module eth_interface #(
 
   localparam [47:0] DEFAULT_MAC_ADDR  = {8'h00, 8'h80, 8'h2f, 8'h16, 8'hc5, 8'h2f};
   localparam [31:0] DEFAULT_IP_ADDR   = {8'd192, 8'd168, 8'd1, 8'd10};
-  localparam [31:0] DEFAULT_IP_ADDR_INT   = {8'd192, 8'd168, 8'd1, 8'd200};
+  // localparam [31:0] DEFAULT_IP_ADDR_INT   = {8'd192, 8'd168, 8'd1, 8'd200};
   localparam [15:0] DEFAULT_UDP_PORT  = 16'd49153;
 
   //---------------------------------------------------------
