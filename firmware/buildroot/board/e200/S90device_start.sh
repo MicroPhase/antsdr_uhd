@@ -3,6 +3,12 @@ case "$1" in
 		echo -n "Starting device start : "
 		start-stop-daemon --start --background /sbin/e200
 		start-stop-daemon --start --background /sbin/net_set
+
+		ip=$(ifconfig eth0 | grep "inet " | awk '{print $2}')
+		new_ip=$(echo $ip | sed -E 's/[0-9]+$/255/g')
+		new_ip=${new_ip#"addr:"}
+		ping $new_ip &
+		
 		[ $? = 0 ] && echo "OK" || echo "FAIL"
 		;;
 
