@@ -571,7 +571,7 @@ b200_impl::b200_impl(
         if ((_local_ctrl->peek32(RB32_CORE_STATUS) & 0xff) != B200_GPSDO_ST_NONE) {
             UHD_LOGGER_INFO("B200") << "Detecting internal GPSDO.... " << std::flush;
             try {
-                _gps = gps_ctrl::make(_async_task_data->gpsdo_uart);
+                _gps = gps_ctrl::make(_async_task_data->gpsdo_uart,false);
             } catch (std::exception& e) {
                 UHD_LOGGER_ERROR("B200")
                     << "An error occurred making GPSDO control: " << e.what();

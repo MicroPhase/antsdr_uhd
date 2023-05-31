@@ -25,7 +25,7 @@ public:
     /*!
      * Make a GPS config for internal GPSDOs or generic NMEA GPS devices
      */
-    static sptr make(uart_iface::sptr uart);
+    static sptr make(uart_iface::sptr uart,bool is_mp);
 
     /*!
      * Retrieve the list of sensors this GPS object provides

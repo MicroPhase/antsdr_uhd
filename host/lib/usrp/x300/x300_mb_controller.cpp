@@ -579,7 +579,7 @@ void x300_mb_controller::init_gps()
         UHD_LOG_TRACE("X300::MB_CTRL", "Detecting internal GPSDO....");
         try {
             // gps_ctrl will print its own log statements if a GPSDO was found
-            _gps = gps_ctrl::make(x300_make_uart_iface(_zpu_ctrl));
+            _gps = gps_ctrl::make(x300_make_uart_iface(_zpu_ctrl),false);
         } catch (std::exception& e) {
             UHD_LOGGER_WARNING("X300::MB_CTRL")
                 << "An error occurred making GPSDO control: " << e.what()
