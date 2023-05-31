@@ -258,7 +258,7 @@ public:
                 or reply.find("GPSTCXO") != std::string::npos) {
                 _gps_type = GPS_TYPE_INTERNAL_GPSDO;
                 break;
-            } else if (reply.substr(0, 3) == "$GP" or reply.substr(0,3) == "GN") {
+            } else if (reply.substr(0, 3) == "$GP" or reply.substr(0,3) == "$GN") {
                 i_heard_some_nmea = true; // but keep looking
             } else if (not reply.empty()) {
                 // wrong baud rate or firmware still initializing
