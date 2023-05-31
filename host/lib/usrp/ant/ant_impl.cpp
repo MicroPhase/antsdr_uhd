@@ -383,7 +383,7 @@ ant_impl::ant_impl(const uhd::device_addr_t &device_addr)
             if ((_local_ctrl->peek32(RB32_CORE_STATUS) & 0xff) != ANT_GPSDO_ST_NONE) {
                 UHD_LOGGER_INFO("ANT") << "Detecting internal GPSDO.... " << std::flush;
                 try {
-                    _gps = gps_ctrl::make(_async_task_data->gpsdo_uart);
+                    _gps = gps_ctrl::make(_async_task_data->gpsdo_uart,true);
                 } catch (std::exception &e) {
                     UHD_LOGGER_ERROR("ANT")
                             << "An error occurred making GPSDO control: " << e.what();

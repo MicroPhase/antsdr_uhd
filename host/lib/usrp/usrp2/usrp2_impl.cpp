@@ -547,7 +547,7 @@ usrp2_impl::usrp2_impl(const device_addr_t& _device_addr)
             try {
                 _mbc[mb].gps =
                     gps_ctrl::make(udp_simple::make_uart(udp_simple::make_connected(
-                        addr, BOOST_STRINGIZE(USRP2_UDP_UART_GPS_PORT))));
+                        addr, BOOST_STRINGIZE(USRP2_UDP_UART_GPS_PORT))),false);
             } catch (std::exception& e) {
                 UHD_LOGGER_ERROR("USRP2")
                     << "An error occurred making GPSDO control: " << e.what();

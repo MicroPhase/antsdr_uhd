@@ -301,7 +301,7 @@ octoclock_impl::octoclock_impl(const device_addr_t& _device_addr)
         if (_oc_dict[oc].state.gps_detected) {
             try {
                 _oc_dict[oc].gps = gps_ctrl::make(
-                    octoclock_make_uart_iface(_oc_dict[oc].gpsdo_xport, _proto_ver));
+                    octoclock_make_uart_iface(_oc_dict[oc].gpsdo_xport, _proto_ver),false);
 
                 if (_oc_dict[oc].gps and _oc_dict[oc].gps->gps_detected()) {
                     for (const std::string& name : _oc_dict[oc].gps->get_sensors()) {
