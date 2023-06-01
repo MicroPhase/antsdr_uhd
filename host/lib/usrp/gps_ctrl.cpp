@@ -228,21 +228,28 @@ public:
         _mpsdr = is_mp;
         // first we look for an internal GPSDO
         _flush(); // get whatever junk is in the rx buffer right now, and throw it away
+        _send("*IDN?\r\n"); // request identity from the GPSDO
+        std::this_thread::sleep_for(std::chrono::milliseconds(GPSDO_COMMAND_DELAY_MS));
         if(_mpsdr){
             std::vector<std::string> init_cmds;
-            std::vector<std::string> init_cmds_string_hex = {"b5 62 0a 04 00 00 0e 34",
-                                                         "b5 62 06 01 03 00 f0 03 00 fd 15",
+            std::vector<std::string> init_cmds_string_hex = {"b5 62 06 01 03 00 f0 03 00 fd 15",
                                                          "b5 62 06 01 03 00 f0 01 00 fb 11",
                                                          "b5 62 06 01 03 00 f0 02 00 fc 13",
                                                          "b5 62 06 01 03 00 f0 03 00 fd 15",
                                                          "b5 62 06 01 03 00 f0 05 00 ff 19",
-                                                         "b5 62 0a 04 00 00 0e 34"};
+                                                         "b5 62 06 31 20 00 01 01 00 00 00 00 00 00 01 00 \
+                                                          00 00 80 96 98 00 00 00 00 80 00 00 00 80 00 00 \
+                                                          00 00 ef 00 00 00 f7 b0"
+                                                        };
             for(auto &change:init_cmds_string_hex){
                 std::string result = hexToString(change);
                 init_cmds.push_back(result);
             }
-        }else{
-            _send("*IDN?\r\n"); // request identity from the GPSDO
+
+            for(const auto& cmd:init_cmds){
+                _send(cmd);
+                std::this_thread::sleep_for(std::chrono::milliseconds(GPSDO_COMMAND_DELAY_MS));
+            }
         }
 
         // then we loop until we either timeout, or until we get a response that indicates
