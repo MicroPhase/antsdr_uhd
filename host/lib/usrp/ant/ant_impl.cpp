@@ -45,11 +45,11 @@ namespace {
 constexpr int64_t REENUMERATION_TIMEOUT_MS = 3000;
 }
 
-// B205
-class b2xxmini_ad9361_client_t : public ad9361_params
+
+class antsdr_ad9361_client_t : public ad9361_params
 {
 public:
-    ~b2xxmini_ad9361_client_t() override {}
+    ~antsdr_ad9361_client_t() override {}
     double get_band_edge(frequency_band_t band) override
     {
         switch (band) {
@@ -448,7 +448,7 @@ ant_impl::ant_impl(const uhd::device_addr_t &device_addr)
         UHD_LOGGER_INFO("ANT") << "Initialize CODEC control...";
         reset_codec();
         ad9361_params::sptr client_settings;
-        client_settings = std::make_shared<b2xxmini_ad9361_client_t>();
+        client_settings = std::make_shared<antsdr_ad9361_client_t>();
 
         _codec_ctrl = ad9361_ctrl::make_spi(client_settings, _spi_iface, AD9361_SLAVENO);
 
