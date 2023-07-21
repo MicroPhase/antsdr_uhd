@@ -46,9 +46,9 @@
 // regulations governing limitations on product liability.
 //
 // THIS COPYRIGHT NOTICE AND DISCLAIMER MUST BE RETAINED AS
-// PART OF THIS FILE AT ALL TIMES.
-//
-//
+// PART OF THIS FILE AT ALL TIMES. 
+// 
+// 
 //------------------------------------------------------------------------------
 // Description: This module holds the support level for the pcs/pma core
 //              This can be used as-is in a single core design, or adapted
@@ -61,7 +61,8 @@
 // The module declaration for the Core Block wrapper.
 //------------------------------------------------------------------------------
 
-module one_gig_eth_pcs_pma_support
+module one_gig_eth_pcs_pma_support 
+    
    (
       // Transceiver Interface
       //----------------------
@@ -73,10 +74,10 @@ module one_gig_eth_pcs_pma_support
       output       txn,                   // Differential -ve of serial transmission from PMA to PMD.
       input        rxp,                   // Differential +ve for serial reception from PMD to PMA.
       input        rxn,                   // Differential -ve for serial reception from PMD to PMA.
-      output       userclk_out,
-      output       userclk2_out,
-      output       rxuserclk_out,
-      output       rxuserclk2_out,
+      output       userclk_out,               
+      output       userclk2_out,              
+      output       rxuserclk_out,             
+      output       rxuserclk2_out,            
       input        independent_clock_bufg,    // Freerun Independent clock,
       output       pma_reset_out,             // transceiver PMA reset signal
       output       mmcm_locked_out,           // MMCM Locked
@@ -98,7 +99,7 @@ module one_gig_eth_pcs_pma_support
       input        mdio_i,                // Management Data In
       output       mdio_o,                // Management Data Out
       output       mdio_t,                // Management Data Tristate
-      input [4:0]  phyaddr,               // MDIO address
+      input [4:0]  phyaddr,
       input [4:0]  configuration_vector,  // Alternative to MDIO interface.
       input        configuration_valid,   // Validation signal for Config vector
 
@@ -106,11 +107,11 @@ module one_gig_eth_pcs_pma_support
       //-------------
       output [15:0] status_vector,         // Core status.
       input        reset,                 // Asynchronous reset for entire core.
-
+      
       input        signal_detect,          // Input from PMD to indicate presence of optical input.
-      input        gt0_qplloutclk_in,
-      input        gt0_qplloutrefclk_in
-
+      output            gt0_qplloutclk_out,
+      output            gt0_qplloutrefclk_out
+ 
 
 
    );
@@ -127,71 +128,69 @@ module one_gig_eth_pcs_pma_support
    wire         pma_reset;                // Reset synchronized to system clock
    wire         txoutclk;                 // txoutclk from GT transceiver (62.5MHz)
    wire         rxoutclk;                 // txoutclk from GT transceiver (62.5MHz)
-   wire         userclk;
-   wire         userclk2;
-   wire         rxuserclk;
-   wire         rxuserclk2;
+   wire         userclk;                  
+   wire         userclk2;                 
+   wire         rxuserclk;                 
+   wire         rxuserclk2;                 
 
       // GT Interface
       //-------------
-   //wire                gt0_qplloutclk;
-   //wire                gt0_qplloutrefclk;
-
-one_gig_eth_pcs_pma
-pcs_pma_i
+   wire                gt0_qplloutclk;
+   wire                gt0_qplloutrefclk;
+  
+one_gig_eth_pcs_pma pcs_pma_i
    (
-
       // Transceiver Interface
       //----------------------
 
-      .gtrefclk (gtrefclk),              // Very high quality clock for GT transceiver.
-      .gtrefclk_bufg (gtrefclk_bufg),
+      .gtrefclk                            (gtrefclk),              // Very high quality clock for GT transceiver.
+      .gtrefclk_bufg                       (gtrefclk_bufg),
       .txp (txp),                   // Differential +ve of serial transmission from PMA to PMD.
       .txn (txn),                   // Differential -ve of serial transmission from PMA to PMD.
       .rxp (rxp),                   // Differential +ve for serial reception from PMD to PMA.
       .rxn (rxn),                   // Differential -ve for serial reception from PMD to PMA.
 
-      .txoutclk                             (txoutclk),
-      .rxoutclk                             (rxoutclk),
-      .resetdone                            (resetdone),
-      .cplllock                             (cplllock),
-      .mmcm_reset                           (mmcm_reset),
-      .userclk                              (userclk),
-      .userclk2                             (userclk2),
-      .rxuserclk                              (rxuserclk),
-      .rxuserclk2                             (rxuserclk2),
-      .independent_clock_bufg        (independent_clock_bufg),
-      .pma_reset                            (pma_reset),
-      .mmcm_locked                          (mmcm_locked),
+      .txoutclk                            (txoutclk),
+      .rxoutclk                            (rxoutclk),
+      .resetdone                           (resetdone),
+      .cplllock                            (cplllock),
+      .mmcm_reset                          (mmcm_reset),
+      .userclk                             (userclk),
+      .userclk2                            (userclk2),
+      .rxuserclk                           (rxuserclk),
+      .rxuserclk2                          (rxuserclk2),
+      .independent_clock_bufg              (independent_clock_bufg),
+      .pma_reset                           (pma_reset),
+      .mmcm_locked                         (mmcm_locked),
 
-      .gmii_txd                      (gmii_txd),
-      .gmii_tx_en                    (gmii_tx_en),
-      .gmii_tx_er                    (gmii_tx_er),
-      .gmii_rxd                      (gmii_rxd),
-      .gmii_rx_dv                    (gmii_rx_dv),
-      .gmii_rx_er                    (gmii_rx_er),
-      .gmii_isolate                  (gmii_isolate),
+      .gmii_txd                            (gmii_txd),
+      .gmii_tx_en                          (gmii_tx_en),
+      .gmii_tx_er                          (gmii_tx_er),
+      .gmii_rxd                            (gmii_rxd),
+      .gmii_rx_dv                          (gmii_rx_dv),
+      .gmii_rx_er                          (gmii_rx_er),
+      .gmii_isolate                        (gmii_isolate),
 
       // Management: MDIO Interface
       //---------------------------
 
-      .mdc                           (mdc),
-      .mdio_i                        (mdio_i),
-      .mdio_o                        (mdio_o),
-      .mdio_t                        (mdio_t),
-      .phyaddr                       (phyaddr),
-      .configuration_vector          (configuration_vector),
-      .configuration_valid           (configuration_valid),
+      .mdc                                 (mdc),
+      .mdio_i                              (mdio_i),
+      .mdio_o                              (mdio_o),
+      .mdio_t                              (mdio_t),
+      .phyaddr                             (phyaddr),
+      .configuration_vector                (configuration_vector),
+      .configuration_valid                 (configuration_valid),
 
 
       // General IO's
       //-------------
       .status_vector          (status_vector),         // Core status.
       .reset                  (pma_reset),                 // Asynchronous reset for entire core.
-
+      
       .signal_detect           (signal_detect) ,         // Input from PMD to indicate presence of optical input.
-      .gt0_qplloutclk_in       (gt0_qplloutclk_in),
-      .gt0_qplloutrefclk_in    (gt0_qplloutrefclk_in)
+      .gt0_qplloutclk_in       (gt0_qplloutclk),                          
+      .gt0_qplloutrefclk_in    (gt0_qplloutrefclk)
    );
 
 
@@ -203,7 +202,7 @@ pcs_pma_i
       .txoutclk                  (txoutclk),
       .rxoutclk                  (rxoutclk),
       .mmcm_reset                (mmcm_reset),
-      .mmcm_locked               (mmcm_locked),
+      .mmcm_locked               (mmcm_locked), 
       .userclk                   (userclk),
       .userclk2                  (userclk2),
       .rxuserclk                 (rxuserclk),
@@ -231,6 +230,20 @@ assign rxuserclk2_out = rxuserclk2;
 
 assign pma_reset_out = pma_reset;
 
+
+  one_gig_eth_pcs_pma_gt_common core_gt_common_i
+(
+    .GTREFCLK0_IN                (gtrefclk) ,
+    .QPLLLOCK_OUT                (),
+    .QPLLLOCKDETCLK_IN           (independent_clock_bufg),
+    .QPLLOUTCLK_OUT              (gt0_qplloutclk),
+    .QPLLOUTREFCLK_OUT           (gt0_qplloutrefclk),
+    .QPLLREFCLKLOST_OUT          (),    
+    .QPLLRESET_IN                (pma_reset) 
+);
+
+  assign   gt0_qplloutclk_out        = gt0_qplloutclk;
+  assign   gt0_qplloutrefclk_out     = gt0_qplloutrefclk;
 
  assign   mmcm_locked_out              = mmcm_locked;
 

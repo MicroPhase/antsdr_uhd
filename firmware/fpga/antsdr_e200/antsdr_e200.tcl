@@ -84,6 +84,7 @@ add_files {
     ../lib/simple_gemac/crc.v
     ../lib/dsp/ddc_chain.v
     ../lib/control/deep_fifo_to_radio.v
+    ../lib/control/deep_fifo_to_host.v
     ../lib/simple_gemac/delay_line.v
     ../lib/dsp/duc_chain.v
     ../lib/rfnoc/xport/eth_interface.v

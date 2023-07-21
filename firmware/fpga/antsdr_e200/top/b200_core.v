@@ -300,7 +300,7 @@ module b200_core
       .FP_GPIO(1),
       .NEW_HB_INTERP(1),
       .NEW_HB_DECIM(1),
-      .SOURCE_FLOW_CONTROL(0),
+      .SOURCE_FLOW_CONTROL(1),
       .USER_SETTINGS(0),
       .DEVICE("7SERIES")
    ) radio_0 (
@@ -332,7 +332,7 @@ module b200_core
       .FP_GPIO(0),
       .NEW_HB_INTERP(1),
       .NEW_HB_DECIM(1),
-      .SOURCE_FLOW_CONTROL(0),
+      .SOURCE_FLOW_CONTROL(1),
       .USER_SETTINGS(0),
       .DEVICE("7SERIES")
    ) radio_1 (

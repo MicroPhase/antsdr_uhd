@@ -1,16 +1,16 @@
 //-----------------------------------------------------------------------------
-// Title      : GT Common wrapper
-// Project    : 10GBASE-R
+// Title      : GT Common wrapper                                             
+// Project    : 10GBASE-R                                                      
 //-----------------------------------------------------------------------------
-// File       : ten_gig_eth_pcs_pma_gt_common.v
+// File       : ten_gig_eth_pcs_pma_gt_common.v                                          
 //-----------------------------------------------------------------------------
-// Description: This file contains the
-// 10GBASE-R Transceiver GT Common block.
+// Description: This file contains the 
+// 10GBASE-R Transceiver GT Common block.                
 //-----------------------------------------------------------------------------
 // (c) Copyright 2009 - 2014 Xilinx, Inc. All rights reserved.
 //
 // This file contains confidential and proprietary information
-// of Xilinx, Inc. and is protected under U.S. and
+// of Xilinx, Inc. and is protected under U.S. and 
 // international copyright and other intellectual property
 // laws.
 //
@@ -96,6 +96,7 @@ module  ten_gig_eth_pcs_pma_gt_common # (
     wire            tied_to_vcc_i;
     wire    [63:0]  tied_to_vcc_vec_i;
 
+
 //********************************* Main Body of Code**************************
 
     assign tied_to_ground_i             = 1'b0;
@@ -109,13 +110,13 @@ module  ten_gig_eth_pcs_pma_gt_common # (
     wire gt0_qplllock_out;
     wire gt0_qplloutclk_i;
     wire gt0_qplloutrefclk_i;
-
+    
     assign gt0_gtrefclk0_common_in = refclk;
     assign gt0_qpllreset_in = qpllreset;
     assign qplllock = gt0_qplllock_out;
     assign qplloutclk = gt0_qplloutclk_i;
     assign qplloutrefclk = gt0_qplloutrefclk_i;
-
+   
 
     //_________________________________________________________________________
     //_________________________________________________________________________

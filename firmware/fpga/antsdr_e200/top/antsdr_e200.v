@@ -536,7 +536,8 @@ module antsdr_e200 (
 
     eth_radio_stream_control#(
         .CHDR_W                  ( 64 ),
-        .USER_W                  ( 16 )
+        .USER_W                  ( 16 ),
+        .BYPASS_RX_DEEP_FIFO     ( 1  )
     )u_eth_radio_stream_control(
         .clk                     ( bus_clk                     ),
         .rst                     ( bus_rst                     ),
