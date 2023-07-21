@@ -525,16 +525,14 @@ module antsdr_e310v2 (
     wire SFDX2_RX, SFDX2_TX, SRX2_RX, SRX2_TX;
     assign {tx_amp_en1, SFDX1_RX, SFDX1_TX, SRX1_RX, SRX1_TX} = fe0_gpio[7:3];
     assign {tx_amp_en2, SFDX2_RX, SFDX2_TX, SRX2_RX, SRX2_TX} = fe1_gpio[7:3];
-    // assign {tx_amp_en1, FE_RX1_SEL2, FE_TXRX1_SEL2, FE_RX1_SEL1, FE_TXRX1_SEL1} = fe0_gpio[7:3];
-    // assign {tx_amp_en2, FE_RX2_SEL1, FE_TXRX2_SEL1, FE_RX2_SEL2, FE_TXRX2_SEL2} = fe1_gpio[7:3];
-    // assign FE_TXRX1_SEL1 = (SFDX1_TX==1'b0 && SRX1_TX==1'b1) ? 1'b0 : 1'b1;
-    // assign FE_RX1_SEL1 = (SFDX1_RX==1'b0 && SRX1_RX==1'b1) ? 1'b0 : 1'b1;
-    // assign FE_TXRX2_SEL1 = (SFDX2_TX==1'b0 && SRX2_TX==1'b1) ? 1'b1 : 1'b0 ;
-    // assign FE_RX2_SEL1 = (SFDX2_RX==1'b0 && SRX2_RX==1'b1) ? 1'b1 : 1'b0; 
-    assign FE_TXRX1_SEL1 = 1'b1;
-    assign FE_RX1_SEL1 = 1'b1;
-    assign FE_TXRX2_SEL1 = 1'b0;
-    assign FE_RX2_SEL1 = 1'b0; 
+    assign FE_TXRX1_SEL1 = (SFDX1_TX==1'b0 && SRX1_TX==1'b1) ? 1'b0 : 1'b1;
+    assign FE_RX1_SEL1 = (SFDX1_RX==1'b0 && SRX1_RX==1'b1) ? 1'b0 : 1'b1;
+    assign FE_TXRX2_SEL1 = (SFDX2_TX==1'b0 && SRX2_TX==1'b1) ? 1'b1 : 1'b0 ;
+    assign FE_RX2_SEL1 = (SFDX2_RX==1'b0 && SRX2_RX==1'b1) ? 1'b1 : 1'b0; 
+    // assign FE_TXRX1_SEL1 = 1'b1;
+    // assign FE_RX1_SEL1 = 1'b1;
+    // assign FE_TXRX2_SEL1 = 1'b0;
+    // assign FE_RX2_SEL1 = 1'b0; 
  
     wire [31:0] misc_outs; reg [31:0] misc_outs_r;
  
@@ -571,7 +569,7 @@ module antsdr_e310v2 (
         .fe0_gpio_out(radio0_gpio), .fe1_gpio_out(radio1_gpio),
         .fp_gpio_in(fp_gpio_in), .fp_gpio_out(fp_gpio_out), .fp_gpio_ddr(fp_gpio_ddr),
 
-        .pps_ref(ref_pps),
+        .pps_ref(lpps),
         .pps_fpga_int(pps_fpga_int),
         .pps_select(pps_select),
         .rxd(GPS_RX),
@@ -586,7 +584,8 @@ module antsdr_e310v2 (
 
     eth_radio_stream_control#(
         .CHDR_W                  ( 64 ),
-        .USER_W                  ( 16 )
+        .USER_W                  ( 16 ),
+        .BYPASS_RX_DEEP_FIFO     ( 1  )
     )u_eth_radio_stream_control(
         .clk                     ( bus_clk                     ),
         .rst                     ( bus_rst                     ),
