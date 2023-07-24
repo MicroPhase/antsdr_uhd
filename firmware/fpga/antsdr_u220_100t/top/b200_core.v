@@ -109,7 +109,7 @@ module b200_core
     reg [1:0] 	 gpsdo_pps_del, ext_pps_del, int_pps_del;
 
     // PPS mux
-    wire pps =   (pps_select == 2'b11)? 1'b0 : pps_ref;
+    wire pps =  pps_ref;
 
     /*******************************************************************
      * Response mux Routing logic

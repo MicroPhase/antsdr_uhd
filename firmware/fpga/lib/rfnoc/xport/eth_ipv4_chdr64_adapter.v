@@ -324,15 +324,21 @@ module eth_ipv4_chdr64_adapter #(
   //---------------------------------------
   // X2E and C2E MUX
   //---------------------------------------
-  axi_mux #(
-    .SIZE(2), .PRIO(0), .WIDTH(64+4), .PRE_FIFO_SIZE(0), .POST_FIFO_SIZE(1)
-  ) eth_mux_i (
-    .clk(clk), .reset(rst), .clear(1'b0),
-    .i_tdata({c2e_tuser, c2e_tdata, x2e_framed_tuser, x2e_framed_tdata}), .i_tlast({c2e_tlast, x2e_framed_tlast}),
-    .i_tvalid({c2e_tvalid, x2e_framed_tvalid}), .i_tready({c2e_tready, x2e_framed_tready}),
-    .o_tdata({m_mac_tuser, m_mac_tdata}), .o_tlast(m_mac_tlast),
-    .o_tvalid(m_mac_tvalid), .o_tready(m_mac_tready)
-  );
-
+  // axi_mux #(
+  //   .SIZE(2), .PRIO(0), .WIDTH(64+4), .PRE_FIFO_SIZE(0), .POST_FIFO_SIZE(1)
+  // ) eth_mux_i (
+  //   .clk(clk), .reset(rst), .clear(1'b0),
+  //   .i_tdata({c2e_tuser, c2e_tdata, x2e_framed_tuser, x2e_framed_tdata}), .i_tlast({c2e_tlast, x2e_framed_tlast}),
+  //   .i_tvalid({c2e_tvalid, x2e_framed_tvalid}), .i_tready({c2e_tready, x2e_framed_tready}),
+  //   .o_tdata({m_mac_tuser, m_mac_tdata}), .o_tlast(m_mac_tlast),
+  //   .o_tvalid(m_mac_tvalid), .o_tready(m_mac_tready)
+  // );
+  axi_mux4 #(.WIDTH(64+4), .BUFFER(1)) mux_for_eth_i
+  (.clk(clk), .reset(rst), .clear(1'b0),
+   .i0_tdata({x2e_framed_tuser, x2e_framed_tdata}), .i0_tlast(x2e_framed_tlast), .i0_tvalid(x2e_framed_tvalid), .i0_tready(x2e_framed_tready),
+   .i1_tdata({c2e_tuser, c2e_tdata}), .i1_tlast(c2e_tlast), .i1_tvalid(c2e_tvalid), .i1_tready(c2e_tready),
+   .i2_tdata(68'd0), .i2_tlast(1'b0), .i2_tvalid(1'b0), .i2_tready(),
+   .i3_tdata(68'd0), .i3_tlast(1'b0), .i3_tvalid(1'b0), .i3_tready(),
+   .o_tdata({m_mac_tuser, m_mac_tdata}), .o_tlast(m_mac_tlast), .o_tvalid(m_mac_tvalid), .o_tready(m_mac_tready));
 endmodule // eth_ipv4_chdr64_adapter
 `default_nettype wire

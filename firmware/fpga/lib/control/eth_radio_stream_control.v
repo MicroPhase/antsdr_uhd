@@ -39,13 +39,14 @@
 // Date          By            Revision    Change Description
 //---------------------------------------------------------------------
 // 2022-10-09     Chaochen Wei  1.0         Original
-// 
+// 2023-05-10     Chaochen Wei  1.1         Add C2H channel buffer
 // 
 // --------------------------------------------------------------------------------
 // --------------------------------------------------------------------------------
 module eth_radio_stream_control #(
     parameter CHDR_W = 64,
-    parameter USER_W = 16
+    parameter USER_W = 16,
+    parameter BYPASS_RX_DEEP_FIFO = 0
 ) (
     input   wire            clk     ,
     input   wire            rst     ,
@@ -63,18 +64,31 @@ module eth_radio_stream_control #(
     output  wire            ctrl_tvalid , 
     input   wire            ctrl_tready , 
 
-    // data stream to deep_fifo
+    // h2c data stream to deep_fifo
     output  wire    [63:0]  h2c_fifo_pre_tdata      ,
     output  wire            h2c_fifo_pre_tvalid     ,
     input   wire            h2c_fifo_pre_tready     ,
 
-    //data stream from deep_fifo
+    // h2c data stream from deep_fifo
     input   wire    [63:0]  h2c_fifo_post_tdata     ,
     input   wire            h2c_fifo_post_tvalid    ,
     output  wire            h2c_fifo_post_tready    ,
 
     input   wire    [8:0]   h2c_fifo_post_rd_count  ,
     input   wire    [8:0]   h2c_fifo_pre_wr_count   , 
+
+    // c2h data stream to deep_fifo
+    output  wire    [63:0]  c2h_fifo_pre_tdata      ,
+    output  wire            c2h_fifo_pre_tvalid     ,
+    input   wire            c2h_fifo_pre_tready     ,
+
+    // c2h data stream from deep_fifo
+    input   wire    [63:0]  c2h_fifo_post_tdata     ,
+    input   wire            c2h_fifo_post_tvalid    ,
+    output  wire            c2h_fifo_post_tready    ,
+
+    input   wire    [8:0]   c2h_fifo_post_rd_count  ,
+    input   wire    [8:0]   c2h_fifo_pre_wr_count   , 
 
     // data stream to radio
     output  wire    [63:0]  tx_tdata    ,  
@@ -110,6 +124,12 @@ module eth_radio_stream_control #(
     wire            v2d_tready  ;
 
 
+
+    wire    [63:0]  rx_buf_tdata    ;
+    wire            rx_buf_tlast    ;
+    wire            rx_buf_tvalid   ;
+    wire            rx_buf_tready   ;
+    
     chdr_trim_payload#(
         .CHDR_W        ( CHDR_W ),
         .USER_W        ( USER_W )
@@ -158,35 +178,6 @@ module eth_radio_stream_control #(
         
     );
 
-    // wire [255:0] probe0;
-    // assign  probe0 = {
-    //     v2d_tdata   ,
-    //     v2d_tuser   ,
-    //     v2d_tlast   ,
-    //     v2d_tvalid  ,
-    //     v2d_tready  ,
-    //     h2c_fifo_pre_tdata  ,
-    //     h2c_fifo_pre_tvalid ,
-    //     h2c_fifo_pre_tready ,
-
-    //     h2c_fifo_post_tdata ,
-    //     h2c_fifo_post_tvalid    ,
-    //     h2c_fifo_post_tready    ,
-    //     h2c_fifo_post_rd_count  ,
-    //     h2c_fifo_pre_wr_count   ,
-
-    //     tx_tlast    ,
-    //     tx_tvalid   ,
-    //     tx_tready
-
-    // };
-    // ila_v2e_e2v U_ila_v2e_e2v (
-    //     .clk(clk), // input wire clk
-    
-    
-    //     .probe0(probe0) // input wire [255:0] probe0
-    // );
-
 
     deep_fifo_to_radio u_deep_fifo_to_radio(
         .clk                     ( clk                     ),
@@ -203,8 +194,37 @@ module eth_radio_stream_control #(
     );
 
 
+generate
+    if (BYPASS_RX_DEEP_FIFO) begin
+        assign rx_buf_tdata = rx_tdata;
+        assign rx_buf_tlast = rx_tlast; 
+        assign rx_buf_tvalid = rx_tvalid; 
+        assign rx_tready  = rx_buf_tready; 
+    end  else begin
+        //====================================================
+        //card to host data buffer
+        //====================================================
+        assign c2h_fifo_pre_tdata = rx_tdata;
+        assign c2h_fifo_pre_tvalid = rx_tvalid;
+        assign rx_tready = c2h_fifo_pre_tready;
 
 
+        deep_fifo_to_host u_deep_fifo_to_host(
+            .clk                     ( clk                     ),
+            .rst                     ( rst                     ),
+            .c2h_fifo_post_tdata     ( c2h_fifo_post_tdata     ),
+            .c2h_fifo_post_tvalid    ( c2h_fifo_post_tvalid    ),
+            .c2h_fifo_post_tready    ( c2h_fifo_post_tready    ),
+            .c2h_fifo_post_rd_count  (   ),
+            .c2h_fifo_pre_wr_count   (   ),
+            .tx_tdata                ( rx_buf_tdata            ),
+            .tx_tlast                ( rx_buf_tlast            ),
+            .tx_tvalid               ( rx_buf_tvalid           ),
+            .tx_tready               ( rx_buf_tready           )
+        );
+        end
+endgenerate
+    
 
     stream_aggregation#(
         .CHDR_W    ( CHDR_W ),
@@ -218,10 +238,10 @@ module eth_radio_stream_control #(
         .i0_tlast  ( resp_tlast  ),
         .i0_tvalid ( resp_tvalid ),
         .i0_tready ( resp_tready ),
-        .i1_tdata  ( rx_tdata  ),
-        .i1_tlast  ( rx_tlast  ),
-        .i1_tvalid ( rx_tvalid ),
-        .i1_tready ( rx_tready ),
+        .i1_tdata  ( rx_buf_tdata  ),
+        .i1_tlast  ( rx_buf_tlast  ),
+        .i1_tvalid ( rx_buf_tvalid ),
+        .i1_tready ( rx_buf_tready ),
         .o_tdata   ( v2e_tdata   ),
         .o_tuser   ( v2e_tuser   ),
         .o_tlast   ( v2e_tlast   ),

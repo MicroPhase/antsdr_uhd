@@ -375,7 +375,7 @@ module antsdr_u220 (
         .fp_gpio_in(fp_gpio_in), .fp_gpio_out(fp_gpio_out), .fp_gpio_ddr(fp_gpio_ddr),
         .rxd(GPS_UART_RX), .txd(GPS_UART_TX),
 
-        .pps_ref(ref_pps),
+        .pps_ref(lpps),
         .pps_fpga_int(pps_fpga_int),
         .pps_select(pps_select),
 
