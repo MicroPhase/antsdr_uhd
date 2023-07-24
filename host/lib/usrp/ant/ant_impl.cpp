@@ -332,14 +332,19 @@ ant_impl::ant_impl(const uhd::device_addr_t &device_addr)
         default_buff_args.recv_frame_size = transport::udp_simple::mtu;
         default_buff_args.num_send_frames = 16;
         default_buff_args.num_recv_frames = 16;
-        default_buff_args.send_buff_size = 1e6;
-        default_buff_args.recv_buff_size = 1e6;
+        if(not device_addr.has_key("recv_buff_size")){
+            default_buff_args.recv_buff_size = 1e6;
+        }
+        if(not device_addr.has_key("send_buff_size")){
+            default_buff_args.send_buff_size = 1e6;
+        }
+        
 
 
         /* make the transprt object with the hintS
               * create the transport port (_ctrl_transport)
               * */
-        device_addr_t filtered_hints;
+        device_addr_t filtered_hints = device_addr;
         udp_zero_copy::buff_params ignored_params;
 
         _ctrl_transport = udp_zero_copy::make(
