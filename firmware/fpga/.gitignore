@@ -2,7 +2,7 @@
 /antsdr_e310v2/ip
 /antsdr_u220_200t/ip
 /antsdr_u220_100t/ip
-/antsdr_t300/ip
+/antsdr_t310/ip
 ipcache
 *.ip_user_files
 *.cache

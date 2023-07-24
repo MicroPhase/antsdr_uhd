@@ -22,6 +22,7 @@ module radio_legacy
   )
   (input radio_clk, input radio_rst,
    input [31:0] rx, output reg [31:0] tx,
+   output   tx_is_running,
    input [31:0] fe_gpio_in, output [31:0] fe_gpio_out, output [31:0] fe_gpio_ddr,
    input [9:0] fp_gpio_in, output [9:0] fp_gpio_out, output [9:0] fp_gpio_ddr,
    input pps, input time_sync,
@@ -154,6 +155,8 @@ module radio_legacy
    reg [63:0]     rb_data;
    wire [2:0]     rb_addr;
 
+   assign tx_is_running = run_tx;
+   
    wire [63:0] vita_time, vita_time_lastpps;
    timekeeper_legacy #(.SR_TIME_HI(SR_TIME), .SR_TIME_LO(SR_TIME+1), .SR_TIME_CTRL(SR_TIME+2)) timekeeper
      (.clk(radio_clk), .reset(radio_rst), .pps(pps), .sync_in(time_sync), .strobe(1'b1),
