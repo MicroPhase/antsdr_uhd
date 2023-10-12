@@ -510,7 +510,7 @@ void b200_impl::handle_overflow(const size_t radio_index)
                 _radio_perifs[radio_index].time64->get_time_now() + time_spec_t(0.01);
             // FIXME: temporarily remove the start stream command.
             // This will avoid an issue that gets the b210 in a bad state.
-            // my_streamer->issue_stream_cmd(stream_cmd);
+            my_streamer->issue_stream_cmd(stream_cmd);
         }
     } else {
         // while (_data_transport->get_recv_buff(0.001)) {
