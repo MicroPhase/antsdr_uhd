@@ -571,7 +571,7 @@ b200_impl::b200_impl(
         if ((_local_ctrl->peek32(RB32_CORE_STATUS) & 0xff) != B200_GPSDO_ST_NONE) {
             UHD_LOGGER_INFO("B200") << "Detecting internal GPSDO.... " << std::flush;
             try {
-                if(device_addr["name"] == "u220"){
+                if(device_addr["name"] == "u220" or device_addr["name"] == "u220v2"){
                     _gps = gps_ctrl::make(_async_task_data->gpsdo_uart,true);
                 }else{
                     _gps = gps_ctrl::make(_async_task_data->gpsdo_uart,false);
