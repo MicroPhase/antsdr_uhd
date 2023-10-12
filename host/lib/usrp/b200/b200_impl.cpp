@@ -535,7 +535,7 @@ b200_impl::b200_impl(
     _async_task_data.reset(new AsyncTaskData());
     _async_task_data->async_md.reset(new async_md_type(1000 /*messages deep*/));
     if (_gpsdo_capable) {
-        if(device_addr["name"] == "u220"){
+        if(device_addr["name"] == "u220" or device_addr["name"] == "u220v2"){
             _async_task_data->gpsdo_uart =
             b200_uart::make(_ctrl_transport, B200_TX_GPS_UART_SID,9600);
         }
