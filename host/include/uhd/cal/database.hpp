@@ -11,6 +11,7 @@
 #include <string>
 #include <vector>
 #include <functional>
+#include <cstdint>
 
 namespace uhd { namespace usrp { namespace cal {
 
