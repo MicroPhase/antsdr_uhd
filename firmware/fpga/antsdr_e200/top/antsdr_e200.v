@@ -351,56 +351,76 @@ module antsdr_e200 (
     wire   radio_rst;
     reset_sync radio_sync(.clk(radio_clk), .reset_in(!clocks_ready), .reset_out(radio_rst));
 
-    wire [1:0] pps_loop_refsel;
     wire ref_sel;
     wire ext_ref;
+    wire ref_pll_clk;
     wire ext_ref_locked;
     wire lpps;
+    
+    wire [15:0] dac_stable;
+    wire int_40mhz;
     wire is10meg;
     wire ispps;
-    
+    wire pps_ref;
     // pps_select == 2'b00 ----> onboard gps module pps
     // pps_select == 2'b01 ----> external pps/10M
     // pps_select == 2'b10 ----> internal pps genreated by fpga
 
-    assign ext_ref =    (pps_select == 2'b01)? PPS_IN_EXT :
-                        (pps_select == 2'b10 && ref_sel == 1'b0)? PPS_IN_EXT : // ref_sel selects the external or gpsdo clock source
+    assign ext_ref =    (pps_select == 2'b00)? PPS_IN_EXT :
+                        (pps_select == 2'b01)? PPS_IN_EXT :
+                        (pps_select == 2'b10 && ref_sel == 1'b0)? CLKIN_10MHz : // ref_sel selects the external or gpsdo clock source
                         (pps_select == 2'b10)? pps_fpga_int: 1'b0;
-    
-
-    assign pps_loop_refsel = (pps_select == 2'b01 || pps_select == 2'b10) ? 2'b11 : 
-                    (pps_select == 2'b00)? 2'b00: 2'b01;
     assign CLKIN_10MHz_REQ = 1'b1;
 
-    gen_clks u_gen_clocks_main(
-        .clk_out1(),
-        .clk_out2(bus_clk),
-        .clk_out3(clk200),    
-
-        .locked(),      
-        .clk_in1(clk_int40)
-    ); 
-
-
-    ppsloop #(
-        .DEVICE("LTC2630")
-    )u_ppsloop(
-        .reset   ( 1'b0   ),
-        .xoclk   ( CLK_40MHz_FPGA   ),
-        .ppsgps  ( 1'b0     ),
-        .ppsext  ( ext_ref  ),
-        .refsel  ( pps_loop_refsel  ),
-        .lpps    ( lpps    ),
-        .is10meg ( is10meg ),
-        .ispps   ( ispps   ),
-        .reflck  ( ext_ref_locked  ),
-        .plllck  ( locked  ),
-        .clk_int40 ( clk_int40 ),
-        .sclk    ( CLK_40M_DAC_SCLK    ),
-        .mosi    ( CLK_40M_DAC_DIN    ),
-        .sync_n  ( CLK_40M_DAC_nSYNC  ),
-        .dac_dflt  ( 16'hBfff  )
+    assign pps_ref =    (pps_select == 2'b00)? PPS_IN_EXT :
+                        (pps_select == 2'b01)? PPS_IN_EXT :
+                        (pps_select == 2'b10)? pps_fpga_int: 1'b0;
+    PLLE2_ADV #(.BANDWIDTH("OPTIMIZED"), .COMPENSATION("INTERNAL"),
+        .DIVCLK_DIVIDE(1),
+        .CLKFBOUT_MULT(30),
+        .CLKOUT0_DIVIDE(6),
+        .CLKOUT1_DIVIDE(30),
+        .CLKOUT2_DIVIDE(12),
+        .CLKOUT3_DIVIDE(6),
+        .CLKIN1_PERIOD(25.0)
+    )
+    clkgen (
+        .PWRDWN(1'b0), .RST(1'b0),
+        .CLKIN1(CLK_40MHz_FPGA),
+        .CLKOUT0(ref_pll_clk),
+        .CLKOUT1(int_40mhz),
+        .CLKOUT2(bus_clk),
+        .CLKOUT3(clk200),
+        .LOCKED(locked)
     );
+
+    // gen_clks instance_name(
+    //     // Clock out ports
+    //     .clk_out1(int_40mhz),     // output clk_out1
+    //     .clk_out2(bus_clk),     // output clk_out2
+    //     .clk_out3(ref_pll_clk),     // output clk_out3
+    //     .clk_out4(clk200),     // output clk_out4
+    //     // Status and control signals
+    //     .locked(locked),       // output locked
+
+    //     .clk_in1(CLK_40MHz_FPGA));      // input clk_in1
+
+    b205_ref_pll #(
+        .DEVICE("LTC2630")
+    ) u_b205_ref_pll(
+        .reset      ( 1'b0      ),
+        .clk        ( ref_pll_clk        ),
+        .refclk     ( int_40mhz     ),
+        .ref_x      ( ext_ref        ),
+        .locked     ( ext_ref_locked     ),
+        .dac_stable ( dac_stable ),
+        .dac_dflt   ( 16'hB7D0  ),
+        .sclk       ( CLK_40M_DAC_SCLK       ),
+        .mosi       ( CLK_40M_DAC_DIN       ),
+        .sync_n     ( CLK_40M_DAC_nSYNC     )
+    );
+
+
 
     // vio_0 your_instance_name (
     //     .clk(bus_clk),              // input wire clk
@@ -523,7 +543,7 @@ module antsdr_e200 (
         .fe0_gpio_out(radio0_gpio), .fe1_gpio_out(radio1_gpio),
         .fp_gpio_in(fp_gpio_in), .fp_gpio_out(fp_gpio_out), .fp_gpio_ddr(fp_gpio_ddr),
 
-        .pps_ref(lpps),
+        .pps_ref(pps_ref),
         .pps_fpga_int(pps_fpga_int),
         .pps_select(pps_select),
 

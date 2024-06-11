@@ -27,6 +27,7 @@ add_files {
     ./top/e200_rgmii_wrapper.v
     ./top/ppsloop.v
     ./top/antsdr_e200.v
+    ./top/b205_ref_pll.v
 
     ../lib/ngc/hbdec2.ngc
     ../lib/ngc/hbdec1.ngc

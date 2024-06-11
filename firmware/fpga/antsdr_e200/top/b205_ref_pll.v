@@ -10,7 +10,7 @@ module b205_ref_pll#(
     input reset,
     input clk,      // 200 MHz sample clock
     input refclk,   // 40 MHz reference clock
-    input ref,      // PPS or 10 MHz external reference
+    input ref_x,      // PPS or 10 MHz external reference
     output reg locked,
     output [15:0]   dac_stable,
     input   [15:0]  dac_dflt  ,
@@ -37,8 +37,8 @@ module b205_ref_pll#(
     // References are only valid if they are +/-5ppm because that is the range of the VCTXCO
     localparam REF_PERIOD_PPS=SAMPLE_CLOCK_FREQ/REF_FREQ_PPS;
     localparam REF_PERIOD_10MHZ=SAMPLE_CLOCK_FREQ/REF_FREQ_10MHZ;
-    localparam REF_PERIOD_PPS_MIN=REF_PERIOD_PPS-(REF_PERIOD_PPS*5/1_000_000)-1;
-    localparam REF_PERIOD_PPS_MAX=REF_PERIOD_PPS+(REF_PERIOD_PPS*5/1_000_000)+1;
+    localparam REF_PERIOD_PPS_MIN=REF_PERIOD_PPS-(REF_PERIOD_PPS*10/1_000_000)-1;
+    localparam REF_PERIOD_PPS_MAX=REF_PERIOD_PPS+(REF_PERIOD_PPS*10/1_000_000)+1;
     localparam REF_PERIOD_10MHZ_MIN=REF_PERIOD_10MHZ-(REF_PERIOD_10MHZ*5/1_000_000)-1;
     localparam REF_PERIOD_10MHZ_MAX=REF_PERIOD_10MHZ+(REF_PERIOD_10MHZ*5/1_000_000)+1;
 
@@ -66,7 +66,7 @@ module b205_ref_pll#(
     reg [3:0] refsmp;
     reg [3:0] refclksmp;
     always @(posedge clk) begin
-        refsmp <= {refsmp[2:0],ref};
+        refsmp <= {refsmp[2:0],ref_x};
         refclksmp <= {refclksmp[2:0],refclk_div};
     end
 
@@ -312,4 +312,27 @@ module b205_ref_pll#(
     endgenerate
 
     assign  dac_stable = daco;
+
+
+
+    // wire [63:0] probe0;
+    // assign probe0 = {
+    //     valid_ref,
+    //     ref_is_pps,
+    //     ref_is_10M,
+    //     ref_x,
+    //     daco,
+    //     sclk,
+    //     mosi,
+    //     refcnt,
+    //     sync_n
+    // };
+
+    // ila_0 u_ila_dll (
+    //     .clk(clk), // input wire clk
+
+
+    //     .probe0(probe0) // input wire [63:0] probe0
+    // );
+
 endmodule
