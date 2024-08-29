@@ -58,6 +58,7 @@ module e200_rgmii_wrapper #(
   // Resets
   input         areset,
   input         bus_rst,
+  input         clk200,
 
   // Clocks
   input         bus_clk,
@@ -266,6 +267,7 @@ module e200_rgmii_wrapper #(
     ) u_e200_eth_if_core (
       //must reset all channels on quad when sfp1 gtx core is reset
       .areset         (areset),
+      .clk200         (clk200),
 
       .bus_rst        (bus_rst),
       .bus_clk        (bus_clk),
@@ -340,8 +342,32 @@ module e200_rgmii_wrapper #(
                       : (c2e_tkeep == 8'b0000_0011) ? 4'd2
                       : (c2e_tkeep == 8'b0000_0001) ? 4'd1
                       : 4'd0;
-
-
+    // wire [255:0] probe0;
+    // assign probe0 = {
+    //   sfpi_tdata,
+    //   sfpi_tuser,
+    //   sfpi_tlast,
+    //   sfpi_tvalid,
+    //   sfpi_tready,
+    //   sfpo_tdata,
+    //   sfpo_tuser,
+    //   sfpo_tlast,
+    //   sfpo_tvalid,
+    //   sfpo_tready,
+    //   e2c_tdata,
+    //   e2c_tuser,
+    //   e2c_tlast,
+    //   e2c_tvalid,
+    //   e2c_tready,
+    //   e2c_tkeep
+    // };
+    // ila_0 u_ila_eth (
+    //   .clk(bus_clk), // input wire clk
+    
+    
+    //   .probe0(probe0) // input wire [255:0] probe0
+    // );
+    
     eth_interface #(
       .PROTOVER   (RFNOC_PROTOVER),
       .MTU        (10),

@@ -640,6 +640,7 @@ module antsdr_e200 (
         .areset(bus_rst),
         .bus_rst(bus_rst),
         .bus_clk(bus_clk),
+        // .clk200(clk200)
 
         .mdc            (mdc),
         .mdio_out       (mdio_out),

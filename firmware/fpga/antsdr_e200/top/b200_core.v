@@ -347,6 +347,24 @@ module b200_core
       .resp_tdata(r1_resp_tdata), .resp_tlast(r1_resp_tlast),  .resp_tvalid(r1_resp_tvalid), .resp_tready(r1_resp_tready),
       .debug(radio1_debug)
    );
+
+    // assign radio_st = 8'h1;
+
+    // //assign undriven outputs
+    // assign fe1_gpio_out = 32'b0; //Always assumed to be outputs
+    // assign tx1 = 32'b0;
+
+    // //unused control signals -- leave in loopback
+    // assign r1_resp_tdata = r1_ctrl_tdata;
+    // assign r1_resp_tlast = r1_ctrl_tlast;
+    // assign r1_resp_tvalid = r1_ctrl_tvalid;
+    // assign r1_ctrl_tready = r1_resp_tready;
+
+    // //unused data signals -- leave in loopback
+    // assign r1_rx_tdata = r1_tx_tdata;
+    // assign r1_rx_tlast = r1_tx_tlast;
+    // assign r1_rx_tvalid = r1_tx_tvalid;
+    // assign r1_tx_tready = r1_tx_tready;
 `else
     assign radio_st = 8'h1;
 

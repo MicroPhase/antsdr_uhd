@@ -57,6 +57,7 @@ module e200_eth_if_core #(
   // Resets
   input                   areset,
   input                   bus_rst,
+  input                   clk200,
   // Clocks
   input                   bus_clk,
 
@@ -352,22 +353,63 @@ module e200_eth_if_core #(
 
 
 
-      rgmii_phy u_rgmii_phy(
-          .rst           ( eth_rst        ),
-          .rgmii_rxc     ( rgmii_rxc     ),
-          .rgmii_rx_ctl  ( rgmii_rx_ctl  ),
-          .rgmii_rd      ( rgmii_rxd      ),
-          .rgmii_txc     ( rgmii_txc     ),
-          .rgmii_tx_ctl  ( rgmii_tx_ctl  ),
-          .rgmii_td      ( rgmii_txd      ),
-          .gmii_rxc      ( gmii_clk      ),
-          .gmii_rx_dv    ( gmii_rx_dv    ),
-          .gmii_rx_er    ( gmii_rx_er    ),
-          .gmii_rd       ( gmii_rxd      ),
-          .gmii_tx_en    ( gmii_tx_en    ),
-          .gmii_tx_er    ( gmii_tx_er    ),
-          .gmii_td       ( gmii_txd      )
-      );
+      // rgmii_phy u_rgmii_phy(
+      //     .rst           ( eth_rst        ),
+      //     .rgmii_rxc     ( rgmii_rxc     ),
+      //     .rgmii_rx_ctl  ( rgmii_rx_ctl  ),
+      //     .rgmii_rd      ( rgmii_rxd      ),
+      //     .rgmii_txc     ( rgmii_txc     ),
+      //     .rgmii_tx_ctl  ( rgmii_tx_ctl  ),
+      //     .rgmii_td      ( rgmii_txd      ),
+      //     .gmii_rxc      ( gmii_clk      ),
+      //     .gmii_rx_dv    ( gmii_rx_dv    ),
+      //     .gmii_rx_er    ( gmii_rx_er    ),
+      //     .gmii_rd       ( gmii_rxd      ),
+      //     .gmii_tx_en    ( gmii_tx_en    ),
+      //     .gmii_tx_er    ( gmii_tx_er    ),
+      //     .gmii_td       ( gmii_txd      )
+      // );
+
+    gmii2rgmii_wrapper u_gmii2rgmii_wrapper(
+        .rst          ( rst          ),
+        .rgmii_txd    ( rgmii_txd    ),
+        .rgmii_tx_ctl ( rgmii_tx_ctl ),
+        .rgmii_txc    ( rgmii_txc    ),
+        .rgmii_rxd    ( rgmii_rxd    ),
+        .rgmii_rx_ctl ( rgmii_rx_ctl ),
+        .rgmii_rxc    ( rgmii_rxc    ),
+        .gmii_txd     ( gmii_txd     ),
+        .gmii_tx_en   ( gmii_tx_en   ),
+        .gmii_tx_er   ( gmii_tx_er   ),
+        .gmii_crs     ( gmii_crs     ),
+        .gmii_col     ( gmii_col     ),
+        .gmii_rxd     ( gmii_rxd     ),
+        .gmii_rx_dv   ( gmii_rx_dv   ),
+        .gmii_rx_er   ( gmii_rx_er   ),
+        .gmii_rx_clk  ( gmii_clk  )
+    );
+
+
+  // gmii2rgmii_wrapper u_gmii2rgmii_wrapper(
+  //     .clk200       ( clk200       ),
+  //     .rst          ( areset       ),
+  //     .rgmii_txd    ( rgmii_txd    ),
+  //     .rgmii_tx_ctl ( rgmii_tx_ctl ),
+  //     .rgmii_txc    ( rgmii_txc    ),
+  //     .rgmii_rxd    ( rgmii_rxd    ),
+  //     .rgmii_rx_ctl ( rgmii_rx_ctl ),
+  //     .rgmii_rxc    ( rgmii_rxc    ),
+  //     .gmii_txd     ( gmii_txd     ),
+  //     .gmii_tx_en   ( gmii_tx_en   ),
+  //     .gmii_tx_er   ( gmii_tx_er   ),
+  //     .gmii_crs     (      ),
+  //     .gmii_col     (      ),
+  //     .gmii_rxd     ( gmii_rxd     ),
+  //     .gmii_rx_dv   ( gmii_rx_dv   ),
+  //     .gmii_rx_er   ( gmii_rx_er   ),
+  //     .gmii_rx_clk  ( gmii_clk  )
+  // );
+
     //   wire [255:0] probe0;
 
     //   assign probe0 ={

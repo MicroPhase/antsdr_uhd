@@ -74,7 +74,7 @@ module rgmii_if_idelay(
         .DELAY_SRC("IDATAIN"),           // Delay input (IDATAIN, DATAIN)
         .HIGH_PERFORMANCE_MODE("FALSE"), // Reduced jitter ("TRUE"), Reduced power ("FALSE")
         .IDELAY_TYPE("FIXED"),        // FIXED, VARIABLE, VAR_LOAD, VAR_LOAD_PIPE
-        .IDELAY_VALUE(5'hB),                // Input delay tap setting (0-31)
+        .IDELAY_VALUE(5'hA),                // Input delay tap setting (0-31)
         .PIPE_SEL("FALSE"),              // Select pipelined mode, FALSE, TRUE
         .REFCLK_FREQUENCY(200.0),        // IDELAYCTRL clock input frequency in MHz (190.0-210.0, 290.0-310.0).
         .SIGNAL_PATTERN("DATA")          // DATA, CLOCK input signal
@@ -104,7 +104,7 @@ module rgmii_if_idelay(
                     .DELAY_SRC("IDATAIN"),           // Delay input (IDATAIN, DATAIN)
                     .HIGH_PERFORMANCE_MODE("FALSE"), // Reduced jitter ("TRUE"), Reduced power ("FALSE")
                     .IDELAY_TYPE("FIXED"),        // FIXED, VARIABLE, VAR_LOAD, VAR_LOAD_PIPE
-                    .IDELAY_VALUE('hB),                // Input delay tap setting (0-31)
+                    .IDELAY_VALUE(5'hA),                // Input delay tap setting (0-31)
                     .PIPE_SEL("FALSE"),              // Select pipelined mode, FALSE, TRUE
                     .REFCLK_FREQUENCY(200.0),        // IDELAYCTRL clock input frequency in MHz (190.0-210.0, 290.0-310.0).
                     .SIGNAL_PATTERN("DATA")          // DATA, CLOCK input signal

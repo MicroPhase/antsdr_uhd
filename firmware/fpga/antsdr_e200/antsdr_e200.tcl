@@ -136,6 +136,8 @@ add_files {
     ../lib/simple_gemac/simple_gemac_tx.v
     ../lib/simple_gemac/simple_gemac_wrapper.v
     ../lib/control/simple_spi_core.v
+    ../lib/control/gmii2rgmii_wrapper.v 
+    ../lib/control/util_gmii_to_rgmii.v
     ../lib/dsp/small_hb_dec.v
     ../lib/dsp/small_hb_int.v
     ../lib/packet_proc_200/source_flow_control_legacy.v
@@ -156,6 +158,7 @@ add_files {
     ../lib/route_table/xport_arbiter.v
     ../lib/route_table/xport_route.v
     ../lib/packet_proc/arp_responder/arp_responder.vhd
+
 }
 update_compile_order -fileset sources_1
 
