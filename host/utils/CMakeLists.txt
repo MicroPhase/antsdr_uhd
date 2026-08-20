@@ -27,6 +27,13 @@ foreach(util_source ${util_runtime_sources})
     UHD_INSTALL(TARGETS ${util_name} RUNTIME DESTINATION ${RUNTIME_DIR} COMPONENT utilities)
 endforeach(util_source)
 
+# ANTSDR dual-device full-duplex network test wrapper
+UHD_INSTALL(PROGRAMS
+    ${CMAKE_CURRENT_SOURCE_DIR}/antsdr_dual_e200_txrx.sh
+    DESTINATION ${RUNTIME_DIR}
+    COMPONENT utilities
+)
+
 set(CONFIG_PATH "${CMAKE_INSTALL_PREFIX}/${PKG_DATA_DIR}")
 configure_file(
     "${CMAKE_CURRENT_SOURCE_DIR}/rfnoc_image_builder.py"

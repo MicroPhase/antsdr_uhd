@@ -8,7 +8,7 @@
 
 
 module rxmac_to_ll8
-  (input clk, input reset, input clear,
+  (input clk, input reset, input clear, input rx_ce,
    input [7:0] rx_data, input rx_valid, input rx_error, input rx_ack,
    output [7:0] ll_data, output ll_sof, output ll_eof, output ll_error, output ll_src_rdy, input ll_dst_rdy );
 
@@ -22,7 +22,7 @@ module rxmac_to_ll8
    localparam XFER_OVERRUN2 = 5;
       
    assign ll_data 	    = rx_data;
-   assign ll_src_rdy 	    = ((rx_valid & (xfer_state != XFER_OVERRUN2) )
+   assign ll_src_rdy 	    = rx_ce & ((rx_valid & (xfer_state != XFER_OVERRUN2) )
 			       | (xfer_state == XFER_ERROR) 
 			       | (xfer_state == XFER_OVERRUN));
    assign ll_sof 	    = ((xfer_state==XFER_IDLE)|(xfer_state==XFER_ERROR)|(xfer_state==XFER_OVERRUN));
@@ -32,7 +32,7 @@ module rxmac_to_ll8
    always @(posedge clk)
      if(reset | clear)
        xfer_state 	   <= XFER_IDLE;
-     else
+	     else if(rx_ce)
        case(xfer_state)
 	 XFER_IDLE :
 	   if(rx_valid)

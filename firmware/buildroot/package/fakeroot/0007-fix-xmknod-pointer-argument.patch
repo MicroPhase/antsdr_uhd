@@ -1,0 +1,45 @@
+From: Ilya Lipnitskiy <ilya.lipnitskiy@gmail.com>
+Subject: [PATCH] configure.ac: fix __xmknod{,at} pointer argument
+
+On glibc 2.33+, these declarations are absent from the headers. Default to
+the pointer form used by modern glibc. Backported from fakeroot commit
+c3eebec293e35b997bb46c22fb5a4e114afb5e7f.
+
+diff --git a/configure.ac b/configure.ac
+--- a/configure.ac
++++ b/configure.ac
+@@ -183,13 +183,13 @@ AC_MSG_CHECKING([for type of arg of __xmknod])
+   ]], [[
+        int __xmknod  ( int ver,
+                        const char *pathname ,
+-                       mode_t  mode ,  dev_t dev);
++                       mode_t  mode ,  dev_t *dev);
+   ]])],[
+-   AC_DEFINE(XMKNOD_FRTH_ARG,)
+-   AC_MSG_RESULT([no extra *])
+-  ],[
+    AC_DEFINE(XMKNOD_FRTH_ARG,[*])
+    AC_MSG_RESULT([needs *])
++  ],[
++   AC_DEFINE(XMKNOD_FRTH_ARG,)
++   AC_MSG_RESULT([no extra *])
+ 
+   ])
+ 
+@@ -210,13 +210,13 @@ AC_MSG_CHECKING([for type of arg of __xmknodat])
+        int __xmknodat  ( int ver,
+                          int dirfd,
+                          const char *pathname ,
+-                         mode_t  mode ,  dev_t dev);
++                         mode_t  mode ,  dev_t *dev);
+   ]])],[
+-   AC_DEFINE(XMKNODAT_FIFTH_ARG,)
+-   AC_MSG_RESULT([no extra *])
+-  ],[
+    AC_DEFINE(XMKNODAT_FIFTH_ARG,[*])
+    AC_MSG_RESULT([needs *])
++  ],[
++   AC_DEFINE(XMKNODAT_FIFTH_ARG,)
++   AC_MSG_RESULT([no extra *])
+ 
+   ])

@@ -57,6 +57,7 @@ module e200_eth_if_core #(
   // Resets
   input                   areset,
   input                   bus_rst,
+  input                   clk200,
   // Clocks
   input                   bus_clk,
 
@@ -115,8 +116,10 @@ module e200_eth_if_core #(
   // Aurora specific
   localparam REG_AURORA_OVERRUNS      = REG_BASE + 'h20;
   localparam REG_CHECKSUM_ERRORS      = REG_BASE + 'h24;
-  localparam REG_BIST_CHECKER_SAMPS   = REG_BASE + 'h28;
-  localparam REG_BIST_CHECKER_ERRORS  = REG_BASE + 'h2C;
+  localparam REG_PAUSE_TX_FRAMES      = REG_BASE + 'h28;
+  localparam REG_PAUSE_RX_FRAMES      = REG_BASE + 'h2C;
+  localparam REG_PAUSE_MAC_LSB        = REG_BASE + 'h30;
+  localparam REG_PAUSE_MAC_MSB        = REG_BASE + 'h34;
 
   wire                  reg_rd_resp_mdio;
   reg                   reg_rd_resp_glob = 1'b0;
@@ -140,7 +143,7 @@ module e200_eth_if_core #(
   wire             c2mac_tready;
 
   axis_packet_flush #(
-    .WIDTH(64+3), // tdata + tuser
+    .WIDTH(64+4), // tdata + tuser
     .TIMEOUT_W(1), // Not using timeout
     .FLUSH_PARTIAL_PKTS(0),
     .PIPELINE("NONE")
@@ -174,7 +177,8 @@ module e200_eth_if_core #(
       assign phy_ctrl_rst_val = 32'h0;
     end else if (PROTOCOL == "1GbE") begin
       assign mgt_protocol     = 8'd1;
-      assign mac_ctrl_rst_val = {31'h0, 1'b1}; // tx_enable on reset
+      // bit 0: TX enable, bits 2:1: 00/01/10 = 10/100/1000 Mb/s
+      assign mac_ctrl_rst_val = 32'h0000_0005;
       assign phy_ctrl_rst_val = 32'h0;
     end else begin
       assign mgt_protocol     = 8'd0;
@@ -187,12 +191,16 @@ module e200_eth_if_core #(
   reg [31:0] mac_ctrl_reg = 32'h0;
   reg [31:0] phy_ctrl_reg = 32'h0;
   reg [1:0]  mac_led_ctl  =  2'h0;
+  reg [31:0] pause_mac_lsb = 32'h0;
+  reg [15:0] pause_mac_msb = 16'h0;
 
   always @(posedge bus_clk) begin
     if (bus_rst) begin
       mac_ctrl_reg <= mac_ctrl_rst_val;
       phy_ctrl_reg <= phy_ctrl_rst_val;
       mac_led_ctl  <= mac_led_ctl_rst_val;
+      pause_mac_lsb <= 32'h0;
+      pause_mac_msb <= 16'h0;
     end else if (reg_wr_req) begin
       case(reg_wr_addr)
         REG_MAC_CTRL_STATUS:
@@ -201,6 +209,10 @@ module e200_eth_if_core #(
           phy_ctrl_reg <= reg_wr_data;
         REG_MAC_LED_CTL:
           mac_led_ctl <= reg_wr_data[1:0];
+        REG_PAUSE_MAC_LSB:
+          pause_mac_lsb <= reg_wr_data;
+        REG_PAUSE_MAC_MSB:
+          pause_mac_msb <= reg_wr_data[15:0];
       endcase
     end
   end
@@ -208,8 +220,10 @@ module e200_eth_if_core #(
   // Readable registers
   wire [31:0] overruns;
   wire [31:0] checksum_errors;
-  wire [47:0] bist_checker_samps;
-  wire [47:0] bist_checker_errors;
+  wire [31:0] pause_tx_frames;
+  wire [31:0] pause_rx_frames;
+  wire [31:0] overruns_bclk, checksum_errors_bclk;
+  wire [31:0] pause_tx_frames_bclk, pause_rx_frames_bclk;
   wire [31:0] mac_status, phy_status;
   wire [31:0] mac_status_bclk, phy_status_bclk;
 
@@ -229,13 +243,17 @@ module e200_eth_if_core #(
         REG_MAC_LED_CTL:
           reg_rd_data_glob <= {30'd0, mac_led_ctl};
         REG_AURORA_OVERRUNS:
-          reg_rd_data_glob <= overruns;
+          reg_rd_data_glob <= overruns_bclk;
         REG_CHECKSUM_ERRORS:
-          reg_rd_data_glob <= checksum_errors;
-        REG_BIST_CHECKER_SAMPS:
-          reg_rd_data_glob <= bist_checker_samps[47:16];  //Scale num samples by 2^16
-        REG_BIST_CHECKER_ERRORS:
-          reg_rd_data_glob <= bist_checker_errors[31:0];  //Don't scale errors
+          reg_rd_data_glob <= checksum_errors_bclk;
+        REG_PAUSE_TX_FRAMES:
+          reg_rd_data_glob <= pause_tx_frames_bclk;
+        REG_PAUSE_RX_FRAMES:
+          reg_rd_data_glob <= pause_rx_frames_bclk;
+        REG_PAUSE_MAC_LSB:
+          reg_rd_data_glob <= pause_mac_lsb;
+        REG_PAUSE_MAC_MSB:
+          reg_rd_data_glob <= {16'h0, pause_mac_msb};
         default:
           reg_rd_resp_glob <= 1'b0;
       endcase
@@ -250,6 +268,19 @@ module e200_eth_if_core #(
 
   synchronizer #( .STAGES(2), .WIDTH(32), .INITIAL_VAL(32'h0) ) phy_status_sync_i (
      .clk(bus_clk), .rst(1'b0), .in(phy_status), .out(phy_status_bclk)
+  );
+
+  synchronizer #( .STAGES(2), .WIDTH(32), .INITIAL_VAL(32'h0) ) rx_overrun_sync_i (
+     .clk(bus_clk), .rst(1'b0), .in(overruns), .out(overruns_bclk)
+  );
+  synchronizer #( .STAGES(2), .WIDTH(32), .INITIAL_VAL(32'h0) ) rx_error_sync_i (
+     .clk(bus_clk), .rst(1'b0), .in(checksum_errors), .out(checksum_errors_bclk)
+  );
+  synchronizer #( .STAGES(2), .WIDTH(32), .INITIAL_VAL(32'h0) ) pause_tx_sync_i (
+     .clk(bus_clk), .rst(1'b0), .in(pause_tx_frames), .out(pause_tx_frames_bclk)
+  );
+  synchronizer #( .STAGES(2), .WIDTH(32), .INITIAL_VAL(32'h0) ) pause_rx_sync_i (
+     .clk(bus_clk), .rst(1'b0), .in(pause_rx_frames), .out(pause_rx_frames_bclk)
   );
 
   // Regport Mux for response
@@ -335,74 +366,54 @@ module e200_eth_if_core #(
 
  
 
-      wire    eth_rst   ;
       //-----------------------------------------------------------------
       // 1 Gigabit Ethernet
       //-----------------------------------------------------------------
       wire [7:0]  gmii_txd, gmii_rxd;
       wire        gmii_tx_en, gmii_tx_er, gmii_rx_dv, gmii_rx_er;
-      wire        gmii_clk;
+      wire        gmii_rx_clk;
+      wire        eth_rst;
 
-      // Synchronous reset for the gmii_clk domain
+      // Keep the proven E200 RGMII path. The RTL8211F board straps provide
+      // the required RGMII-ID delay; no programmable FPGA input delay is
+      // inserted here.
       reset_sync ethernet_rst_sync (
-        .clk(gmii_clk),
-        .reset_in(areset),
+        .clk(gmii_rx_clk),
+        .reset_in(areset | ~link_up),
         .reset_out(eth_rst)
       );
 
-
-
-      rgmii_phy u_rgmii_phy(
-          .rst           ( eth_rst        ),
-          .rgmii_rxc     ( rgmii_rxc     ),
-          .rgmii_rx_ctl  ( rgmii_rx_ctl  ),
-          .rgmii_rd      ( rgmii_rxd      ),
-          .rgmii_txc     ( rgmii_txc     ),
-          .rgmii_tx_ctl  ( rgmii_tx_ctl  ),
-          .rgmii_td      ( rgmii_txd      ),
-          .gmii_rxc      ( gmii_clk      ),
-          .gmii_rx_dv    ( gmii_rx_dv    ),
-          .gmii_rx_er    ( gmii_rx_er    ),
-          .gmii_rd       ( gmii_rxd      ),
-          .gmii_tx_en    ( gmii_tx_en    ),
-          .gmii_tx_er    ( gmii_tx_er    ),
-          .gmii_td       ( gmii_txd      )
+      gmii2rgmii_wrapper u_gmii2rgmii_wrapper (
+        .rst          (eth_rst),
+        .rgmii_txd    (rgmii_txd),
+        .rgmii_tx_ctl (rgmii_tx_ctl),
+        .rgmii_txc    (rgmii_txc),
+        .rgmii_rxd    (rgmii_rxd),
+        .rgmii_rx_ctl (rgmii_rx_ctl),
+        .rgmii_rxc    (rgmii_rxc),
+        .gmii_txd     (gmii_txd),
+        .gmii_tx_en   (gmii_tx_en),
+        .gmii_tx_er   (gmii_tx_er),
+        .gmii_crs     (),
+        .gmii_col     (),
+        .gmii_rxd     (gmii_rxd),
+        .gmii_rx_dv   (gmii_rx_dv),
+        .gmii_rx_er   (gmii_rx_er),
+        .gmii_rx_clk  (gmii_rx_clk)
       );
-    //   wire [255:0] probe0;
 
-    //   assign probe0 ={
-    //     gmii_tx_en  ,
-    //     gmii_tx_er  ,
-    //     gmii_txd  ,
-    //     gmii_rx_dv  ,
-    //     gmii_rx_er  ,
-    //     gmii_rxd
-
-    //   };
-    // ila_0 ila_gmii (
-    //   .clk(gmii_clk), // input wire clk
-
-
-    //   .probe0(probe0) // input wire [255:0] probe0
-    // );
-
-
-
-      wire link_status        ;
-      wire [1 : 0] clock_speed;
-      wire duplex_status      ;
-      wire [1:0] speed_mode;
-
-      simple_gemac_wrapper #(.RX_FLOW_CTRL(0), .PORTNUM(PORTNUM)) simple_gemac_wrapper_i
+      simple_gemac_wrapper #(.RX_FLOW_CTRL(1), .PORTNUM(PORTNUM)) simple_gemac_wrapper_i
       (
-        .clk125(gmii_clk),
-        .reset(eth_rst),
+	        .clk125(gmii_rx_clk),
+	        .reset(areset | ~link_up),
+	        .tx_ce(1'b1),
+	        .rx_ce(1'b1),
 
         .GMII_GTX_CLK(),
         .GMII_TX_EN(gmii_tx_en),
         .GMII_TX_ER(gmii_tx_er),
         .GMII_TXD(gmii_txd),
-        .GMII_RX_CLK(gmii_clk),
+	        .GMII_RX_CLK(gmii_rx_clk),
         .GMII_RX_DV(gmii_rx_dv),
         .GMII_RX_ER(gmii_rx_er),
         .GMII_RXD(gmii_rxd),
@@ -416,8 +427,16 @@ module e200_eth_if_core #(
         .tx_tdata(c2mac_tdata),
         .tx_tuser(c2mac_tuser),
         .tx_tlast(c2mac_tlast),
-        .tx_tvalid(c2mac_tvalid),
-        .tx_tready(c2mac_tready),
+	        .tx_tvalid(c2mac_tvalid),
+	        .tx_tready(c2mac_tready),
+
+	        .mac_addr({pause_mac_msb, pause_mac_lsb}),
+	        .pause_request_en(mac_ctrl_reg[4]),
+	        .pause_respect_en(mac_ctrl_reg[5]),
+	        .rx_overrun_count(overruns),
+	        .rx_error_count(checksum_errors),
+	        .pause_tx_count(pause_tx_frames),
+	        .pause_rx_count(pause_rx_frames),
 
         .wb_clk_i(1'b0),
         .wb_rst_i(1'b0),
@@ -437,12 +456,9 @@ module e200_eth_if_core #(
         .debug_rx()
       );
 
-      assign phy_status[31:16] = 16'h0;
-      assign phy_status[1:0] = 2'b11;
-      assign phy_status[11:10] = 2'b10;
-      assign phy_status[12] = 1;
-      assign mac_status[31:0]  = 32'h0;
-      assign link_up = phy_status_bclk[0];
+      assign phy_status = phy_ctrl_reg;
+      assign mac_status = mac_ctrl_reg;
+      assign link_up = phy_ctrl_reg[0];
 
       assign gt_tx_out_clk_unbuf = 1'b0;
 

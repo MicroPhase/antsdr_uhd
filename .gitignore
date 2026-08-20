@@ -1,6 +1,14 @@
 host/build
+
+# Local editor settings
+/.vscode/
 # Vim swap files
 *.swp
+
+# Tool and build logs (Vivado also creates these in the invocation directory)
+*.log
+*.jou
+vivado_pid*.str
 
 # Object files
 *.o
@@ -37,3 +45,12 @@ host/build
 *.su
 
 build/
+
+# Packaged firmware images
+/firmware/build_sdimg/
+xsim.dir/
+xvlog.log
+xvlog.pb
+
+# Local ANTSDR UHD out-of-tree build
+/host/build-antsdr/

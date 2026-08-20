@@ -23,9 +23,10 @@
 #include <linux/fs.h>
 #include <linux/device.h>
 #include <linux/string.h>
+#include <linux/workqueue.h>
 
 #define TX_BD_NUM		64
-#define RX_BD_NUM		128
+#define RX_BD_NUM		512
 
 /* Axi DMA Register definitions */
 #define XAXIDMA_TX_CR_OFFSET	0x00 /* Channel control */
@@ -82,6 +83,23 @@
 #define NIXGE_REG_MDIO_ADDR	0x14
 #define NIXGE_REG_MDIO_OP	0x18
 #define NIXGE_REG_MDIO_CTRL	0x1c
+#define NIXGE_REG_RX_OVERRUNS	0x20
+#define NIXGE_REG_RX_ERRORS	0x24
+#define NIXGE_REG_PAUSE_TX	0x28
+#define NIXGE_REG_PAUSE_RX	0x2c
+#define NIXGE_REG_PAUSE_MAC_LSB	0x30
+#define NIXGE_REG_PAUSE_MAC_MSB	0x34
+
+#define NIXGE_MAC_CTL_TX_EN	BIT(0)
+#define NIXGE_MAC_CTL_SPEED_SHIFT 1
+#define NIXGE_MAC_CTL_SPEED_MASK	GENMASK(2, 1)
+#define NIXGE_MAC_CTL_SPEED_10	(0 << NIXGE_MAC_CTL_SPEED_SHIFT)
+#define NIXGE_MAC_CTL_SPEED_100	(1 << NIXGE_MAC_CTL_SPEED_SHIFT)
+#define NIXGE_MAC_CTL_SPEED_1000	(2 << NIXGE_MAC_CTL_SPEED_SHIFT)
+#define NIXGE_MAC_CTL_FULL_DUPLEX BIT(3)
+#define NIXGE_MAC_CTL_PAUSE_SEND	BIT(4)
+#define NIXGE_MAC_CTL_PAUSE_RESPECT BIT(5)
+#define NIXGE_PHY_CTL_LINK_UP	BIT(0)
 
 #define NIXGE_ID_LED_CTL_EN	BIT(0)
 #define NIXGE_ID_LED_CTL_VAL	BIT(1)
@@ -110,6 +128,7 @@
 #define NIXGE_JUMBO_MTU		9000 /* Max MTU of a jumbo Eth. frame */
 
 #define NIXGE_MAX_FRAME_SIZE	 (NIXGE_MTU + NIXGE_HDR_SIZE + NIXGE_TRL_SIZE)
+#define NIXGE_RX_BUF_SIZE	 2048
 #define NIXGE_MAX_JUMBO_FRAME_SIZE \
 	(NIXGE_JUMBO_MTU + NIXGE_HDR_SIZE + NIXGE_TRL_SIZE)
 
@@ -185,6 +204,8 @@ struct nixge_priv {
 	int link;
 	unsigned int speed;
 	unsigned int duplex;
+	bool pause_rx;
+	bool pause_tx;
 
 	/* MDIO bus data */
 	struct mii_bus *mii_bus;	/* MII bus reference */
@@ -193,7 +214,9 @@ struct nixge_priv {
 	void __iomem *ctrl_regs;
 	void __iomem *dma_regs;
 
-	struct tasklet_struct dma_err_tasklet;
+	struct work_struct dma_err_work;
+	atomic_t dma_err_pending;
+	spinlock_t tx_lock;
 
 	int tx_irq;
 	int rx_irq;
@@ -207,10 +230,14 @@ struct nixge_priv {
 	dma_addr_t rx_bd_p;
 	u32 tx_bd_ci;
 	u32 tx_bd_tail;
+	u32 tx_bd_used;
 	u32 rx_bd_ci;
 
 	u32 coalesce_count_rx;
 	u32 coalesce_count_tx;
+	u32 dma_rx_errors;
+	u32 dma_tx_errors;
+	u32 rx_alloc_fail;
 
 	int is_fixed_link;
 };
@@ -257,6 +284,9 @@ static u32 nixge_ctrl_read_reg(struct nixge_priv *priv, off_t offset)
 	readl_poll_timeout((priv)->dma_regs + (addr), (val), (cond), \
 			   (sleep_us), (timeout_us))
 
+static void nixge_tx_skb_unmap(struct nixge_priv *priv,
+			       struct nixge_tx_skb *tx_skb);
+
 static void nixge_hw_dma_bd_release(struct net_device *ndev)
 {
 	struct nixge_priv *priv = netdev_priv(ndev);
@@ -264,18 +294,21 @@ static void nixge_hw_dma_bd_release(struct net_device *ndev)
 	struct sk_buff *skb;
 	int i;
 
-	for (i = 0; i < RX_BD_NUM; i++) {
-		phys_addr = nixge_hw_dma_bd_get_addr(&priv->rx_bd_v[i],
-						     phys);
+	if (priv->rx_bd_v) {
+		for (i = 0; i < RX_BD_NUM; i++) {
+			skb = (struct sk_buff *)(uintptr_t)
+				nixge_hw_dma_bd_get_addr(&priv->rx_bd_v[i],
+							 sw_id_offset);
+			if (!skb)
+				continue;
 
-		dma_unmap_single(ndev->dev.parent, phys_addr,
-				 NIXGE_MAX_JUMBO_FRAME_SIZE,
-				 DMA_FROM_DEVICE);
-
-		skb = (struct sk_buff *)(uintptr_t)
-			nixge_hw_dma_bd_get_addr(&priv->rx_bd_v[i],
-						 sw_id_offset);
-		dev_kfree_skb(skb);
+			phys_addr = nixge_hw_dma_bd_get_addr(&priv->rx_bd_v[i],
+							     phys);
+			dma_unmap_single(ndev->dev.parent, phys_addr,
+					 NIXGE_RX_BUF_SIZE,
+					 DMA_FROM_DEVICE);
+			dev_kfree_skb(skb);
+		}
 	}
 
 	if (priv->rx_bd_v)
@@ -284,14 +317,24 @@ static void nixge_hw_dma_bd_release(struct net_device *ndev)
 				  priv->rx_bd_v,
 				  priv->rx_bd_p);
 
-	if (priv->tx_skb)
+	if (priv->tx_skb) {
+		for (i = 0; i < TX_BD_NUM; i++)
+			nixge_tx_skb_unmap(priv, &priv->tx_skb[i]);
 		devm_kfree(ndev->dev.parent, priv->tx_skb);
+	}
 
 	if (priv->tx_bd_v)
 		dma_free_coherent(ndev->dev.parent,
 				  sizeof(*priv->tx_bd_v) * TX_BD_NUM,
 				  priv->tx_bd_v,
 				  priv->tx_bd_p);
+
+	priv->rx_bd_v = NULL;
+	priv->tx_skb = NULL;
+	priv->tx_bd_v = NULL;
+	priv->rx_bd_p = 0;
+	priv->tx_bd_p = 0;
+	priv->tx_bd_used = 0;
 }
 
 static int nixge_hw_dma_bd_init(struct net_device *ndev)
@@ -305,6 +348,7 @@ static int nixge_hw_dma_bd_init(struct net_device *ndev)
 	/* Reset the indexes which are used for accessing the BDs */
 	priv->tx_bd_ci = 0;
 	priv->tx_bd_tail = 0;
+	priv->tx_bd_used = 0;
 	priv->rx_bd_ci = 0;
 
 	/* Allocate the Tx and Rx buffer descriptors. */
@@ -315,6 +359,8 @@ static int nixge_hw_dma_bd_init(struct net_device *ndev)
 					   &priv->tx_bd_p, GFP_KERNEL);
 	if (!priv->tx_bd_v)
 		goto out;
+	memset(priv->tx_bd_v, 0,
+	       sizeof(*priv->tx_bd_v) * TX_BD_NUM);
 	/* alloc buffer pointer */
 	priv->tx_skb = devm_kcalloc(ndev->dev.parent,
 				    TX_BD_NUM, sizeof(*priv->tx_skb),
@@ -327,6 +373,8 @@ static int nixge_hw_dma_bd_init(struct net_device *ndev)
 					   &priv->rx_bd_p, GFP_KERNEL);
 	if (!priv->rx_bd_v)
 		goto out;
+	memset(priv->rx_bd_v, 0,
+	       sizeof(*priv->rx_bd_v) * RX_BD_NUM);
 
 	for (i = 0; i < TX_BD_NUM; i++) {
 		// descriptor chain, one point to another
@@ -343,19 +391,23 @@ static int nixge_hw_dma_bd_init(struct net_device *ndev)
 					 + sizeof(*priv->rx_bd_v) *
 					 ((i + 1) % RX_BD_NUM));
 
-		skb = netdev_alloc_skb_ip_align(ndev,
-						NIXGE_MAX_JUMBO_FRAME_SIZE);
+		skb = netdev_alloc_skb_ip_align(ndev, NIXGE_RX_BUF_SIZE);
 		if (!skb)
 			goto out;
 
-		nixge_hw_dma_bd_set_offset(&priv->rx_bd_v[i], (uintptr_t)skb);
 		phys = dma_map_single(ndev->dev.parent, skb->data,
-				      NIXGE_MAX_JUMBO_FRAME_SIZE,
+				      NIXGE_RX_BUF_SIZE,
 				      DMA_FROM_DEVICE);
+		if (dma_mapping_error(ndev->dev.parent, phys)) {
+			dev_kfree_skb(skb);
+			goto out;
+		}
 
+		nixge_hw_dma_bd_set_offset(&priv->rx_bd_v[i],
+					       (uintptr_t)skb);
 		nixge_hw_dma_bd_set_phys(&priv->rx_bd_v[i], phys);
 
-		priv->rx_bd_v[i].cntrl = NIXGE_MAX_JUMBO_FRAME_SIZE;
+		priv->rx_bd_v[i].cntrl = NIXGE_RX_BUF_SIZE;
 	}
 
 	/* Start updating the Rx channel control register */
@@ -391,6 +443,7 @@ static int nixge_hw_dma_bd_init(struct net_device *ndev)
 	cr = nixge_dma_read_reg(priv, XAXIDMA_RX_CR_OFFSET);
 	nixge_dma_write_reg(priv, XAXIDMA_RX_CR_OFFSET,
 			    cr | XAXIDMA_CR_RUNSTOP_MASK);
+	dma_wmb();
 	nixge_dma_write_desc_reg(priv, XAXIDMA_RX_TDESC_OFFSET, priv->rx_bd_p +
 			    (sizeof(*priv->rx_bd_v) * (RX_BD_NUM - 1)));
 
@@ -412,7 +465,7 @@ out:
 static void __nixge_device_reset(struct nixge_priv *priv, off_t offset)
 {
 	u32 status;
-	int err;
+	int err = 0;
 
 	/* Reset Axi DMA. This would reset NIXGE Ethernet core as well.
 	 * The reset process of Axi DMA takes a while to complete as all
@@ -427,34 +480,107 @@ static void __nixge_device_reset(struct nixge_priv *priv, off_t offset)
 		netdev_err(priv->ndev, "%s: DMA reset timeout!\n", __func__);
 }
 
-static void nixge_device_reset(struct net_device *ndev)
+static int nixge_device_reset(struct net_device *ndev)
 {
 	struct nixge_priv *priv = netdev_priv(ndev);
+	int ret;
 
 	// write axi dma control register 
 	__nixge_device_reset(priv, XAXIDMA_TX_CR_OFFSET);
 	__nixge_device_reset(priv, XAXIDMA_RX_CR_OFFSET);
 
 	// init the dma descriptor, make rx sg starts to work
-	if (nixge_hw_dma_bd_init(ndev))
+	ret = nixge_hw_dma_bd_init(ndev);
+	if (ret) {
 		netdev_err(ndev, "%s: descriptor allocation failed\n",
 			   __func__);
+		return ret;
+	}
 
 	netif_trans_update(ndev);
+	return 0;
+}
+
+static u32 nixge_mac_link_control(struct phy_device *phydev,
+				  bool *pause_rx, bool *pause_tx)
+{
+	bool local_pause;
+	u32 ctrl = NIXGE_MAC_CTL_TX_EN;
+
+	switch (phydev->speed) {
+	case SPEED_10:
+		ctrl |= NIXGE_MAC_CTL_SPEED_10;
+		break;
+	case SPEED_100:
+		ctrl |= NIXGE_MAC_CTL_SPEED_100;
+		break;
+	case SPEED_1000:
+	default:
+		ctrl |= NIXGE_MAC_CTL_SPEED_1000;
+		break;
+	}
+
+	if (phydev->duplex == DUPLEX_FULL)
+		ctrl |= NIXGE_MAC_CTL_FULL_DUPLEX;
+
+	/* This MAC advertises symmetric pause only.  phydev->pause describes
+	 * the link partner's Pause advertisement, so flow control is enabled
+	 * in both directions only when both ends advertised Pause.  In
+	 * particular, a partner advertising Asym_Pause alone must not enable
+	 * TX pause here.
+	 */
+	local_pause = linkmode_test_bit(ETHTOOL_LINK_MODE_Pause_BIT,
+					phydev->advertising);
+	*pause_rx = phydev->autoneg == AUTONEG_ENABLE &&
+		    local_pause && phydev->pause;
+	*pause_tx = *pause_rx;
+	if (*pause_tx)
+		ctrl |= NIXGE_MAC_CTL_PAUSE_SEND;
+	if (*pause_rx)
+		ctrl |= NIXGE_MAC_CTL_PAUSE_RESPECT;
+
+	return ctrl;
 }
 
 static void nixge_handle_link_change(struct net_device *ndev)
 {
 	struct nixge_priv *priv = netdev_priv(ndev);
 	struct phy_device *phydev = ndev->phydev;
+	bool pause_rx = false, pause_tx = false;
+	u32 mac_ctrl;
+
+	if (!phydev->link) {
+		/* Drop link first so the FPGA flushes traffic before changing the
+		 * clock mux.  Return to the independent 125 MHz clock while down.
+		 */
+		nixge_ctrl_write_reg(priv, NIXGE_REG_PHY_CTL, 0);
+		nixge_ctrl_write_reg(priv, NIXGE_REG_MAC_CTL,
+				     NIXGE_MAC_CTL_TX_EN |
+				     NIXGE_MAC_CTL_SPEED_1000 |
+				     NIXGE_MAC_CTL_FULL_DUPLEX);
+	} else {
+		mac_ctrl = nixge_mac_link_control(phydev, &pause_rx, &pause_tx);
+		/* Program speed and flow control before releasing the FPGA link. */
+		nixge_ctrl_write_reg(priv, NIXGE_REG_MAC_CTL, mac_ctrl);
+		nixge_ctrl_write_reg(priv, NIXGE_REG_PHY_CTL,
+				     NIXGE_PHY_CTL_LINK_UP);
+	}
 
 	if (phydev->link != priv->link || phydev->speed != priv->speed ||
-	    phydev->duplex != priv->duplex) {
+	    phydev->duplex != priv->duplex || pause_rx != priv->pause_rx ||
+	    pause_tx != priv->pause_tx) {
 		priv->link = phydev->link;
 		priv->speed = phydev->speed;
 		priv->duplex = phydev->duplex;
+		priv->pause_rx = pause_rx;
+		priv->pause_tx = pause_tx;
 		phy_print_status(phydev);
 	}
+
+	if (phydev->link)
+		netif_carrier_on(ndev);
+	else
+		netif_carrier_off(ndev);
 }
 
 static void nixge_tx_skb_unmap(struct nixge_priv *priv,
@@ -482,28 +608,35 @@ static void nixge_start_xmit_done(struct net_device *ndev)
 	struct nixge_priv *priv = netdev_priv(ndev);
 	struct nixge_hw_dma_bd *cur_p;
 	struct nixge_tx_skb *tx_skb;
-	unsigned int status = 0;
+	unsigned int status;
+	unsigned long flags;
 	u32 packets = 0;
 	u32 size = 0;
 
+	spin_lock_irqsave(&priv->tx_lock, flags);
 	cur_p = &priv->tx_bd_v[priv->tx_bd_ci];
 	tx_skb = &priv->tx_skb[priv->tx_bd_ci];
 
-	status = cur_p->status;
+	status = READ_ONCE(cur_p->status);
 
-	while (status & XAXIDMA_BD_STS_COMPLETE_MASK) {
+	while (priv->tx_bd_used &&
+	       (status & XAXIDMA_BD_STS_COMPLETE_MASK)) {
+		dma_rmb();
 		nixge_tx_skb_unmap(priv, tx_skb);
-		cur_p->status = 0;
 
 		size += status & XAXIDMA_BD_STS_ACTUAL_LEN_MASK;
 		packets++;
+		cur_p->cntrl = 0;
+		WRITE_ONCE(cur_p->status, 0);
+		priv->tx_bd_used--;
 
 		++priv->tx_bd_ci;
 		priv->tx_bd_ci %= TX_BD_NUM;
 		cur_p = &priv->tx_bd_v[priv->tx_bd_ci];
 		tx_skb = &priv->tx_skb[priv->tx_bd_ci];
-		status = cur_p->status;
+		status = READ_ONCE(cur_p->status);
 	}
+	spin_unlock_irqrestore(&priv->tx_lock, flags);
 
 	ndev->stats.tx_packets += packets;
 	ndev->stats.tx_bytes += size;
@@ -512,101 +645,58 @@ static void nixge_start_xmit_done(struct net_device *ndev)
 		netif_wake_queue(ndev);
 }
 
-static int nixge_check_tx_bd_space(struct nixge_priv *priv,
-				   int num_frag)
-{
-	struct nixge_hw_dma_bd *cur_p;
-
-	cur_p = &priv->tx_bd_v[(priv->tx_bd_tail + num_frag) % TX_BD_NUM];
-	if (cur_p->status & XAXIDMA_BD_STS_ALL_MASK)
-		return NETDEV_TX_BUSY;
-	return 0;
-}
-
 static int nixge_start_xmit(struct sk_buff *skb, struct net_device *ndev)
 {
 	struct nixge_priv *priv = netdev_priv(ndev);
 	struct nixge_hw_dma_bd *cur_p;
 	struct nixge_tx_skb *tx_skb;
 	dma_addr_t tail_p, cur_phys;
-	skb_frag_t *frag;
-	u32 num_frag;
-	u32 ii;
+	unsigned long flags;
 
-	num_frag = skb_shinfo(skb)->nr_frags;
+	if (skb_is_nonlinear(skb) && skb_linearize(skb))
+		goto drop;
+
+	spin_lock_irqsave(&priv->tx_lock, flags);
+	if (priv->tx_bd_used >= TX_BD_NUM - 1) {
+		netif_stop_queue(ndev);
+		spin_unlock_irqrestore(&priv->tx_lock, flags);
+		return NETDEV_TX_BUSY;
+	}
+
 	cur_p = &priv->tx_bd_v[priv->tx_bd_tail];
 	tx_skb = &priv->tx_skb[priv->tx_bd_tail];
 
-	if (nixge_check_tx_bd_space(priv, num_frag)) {
-		if (!netif_queue_stopped(ndev))
-			netif_stop_queue(ndev);
-		return NETDEV_TX_OK;
-	}
-
 	cur_phys = dma_map_single(ndev->dev.parent, skb->data,
-				  skb_headlen(skb), DMA_TO_DEVICE);
+				  skb->len, DMA_TO_DEVICE);
 	if (dma_mapping_error(ndev->dev.parent, cur_phys))
-		goto drop;
+		goto drop_unlock;
 	nixge_hw_dma_bd_set_phys(cur_p, cur_phys);
 
-	cur_p->cntrl = skb_headlen(skb) | XAXIDMA_BD_CTRL_TXSOF_MASK;
+	cur_p->cntrl = skb->len | XAXIDMA_BD_CTRL_TXSOF_MASK |
+			 XAXIDMA_BD_CTRL_TXEOF_MASK;
+	WRITE_ONCE(cur_p->status, 0);
 
-	tx_skb->skb = NULL;
+	tx_skb->skb = skb;
 	tx_skb->mapping = cur_phys;
-	tx_skb->size = skb_headlen(skb);
+	tx_skb->size = skb->len;
 	tx_skb->mapped_as_page = false;
 
-	for (ii = 0; ii < num_frag; ii++) {
-		++priv->tx_bd_tail;
-		priv->tx_bd_tail %= TX_BD_NUM;
-		cur_p = &priv->tx_bd_v[priv->tx_bd_tail];
-		tx_skb = &priv->tx_skb[priv->tx_bd_tail];
-		frag = &skb_shinfo(skb)->frags[ii];
-
-		cur_phys = skb_frag_dma_map(ndev->dev.parent, frag, 0,
-					    skb_frag_size(frag),
-					    DMA_TO_DEVICE);
-		if (dma_mapping_error(ndev->dev.parent, cur_phys))
-			goto frag_err;
-		nixge_hw_dma_bd_set_phys(cur_p, cur_phys);
-
-		cur_p->cntrl = skb_frag_size(frag);
-
-		tx_skb->skb = NULL;
-		tx_skb->mapping = cur_phys;
-		tx_skb->size = skb_frag_size(frag);
-		tx_skb->mapped_as_page = true;
-	}
-
-	/* last buffer of the frame */
-	tx_skb->skb = skb;
-
-	cur_p->cntrl |= XAXIDMA_BD_CTRL_TXEOF_MASK;
-
 	tail_p = priv->tx_bd_p + sizeof(*priv->tx_bd_v) * priv->tx_bd_tail;
-	/* Start the transfer */
-	nixge_dma_write_desc_reg(priv, XAXIDMA_TX_TDESC_OFFSET, tail_p);
 	++priv->tx_bd_tail;
 	priv->tx_bd_tail %= TX_BD_NUM;
+	priv->tx_bd_used++;
+
+	dma_wmb();
+	nixge_dma_write_desc_reg(priv, XAXIDMA_TX_TDESC_OFFSET, tail_p);
+	if (priv->tx_bd_used >= TX_BD_NUM - 1)
+		netif_stop_queue(ndev);
+	spin_unlock_irqrestore(&priv->tx_lock, flags);
 
 	return NETDEV_TX_OK;
-frag_err:
-	for (; ii > 0; ii--) {
-		if (priv->tx_bd_tail)
-			priv->tx_bd_tail--;
-		else
-			priv->tx_bd_tail = TX_BD_NUM - 1;
-
-		tx_skb = &priv->tx_skb[priv->tx_bd_tail];
-		nixge_tx_skb_unmap(priv, tx_skb);
-
-		cur_p = &priv->tx_bd_v[priv->tx_bd_tail];
-		cur_p->status = 0;
-	}
-	dma_unmap_single(priv->ndev->dev.parent,
-			 tx_skb->mapping,
-			 tx_skb->size, DMA_TO_DEVICE);
+drop_unlock:
+	spin_unlock_irqrestore(&priv->tx_lock, flags);
 drop:
+	dev_kfree_skb_any(skb);
 	ndev->stats.tx_dropped++;
 	return NETDEV_TX_OK;
 }
@@ -614,76 +704,97 @@ drop:
 static int nixge_recv(struct net_device *ndev, int budget)
 {
 	struct nixge_priv *priv = netdev_priv(ndev);
-	struct sk_buff *skb, *new_skb;
+	struct sk_buff *dma_skb, *skb;
 	struct nixge_hw_dma_bd *cur_p;
-	dma_addr_t tail_p = 0, cur_phys = 0;
+	dma_addr_t tail_p = 0, dma_phys;
+	u32 status;
 	u32 packets = 0;
-	u32 length = 0;
+	u32 received = 0;
+	u32 length;
 	u32 size = 0;
 
 	cur_p = &priv->rx_bd_v[priv->rx_bd_ci];
+	status = READ_ONCE(cur_p->status);
 
-	while ((cur_p->status & XAXIDMA_BD_STS_COMPLETE_MASK &&
-		budget > packets)) {
+	while ((status & XAXIDMA_BD_STS_COMPLETE_MASK) &&
+	       budget > packets) {
+		dma_rmb();
 		tail_p = priv->rx_bd_p + sizeof(*priv->rx_bd_v) *
 			 priv->rx_bd_ci;
 
-		skb = (struct sk_buff *)(uintptr_t)
+		length = status & XAXIDMA_BD_STS_ACTUAL_LEN_MASK;
+		if (length > NIXGE_RX_BUF_SIZE)
+			length = NIXGE_RX_BUF_SIZE;
+
+		/* Keep a permanently mapped DMA buffer behind every descriptor.
+		 * Copying a normal-size frame is substantially cheaper on Zynq-7000
+		 * than allocating and mapping a 9 KiB replacement for every packet,
+		 * and it prevents descriptor starvation under sustained RX load.
+		 */
+		dma_skb = (struct sk_buff *)(uintptr_t)
 			nixge_hw_dma_bd_get_addr(cur_p, sw_id_offset);
+		dma_phys = nixge_hw_dma_bd_get_addr(cur_p, phys);
+		skb = napi_alloc_skb(&priv->napi, length);
+		if (!skb) {
+			priv->rx_alloc_fail++;
+			ndev->stats.rx_dropped++;
+			goto recycle_buffer;
+		}
 
-		length = cur_p->status & XAXIDMA_BD_STS_ACTUAL_LEN_MASK;
-		if (length > NIXGE_MAX_JUMBO_FRAME_SIZE)
-			length = NIXGE_MAX_JUMBO_FRAME_SIZE;
-
-		dma_unmap_single(ndev->dev.parent,
-				 nixge_hw_dma_bd_get_addr(cur_p, phys),
-				 NIXGE_MAX_JUMBO_FRAME_SIZE,
-				 DMA_FROM_DEVICE);
-
-		skb_put(skb, length);
-
+		dma_sync_single_for_cpu(ndev->dev.parent, dma_phys,
+					NIXGE_RX_BUF_SIZE, DMA_FROM_DEVICE);
+		memcpy(skb_put(skb, length), dma_skb->data, length);
+		dma_sync_single_for_device(ndev->dev.parent, dma_phys,
+					   NIXGE_RX_BUF_SIZE, DMA_FROM_DEVICE);
 		skb->protocol = eth_type_trans(skb, ndev);
 		skb_checksum_none_assert(skb);
-
-		/* For now mark them as CHECKSUM_NONE since
-		 * we don't have offload capabilities
-		 */
 		skb->ip_summed = CHECKSUM_NONE;
-
 		napi_gro_receive(&priv->napi, skb);
-
 		size += length;
+		received++;
+		goto rearm_descriptor;
+
+recycle_buffer:
+		dma_sync_single_for_device(ndev->dev.parent, dma_phys,
+					   NIXGE_RX_BUF_SIZE, DMA_FROM_DEVICE);
+rearm_descriptor:
+		cur_p->cntrl = NIXGE_RX_BUF_SIZE;
+		WRITE_ONCE(cur_p->status, 0);
+
 		packets++;
-
-		new_skb = netdev_alloc_skb_ip_align(ndev,
-						    NIXGE_MAX_JUMBO_FRAME_SIZE);
-		if (!new_skb)
-			return packets;
-
-		cur_phys = dma_map_single(ndev->dev.parent, new_skb->data,
-					  NIXGE_MAX_JUMBO_FRAME_SIZE,
-					  DMA_FROM_DEVICE);
-		if (dma_mapping_error(ndev->dev.parent, cur_phys)) {
-			/* FIXME: bail out and clean up */
-			netdev_err(ndev, "Failed to map ...\n");
-		}
-		nixge_hw_dma_bd_set_phys(cur_p, cur_phys);
-		cur_p->cntrl = NIXGE_MAX_JUMBO_FRAME_SIZE;
-		cur_p->status = 0;
-		nixge_hw_dma_bd_set_offset(cur_p, (uintptr_t)new_skb);
-
 		++priv->rx_bd_ci;
 		priv->rx_bd_ci %= RX_BD_NUM;
 		cur_p = &priv->rx_bd_v[priv->rx_bd_ci];
+		status = READ_ONCE(cur_p->status);
 	}
 
-	ndev->stats.rx_packets += packets;
+	ndev->stats.rx_packets += received;
 	ndev->stats.rx_bytes += size;
 
-	if (tail_p)
+	if (tail_p) {
+		dma_wmb();
 		nixge_dma_write_desc_reg(priv, XAXIDMA_RX_TDESC_OFFSET, tail_p);
+	}
 
 	return packets;
+}
+
+static void nixge_schedule_dma_recovery(struct nixge_priv *priv)
+{
+	u32 cr;
+
+	netif_stop_queue(priv->ndev);
+
+	cr = nixge_dma_read_reg(priv, XAXIDMA_TX_CR_OFFSET);
+	cr &= ~XAXIDMA_IRQ_ALL_MASK;
+	nixge_dma_write_reg(priv, XAXIDMA_TX_CR_OFFSET, cr);
+
+	cr = nixge_dma_read_reg(priv, XAXIDMA_RX_CR_OFFSET);
+	cr &= ~XAXIDMA_IRQ_ALL_MASK;
+	nixge_dma_write_reg(priv, XAXIDMA_RX_CR_OFFSET, cr);
+
+	if (atomic_cmpxchg(&priv->dma_err_pending, 0, 1) == 0)
+		schedule_work(&priv->dma_err_work);
 }
 
 static int nixge_poll(struct napi_struct *napi, int budget)
@@ -699,9 +810,21 @@ static int nixge_poll(struct napi_struct *napi, int budget)
 		napi_complete_done(napi, work_done);
 		status = nixge_dma_read_reg(priv, XAXIDMA_RX_SR_OFFSET);
 
+		if (status & XAXIDMA_IRQ_ERROR_MASK) {
+			priv->dma_rx_errors++;
+			netdev_err(priv->ndev, "DMA Rx error 0x%x in NAPI\n",
+				   status);
+			nixge_dma_write_reg(priv, XAXIDMA_RX_SR_OFFSET,
+					    status & XAXIDMA_IRQ_ALL_MASK);
+			nixge_schedule_dma_recovery(priv);
+			return work_done;
+		}
+
 		if (status & (XAXIDMA_IRQ_IOC_MASK | XAXIDMA_IRQ_DELAY_MASK)) {
 			/* If there's more, reschedule, but clear */
-			nixge_dma_write_reg(priv, XAXIDMA_RX_SR_OFFSET, status);
+			nixge_dma_write_reg(priv, XAXIDMA_RX_SR_OFFSET,
+					    status & (XAXIDMA_IRQ_IOC_MASK |
+						      XAXIDMA_IRQ_DELAY_MASK));
 			napi_reschedule(napi);
 		} else {
 			/* if not, turn on RX IRQs again ... */
@@ -720,40 +843,31 @@ static irqreturn_t nixge_tx_irq(int irq, void *_ndev)
 	struct net_device *ndev = _ndev;
 	unsigned int status;
 	dma_addr_t phys;
-	u32 cr;
 
 	// read axidma mm2s status register
 	status = nixge_dma_read_reg(priv, XAXIDMA_TX_SR_OFFSET);
-	if (status & (XAXIDMA_IRQ_IOC_MASK | XAXIDMA_IRQ_DELAY_MASK)) {
-		nixge_dma_write_reg(priv, XAXIDMA_TX_SR_OFFSET, status);
-		nixge_start_xmit_done(priv->ndev);
-		goto out;
-	}
 	if (!(status & XAXIDMA_IRQ_ALL_MASK)) {
 		netdev_err(ndev, "No interrupts asserted in Tx path\n");
 		return IRQ_NONE;
 	}
 	if (status & XAXIDMA_IRQ_ERROR_MASK) {
+		priv->dma_tx_errors++;
 		phys = nixge_hw_dma_bd_get_addr(&priv->tx_bd_v[priv->tx_bd_ci],
 						phys);
 
 		netdev_err(ndev, "DMA Tx error 0x%x\n", status);
 		netdev_err(ndev, "Current BD is at: 0x%llx\n", (u64)phys);
 
-		cr = nixge_dma_read_reg(priv, XAXIDMA_TX_CR_OFFSET);
-		/* Disable coalesce, delay timer and error interrupts */
-		cr &= (~XAXIDMA_IRQ_ALL_MASK);
-		/* Write to the Tx channel control register */
-		nixge_dma_write_reg(priv, XAXIDMA_TX_CR_OFFSET, cr);
-
-		cr = nixge_dma_read_reg(priv, XAXIDMA_RX_CR_OFFSET);
-		/* Disable coalesce, delay timer and error interrupts */
-		cr &= (~XAXIDMA_IRQ_ALL_MASK);
-		/* Write to the Rx channel control register */
-		nixge_dma_write_reg(priv, XAXIDMA_RX_CR_OFFSET, cr);
-
-		tasklet_schedule(&priv->dma_err_tasklet);
-		nixge_dma_write_reg(priv, XAXIDMA_TX_SR_OFFSET, status);
+		nixge_dma_write_reg(priv, XAXIDMA_TX_SR_OFFSET,
+				    status & XAXIDMA_IRQ_ALL_MASK);
+		nixge_schedule_dma_recovery(priv);
+		goto out;
+	}
+	if (status & (XAXIDMA_IRQ_IOC_MASK | XAXIDMA_IRQ_DELAY_MASK)) {
+		nixge_dma_write_reg(priv, XAXIDMA_TX_SR_OFFSET,
+				    status & (XAXIDMA_IRQ_IOC_MASK |
+					      XAXIDMA_IRQ_DELAY_MASK));
+		nixge_start_xmit_done(priv->ndev);
 	}
 out:
 	return IRQ_HANDLED;
@@ -768,52 +882,54 @@ static irqreturn_t nixge_rx_irq(int irq, void *_ndev)
 	u32 cr;
 
 	status = nixge_dma_read_reg(priv, XAXIDMA_RX_SR_OFFSET);
+	if (!(status & XAXIDMA_IRQ_ALL_MASK)) {
+		netdev_err(ndev, "No interrupts asserted in Rx path\n");
+		return IRQ_NONE;
+	}
+	if (status & XAXIDMA_IRQ_ERROR_MASK) {
+		priv->dma_rx_errors++;
+		phys = nixge_hw_dma_bd_get_addr(&priv->rx_bd_v[priv->rx_bd_ci],
+						phys);
+		netdev_err(ndev, "DMA Rx error 0x%x\n", status);
+		netdev_err(ndev, "Current BD is at: 0x%llx\n", (u64)phys);
+
+		nixge_dma_write_reg(priv, XAXIDMA_RX_SR_OFFSET,
+				    status & XAXIDMA_IRQ_ALL_MASK);
+		nixge_schedule_dma_recovery(priv);
+		goto out;
+	}
 	if (status & (XAXIDMA_IRQ_IOC_MASK | XAXIDMA_IRQ_DELAY_MASK)) {
-		/* Turn of IRQs because NAPI */
-		nixge_dma_write_reg(priv, XAXIDMA_RX_SR_OFFSET, status);
+		/* Turn off completion IRQs while NAPI owns the RX ring. */
+		nixge_dma_write_reg(priv, XAXIDMA_RX_SR_OFFSET,
+				    status & (XAXIDMA_IRQ_IOC_MASK |
+					      XAXIDMA_IRQ_DELAY_MASK));
 		cr = nixge_dma_read_reg(priv, XAXIDMA_RX_CR_OFFSET);
 		cr &= ~(XAXIDMA_IRQ_IOC_MASK | XAXIDMA_IRQ_DELAY_MASK);
 		nixge_dma_write_reg(priv, XAXIDMA_RX_CR_OFFSET, cr);
 
 		if (napi_schedule_prep(&priv->napi))
 			__napi_schedule(&priv->napi);
-		goto out;
-	}
-	if (!(status & XAXIDMA_IRQ_ALL_MASK)) {
-		netdev_err(ndev, "No interrupts asserted in Rx path\n");
-		return IRQ_NONE;
-	}
-	if (status & XAXIDMA_IRQ_ERROR_MASK) {
-		phys = nixge_hw_dma_bd_get_addr(&priv->rx_bd_v[priv->rx_bd_ci],
-						phys);
-		netdev_err(ndev, "DMA Rx error 0x%x\n", status);
-		netdev_err(ndev, "Current BD is at: 0x%llx\n", (u64)phys);
-
-		cr = nixge_dma_read_reg(priv, XAXIDMA_TX_CR_OFFSET);
-		/* Disable coalesce, delay timer and error interrupts */
-		cr &= (~XAXIDMA_IRQ_ALL_MASK);
-		/* Finally write to the Tx channel control register */
-		nixge_dma_write_reg(priv, XAXIDMA_TX_CR_OFFSET, cr);
-
-		cr = nixge_dma_read_reg(priv, XAXIDMA_RX_CR_OFFSET);
-		/* Disable coalesce, delay timer and error interrupts */
-		cr &= (~XAXIDMA_IRQ_ALL_MASK);
-		/* write to the Rx channel control register */
-		nixge_dma_write_reg(priv, XAXIDMA_RX_CR_OFFSET, cr);
-
-		tasklet_schedule(&priv->dma_err_tasklet);
-		nixge_dma_write_reg(priv, XAXIDMA_RX_SR_OFFSET, status);
 	}
 out:
 	return IRQ_HANDLED;
 }
 
-static void nixge_dma_err_handler(unsigned long data)
+static void nixge_dma_err_handler(struct work_struct *work)
 {
-	struct nixge_priv *lp = (struct nixge_priv *)data;
+	struct nixge_priv *lp = container_of(work, struct nixge_priv,
+					     dma_err_work);
 	struct nixge_hw_dma_bd *cur_p;
 	struct nixge_tx_skb *tx_skb;
+	unsigned long flags;
 	u32 cr, i;
+
+	/* Process context lets us quiesce NAPI and both IRQ handlers before
+	 * rebuilding the DMA state. A tasklet cannot safely do this.
+	 */
+	napi_disable(&lp->napi);
+	synchronize_irq(lp->tx_irq);
+	synchronize_irq(lp->rx_irq);
+	spin_lock_irqsave(&lp->tx_lock, flags);
 
 	__nixge_device_reset(lp, XAXIDMA_TX_CR_OFFSET);
 	__nixge_device_reset(lp, XAXIDMA_RX_CR_OFFSET);
@@ -836,6 +952,7 @@ static void nixge_dma_err_handler(unsigned long data)
 
 	lp->tx_bd_ci = 0;
 	lp->tx_bd_tail = 0;
+	lp->tx_bd_used = 0;
 	lp->rx_bd_ci = 0;
 
 	/* Start updating the Rx channel control register */
@@ -871,6 +988,7 @@ static void nixge_dma_err_handler(unsigned long data)
 	cr = nixge_dma_read_reg(lp, XAXIDMA_RX_CR_OFFSET);
 	nixge_dma_write_reg(lp, XAXIDMA_RX_CR_OFFSET,
 			    cr | XAXIDMA_CR_RUNSTOP_MASK);
+	dma_wmb();
 	nixge_dma_write_desc_reg(lp, XAXIDMA_RX_TDESC_OFFSET, lp->rx_bd_p +
 			    (sizeof(*lp->rx_bd_v) * (RX_BD_NUM - 1)));
 
@@ -882,6 +1000,12 @@ static void nixge_dma_err_handler(unsigned long data)
 	cr = nixge_dma_read_reg(lp, XAXIDMA_TX_CR_OFFSET);
 	nixge_dma_write_reg(lp, XAXIDMA_TX_CR_OFFSET,
 			    cr | XAXIDMA_CR_RUNSTOP_MASK);
+
+	spin_unlock_irqrestore(&lp->tx_lock, flags);
+	napi_enable(&lp->napi);
+	atomic_set(&lp->dma_err_pending, 0);
+	if (netif_running(lp->ndev))
+		netif_wake_queue(lp->ndev);
 }
 
 static int nixge_open(struct net_device *ndev)
@@ -891,22 +1015,27 @@ static int nixge_open(struct net_device *ndev)
 	int ret;
 
 	// reset the axi dma
-	nixge_device_reset(ndev);
+	ret = nixge_device_reset(ndev);
+	if (ret)
+		return ret;
 
 	phy = of_phy_connect(ndev, priv->phy_node,
 			     &nixge_handle_link_change, 0, priv->phy_mode);
-	if (!phy)
-		return -ENODEV;
+	if (!phy) {
+		ret = -ENODEV;
+		goto err_phy;
+	}
 
-	linkmode_clear_bit(ETHTOOL_LINK_MODE_Autoneg_BIT, ndev->phydev->supported);
-	linkmode_copy(ndev->phydev->advertising, ndev->phydev->supported);
-	ndev->phydev->autoneg = AUTONEG_DISABLE;
+	/* The RGMII adapter supports all three wire speeds in full duplex.
+	 * Half duplex needs collision/backoff logic which this MAC does not
+	 * implement, so never advertise it.
+	 */
+	phy_remove_link_mode(phy, ETHTOOL_LINK_MODE_10baseT_Half_BIT);
+	phy_remove_link_mode(phy, ETHTOOL_LINK_MODE_100baseT_Half_BIT);
+	phy_remove_link_mode(phy, ETHTOOL_LINK_MODE_1000baseT_Half_BIT);
+	phy_support_sym_pause(phy);
 
 	phy_start(phy);
-
-	/* Enable tasklets for Axi DMA error handling */
-	tasklet_init(&priv->dma_err_tasklet, nixge_dma_err_handler,
-		     (unsigned long)priv);
 
 	napi_enable(&priv->napi);
 
@@ -928,10 +1057,12 @@ static int nixge_open(struct net_device *ndev)
 err_rx_irq:
 	free_irq(priv->tx_irq, ndev);
 err_tx_irq:
+	napi_disable(&priv->napi);
 	phy_stop(phy);
 	phy_disconnect(phy);
-	tasklet_kill(&priv->dma_err_tasklet);
-	netdev_err(ndev, "request_irq() failed\n");
+err_phy:
+	nixge_hw_dma_bd_release(ndev);
+	netdev_err(ndev, "failed to open interface: %d\n", ret);
 	return ret;
 }
 
@@ -940,6 +1071,24 @@ static int nixge_stop(struct net_device *ndev)
 	struct nixge_priv *priv = netdev_priv(ndev);
 	u32 cr;
 
+	netif_stop_queue(ndev);
+	nixge_ctrl_write_reg(priv, NIXGE_REG_PHY_CTL, 0);
+	nixge_ctrl_write_reg(priv, NIXGE_REG_MAC_CTL,
+			     NIXGE_MAC_CTL_TX_EN |
+			     NIXGE_MAC_CTL_SPEED_1000 |
+			     NIXGE_MAC_CTL_FULL_DUPLEX);
+
+	cr = nixge_dma_read_reg(priv, XAXIDMA_RX_CR_OFFSET);
+	nixge_dma_write_reg(priv, XAXIDMA_RX_CR_OFFSET,
+			    cr & ~XAXIDMA_IRQ_ALL_MASK);
+	cr = nixge_dma_read_reg(priv, XAXIDMA_TX_CR_OFFSET);
+	nixge_dma_write_reg(priv, XAXIDMA_TX_CR_OFFSET,
+			    cr & ~XAXIDMA_IRQ_ALL_MASK);
+	/* No IRQ handler may enqueue recovery after cancel_work_sync(). */
+	synchronize_irq(priv->tx_irq);
+	synchronize_irq(priv->rx_irq);
+	cancel_work_sync(&priv->dma_err_work);
+	atomic_set(&priv->dma_err_pending, 0);
 	netif_stop_queue(ndev);
 	napi_disable(&priv->napi);
 
@@ -950,12 +1099,12 @@ static int nixge_stop(struct net_device *ndev)
 
 	cr = nixge_dma_read_reg(priv, XAXIDMA_RX_CR_OFFSET);
 	nixge_dma_write_reg(priv, XAXIDMA_RX_CR_OFFSET,
-			    cr & (~XAXIDMA_CR_RUNSTOP_MASK));
+			    cr & ~(XAXIDMA_CR_RUNSTOP_MASK |
+				   XAXIDMA_IRQ_ALL_MASK));
 	cr = nixge_dma_read_reg(priv, XAXIDMA_TX_CR_OFFSET);
 	nixge_dma_write_reg(priv, XAXIDMA_TX_CR_OFFSET,
-			    cr & (~XAXIDMA_CR_RUNSTOP_MASK));
-
-	tasklet_kill(&priv->dma_err_tasklet);
+			    cr & ~(XAXIDMA_CR_RUNSTOP_MASK |
+				   XAXIDMA_IRQ_ALL_MASK));
 
 	free_irq(priv->tx_irq, ndev);
 	free_irq(priv->rx_irq, ndev);
@@ -971,7 +1120,7 @@ static int nixge_change_mtu(struct net_device *ndev, int new_mtu)
 		return -EBUSY;
 
 	if ((new_mtu + NIXGE_HDR_SIZE + NIXGE_TRL_SIZE) >
-	     NIXGE_MAX_JUMBO_FRAME_SIZE)
+	     NIXGE_MAX_FRAME_SIZE)
 		return -EINVAL;
 
 	ndev->mtu = new_mtu;
@@ -991,6 +1140,13 @@ static s32 __nixge_hw_set_mac_address(struct net_device *ndev)
 
 	nixge_ctrl_write_reg(priv, NIXGE_REG_MAC_MSB,
 			     (ndev->dev_addr[1] | (ndev->dev_addr[0] << 8)));
+	nixge_ctrl_write_reg(priv, NIXGE_REG_PAUSE_MAC_LSB,
+			     (ndev->dev_addr[2] << 24) |
+			     (ndev->dev_addr[3] << 16) |
+			     (ndev->dev_addr[4] << 8) |
+			     ndev->dev_addr[5]);
+	nixge_ctrl_write_reg(priv, NIXGE_REG_PAUSE_MAC_MSB,
+			     (ndev->dev_addr[0] << 8) | ndev->dev_addr[1]);
 
 	
 
@@ -1008,10 +1164,23 @@ static int nixge_net_set_mac_address(struct net_device *ndev, void *p)
 	return err;
 }
 
+static void nixge_tx_timeout(struct net_device *ndev)
+{
+	struct nixge_priv *priv = netdev_priv(ndev);
+	u32 tx_status = nixge_dma_read_reg(priv, XAXIDMA_TX_SR_OFFSET);
+	u32 rx_status = nixge_dma_read_reg(priv, XAXIDMA_RX_SR_OFFSET);
+
+	netdev_err(ndev, "TX timeout, DMA status tx=0x%x rx=0x%x\n",
+		   tx_status, rx_status);
+	ndev->stats.tx_errors++;
+	nixge_schedule_dma_recovery(priv);
+}
+
 static const struct net_device_ops nixge_netdev_ops = {
 	.ndo_open = nixge_open,
 	.ndo_stop = nixge_stop,
 	.ndo_start_xmit = nixge_start_xmit,
+	.ndo_tx_timeout = nixge_tx_timeout,
 	.ndo_change_mtu	= nixge_change_mtu,
 	.ndo_set_mac_address = nixge_net_set_mac_address,
 	.ndo_validate_addr = eth_validate_addr,
@@ -1022,6 +1191,82 @@ static void nixge_ethtools_get_drvinfo(struct net_device *ndev,
 {
 	strlcpy(ed->driver, "nixge", sizeof(ed->driver));
 	strlcpy(ed->bus_info, "platform", sizeof(ed->driver));
+}
+
+static const char nixge_stat_names[][ETH_GSTRING_LEN] = {
+	"fpga_rx_overruns",
+	"fpga_rx_errors",
+	"fpga_pause_tx",
+	"fpga_pause_rx",
+	"dma_rx_errors",
+	"dma_tx_errors",
+	"rx_alloc_fail",
+};
+
+static void nixge_ethtools_get_strings(struct net_device *ndev, u32 stringset,
+				       u8 *data)
+{
+	if (stringset == ETH_SS_STATS)
+		memcpy(data, nixge_stat_names, sizeof(nixge_stat_names));
+}
+
+static int nixge_ethtools_get_sset_count(struct net_device *ndev, int sset)
+{
+	if (sset == ETH_SS_STATS)
+		return ARRAY_SIZE(nixge_stat_names);
+
+	return -EOPNOTSUPP;
+}
+
+static void nixge_ethtools_get_stats(struct net_device *ndev,
+				     struct ethtool_stats *stats, u64 *data)
+{
+	struct nixge_priv *priv = netdev_priv(ndev);
+
+	data[0] = nixge_ctrl_read_reg(priv, NIXGE_REG_RX_OVERRUNS);
+	data[1] = nixge_ctrl_read_reg(priv, NIXGE_REG_RX_ERRORS);
+	data[2] = nixge_ctrl_read_reg(priv, NIXGE_REG_PAUSE_TX);
+	data[3] = nixge_ctrl_read_reg(priv, NIXGE_REG_PAUSE_RX);
+	data[4] = priv->dma_rx_errors;
+	data[5] = priv->dma_tx_errors;
+	data[6] = priv->rx_alloc_fail;
+}
+
+static void nixge_ethtools_get_pauseparam(struct net_device *ndev,
+					  struct ethtool_pauseparam *pause)
+{
+	struct phy_device *phy = ndev->phydev;
+
+	pause->autoneg = phy ? phy->autoneg : AUTONEG_ENABLE;
+	if (!phy)
+		return;
+
+	pause->rx_pause = linkmode_test_bit(ETHTOOL_LINK_MODE_Pause_BIT,
+					     phy->advertising);
+	pause->tx_pause = pause->rx_pause;
+}
+
+static int nixge_ethtools_set_pauseparam(struct net_device *ndev,
+					 struct ethtool_pauseparam *pause)
+{
+	struct phy_device *phy = ndev->phydev;
+
+	if (!phy)
+		return -ENODEV;
+	if (!pause->autoneg || pause->rx_pause != pause->tx_pause)
+		return -EOPNOTSUPP;
+	if (!phy_validate_pause(phy, pause))
+		return -EINVAL;
+
+	if (pause->rx_pause)
+		linkmode_set_bit(ETHTOOL_LINK_MODE_Pause_BIT,
+				 phy->advertising);
+	else
+		linkmode_clear_bit(ETHTOOL_LINK_MODE_Pause_BIT,
+				   phy->advertising);
+	linkmode_clear_bit(ETHTOOL_LINK_MODE_Asym_Pause_BIT,
+			   phy->advertising);
+	return phy_start_aneg(phy);
 }
 
 static int nixge_ethtools_get_coalesce(struct net_device *ndev,
@@ -1117,6 +1362,11 @@ static int nixge_ethtools_set_phys_id(struct net_device *ndev,
 
 static const struct ethtool_ops nixge_ethtool_ops = {
 	.get_drvinfo    = nixge_ethtools_get_drvinfo,
+	.get_strings    = nixge_ethtools_get_strings,
+	.get_sset_count = nixge_ethtools_get_sset_count,
+	.get_ethtool_stats = nixge_ethtools_get_stats,
+	.get_pauseparam = nixge_ethtools_get_pauseparam,
+	.set_pauseparam = nixge_ethtools_set_pauseparam,
 	.get_coalesce   = nixge_ethtools_get_coalesce,
 	.set_coalesce   = nixge_ethtools_set_coalesce,
 	.set_phys_id    = nixge_ethtools_set_phys_id,
@@ -1204,6 +1454,7 @@ static int nixge_mdio_write(struct mii_bus *bus, int phy_id, int reg, u16 val)
 
 		nixge_ctrl_write_reg(priv, NIXGE_REG_MDIO_DATA, val);
 		nixge_ctrl_write_reg(priv, NIXGE_REG_MDIO_OP, tmp);
+		nixge_ctrl_write_reg(priv, NIXGE_REG_MDIO_CTRL, 1);
 		err = nixge_ctrl_poll_timeout(priv, NIXGE_REG_MDIO_CTRL, status,
 					      !status, 10, 1000);
 		if (err)
@@ -1490,13 +1741,16 @@ static int nixge_probe(struct platform_device *pdev)
 	SET_NETDEV_DEV(ndev, &pdev->dev);
 	
 
-	ndev->features = NETIF_F_SG;
+	/* Keep one packet per descriptor until SG ring accounting is added. */
+	ndev->features &= ~NETIF_F_SG;
+	ndev->hw_features &= ~NETIF_F_SG;
 	ndev->netdev_ops = &nixge_netdev_ops;
 	ndev->ethtool_ops = &nixge_ethtool_ops;
+	ndev->watchdog_timeo = msecs_to_jiffies(5000);
 
-	/* MTU range: 64 - 9000 */
+	/* The optimized RX path uses one 2 KiB buffer per descriptor. */
 	ndev->min_mtu = 64;
-	ndev->max_mtu = NIXGE_JUMBO_MTU;
+	ndev->max_mtu = NIXGE_MTU;
 
 	mac_addr = nixge_get_nvmem_address(&pdev->dev);
 	if (mac_addr && is_valid_ether_addr(mac_addr)) {
@@ -1509,7 +1763,11 @@ static int nixge_probe(struct platform_device *pdev)
 	priv = netdev_priv(ndev);
 	priv->ndev = ndev;
 	priv->dev = &pdev->dev;
+	spin_lock_init(&priv->tx_lock);
+	atomic_set(&priv->dma_err_pending, 0);
+	INIT_WORK(&priv->dma_err_work, nixge_dma_err_handler);
 	ndev_chr = ndev;
+	netif_carrier_off(ndev);
 
 	netif_napi_add(ndev, &priv->napi, nixge_poll, NAPI_POLL_WEIGHT);
 	// get the dma and eth_interface io register resources
@@ -1518,6 +1776,11 @@ static int nixge_probe(struct platform_device *pdev)
 		return err;
 
 	nixge_ctrl_write_reg(priv, NIXGE_REG_MAC_MASK, 0);
+	nixge_ctrl_write_reg(priv, NIXGE_REG_PHY_CTL, 0);
+	nixge_ctrl_write_reg(priv, NIXGE_REG_MAC_CTL,
+			     NIXGE_MAC_CTL_TX_EN |
+			     NIXGE_MAC_CTL_SPEED_1000 |
+			     NIXGE_MAC_CTL_FULL_DUPLEX);
 	// set the mac address to PL eth_interface
 	__nixge_hw_set_mac_address(ndev);
 

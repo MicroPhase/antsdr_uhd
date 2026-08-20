@@ -16,12 +16,12 @@ TOOLCHAIN_PATH = $(shell dirname $(TOOLCHAIN2))
 
 
 NCORES = $(shell grep -c ^processor /proc/cpuinfo)
-VIVADO_SETTINGS ?= /tools/Xilinx/Vivado/$(VIVADO_VERSION)/settings64.sh
+VIVADO_SETTINGS ?= /opt/Xilinx/Vivado/$(VIVADO_VERSION)/settings64.sh
 VSUBDIRS = hdl buildroot linux u-boot-xlnx
 
 VERSION=$(shell git describe --abbrev=4 --dirty --always --tags)
 LATEST_TAG=$(shell git describe --abbrev=0 --tags)
-UBOOT_VERSION=$(shell echo -n "e200 " && cd u-boot-xlnx && git describe --abbrev=0 --dirty --always --tags)
+UBOOT_VERSION=$(shell echo -n "$(TARGET) " && cd u-boot-xlnx && git describe --abbrev=0 --dirty --always --tags)
 HAVE_VIVADO= $(shell bash -c "source $(VIVADO_SETTINGS) > /dev/null 2>&1 && vivado -version > /dev/null 2>&1 && echo 1 || echo 0")
 
 ifeq (1, ${HAVE_VIVADO})
@@ -39,27 +39,33 @@ TARGET ?= e200
 SUPPORTED_TARGETS:=e200 e310v2
 
 
-ifeq ($(findstring $(TARGET),$(SUPPORTED_TARGETS)),)
-all:
-	@echo "Invalid `TARGET variable ; valid values are: e310 e310v2" &&
-	exit 1
-else
-all: clean-build $(TARGETS) 
+ifeq ($(filter $(TARGET),$(SUPPORTED_TARGETS)),)
+$(error Invalid TARGET '$(TARGET)'; valid values are: $(SUPPORTED_TARGETS))
 endif
 
-
-all : build	build/uboot-env.txt	build/uImage build/device_tree.dtb build/system_top.bit build/BOOT.bin \
+.PHONY: all image fpga-project fpga-bitstream fpga-export-current
+all: build/uboot-env.txt build/uImage build/device_tree.dtb build/system_top.bit build/BOOT.bin \
 	  build/rootfs.cpio.gz
+
+# Complete SD-card boot image. Keep "all" for build/ intermediates and expose
+# "image" as the one-command deliverable target.
+image: sdimg
+
+fpga-project:
+	$(MAKE) -C fpga/antsdr_$(TARGET) project
+
+fpga-bitstream:
+	$(MAKE) -C fpga/antsdr_$(TARGET) rebuild
+
+fpga-export-current:
+	$(MAKE) -C fpga/antsdr_$(TARGET) export-current-project-scripts
 
 #all the build file temp
 build:
 	mkdir -p $@
-	rm -rf build/BOOT.bin
 
 %: build/%
 	cp $< $@
-
-.PHONY: build
 
 ## uboot make
 u-boot-xlnx/u-boot u-boot-xlnx/tools/mkimage:
@@ -78,6 +84,7 @@ build/uboot-env.txt: build/u-boot.elf | build
 ## linux uImage
 linux/arch/arm/boot/uImage: 
 	make -C linux ARCH=arm zynq_$(TARGET)_defconfig
+	make -C linux ARCH=arm CROSS_COMPILE=$(CROSS_COMPILE) olddefconfig
 	make -C linux -j $(NCORES) ARCH=arm CROSS_COMPILE=$(CROSS_COMPILE) uImage UIMAGE_LOADADDR=0x8000
 
 
@@ -95,8 +102,8 @@ build/device_tree.dtb: linux/arch/arm/boot/dts/zynq-$(TARGET).dtb | build
 
 ## rootfs
 buildroot/output/images/rootfs.cpio.gz:
-	make -C buildroot ARCH=arm zynq_$(TARGET)_defconfig
-	make -C buildroot TOOLCHAIN_EXTERNAL_INSTALL_DIR=$(TOOLCHAIN_PATH) ARCH=arm CROSS_COMPILE=$(CROSS_COMPILE) all
+	env -u LD_LIBRARY_PATH LC_ALL=C $(MAKE) -C buildroot ARCH=arm zynq_$(TARGET)_defconfig
+	env -u LD_LIBRARY_PATH LC_ALL=C $(MAKE) -C buildroot TOOLCHAIN_EXTERNAL_INSTALL_DIR=$(TOOLCHAIN_PATH) ARCH=arm CROSS_COMPILE=$(CROSS_COMPILE) all
 
 .PHONY: buildroot/output/images/rootfs.cpio.gz
 
@@ -107,18 +114,40 @@ build/$(TARGET).itb: u-boot-xlnx/tools/mkimage build/zImage build/rootfs.cpio.gz
 	u-boot-xlnx/tools/mkimage -f scripts/$(TARGET).its $@
 
 
+FPGA_DIR := fpga/antsdr_$(TARGET)
+FPGA_ARTIFACT_DIR := $(FPGA_DIR)/artifacts
+FPGA_HDF_DIR := $(FPGA_DIR)/antsdr_$(TARGET)/antsdr_$(TARGET).sdk
+# Vivado 2019.1 may name the exported hardware definition after either the
+# wrapper (system_top.hdf) or the project (antsdr_<target>.hdf).  Prefer the
+# newest export so a freshly generated bitstream cannot be hidden by a stale
+# system_top.hdf left in the SDK directory.
+FPGA_HDF_CANDIDATES := $(FPGA_ARTIFACT_DIR)/system_top.hdf \
+	$(FPGA_HDF_DIR)/system_top.hdf \
+	$(FPGA_HDF_DIR)/antsdr_$(TARGET).hdf
+FPGA_HDF := $(shell ls -t $(FPGA_HDF_CANDIDATES) 2>/dev/null | head -n 1)
+
 ## hdf
-build/system_top.hdf: | build
-	bash -c "source $(VIVADO_SETTINGS) && make -C fpga/antsdr_$(TARGET) -j $(NCORES) && cp fpga/antsdr_$(TARGET)/antsdr_$(TARGET)/antsdr_$(TARGET).sdk/system_top.hdf $@"
+build/system_top.hdf: $(FPGA_HDF) | build
+	@hdf="$(FPGA_HDF)"; \
+	if [ -z "$$hdf" ]; then \
+		bash -c "source $(VIVADO_SETTINGS) && make -C $(FPGA_DIR) -j $(NCORES)"; \
+		hdf=$$(ls -t $(FPGA_HDF_CANDIDATES) 2>/dev/null | head -n 1); \
+	fi; \
+	if [ -z "$$hdf" ]; then \
+		echo "No exported HDF found in $(FPGA_HDF_CANDIDATES)" >&2; \
+		exit 1; \
+	fi; \
+	echo "Using existing $$hdf"; \
+	cp "$$hdf" $@
 
 ## bit
 build/system_top.bit : build/system_top.hdf
 	unzip -o build/system_top.hdf -d build/antsdr_$(TARGET)
-	cp build/antsdr_$(TARGET)/antsdr_$(TARGET).bit build/
+	cp build/antsdr_$(TARGET)/antsdr_$(TARGET).bit $@
 
 
 ## fsbl
-build/fsbl.elf :
+build/fsbl.elf : build/system_top.hdf scripts/create_fsbl_project.tcl | build
 	bash -c "source $(VIVADO_SETTINGS) && xsdk -batch -source scripts/create_fsbl_project.tcl"
 	cp build/sdk/fsbl/Release/fsbl.elf build/fsbl.elf
 
@@ -129,30 +158,29 @@ build/boot.bif : build/u-boot.elf build/fsbl.elf
 
 ## BIN 
 build/BOOT.bin : build/boot.bif
-	bash -c "source $(VIVADO_SETTINGS) && bootgen -image build/boot.bif -o i build/BOOT.bin"
+	bash -c "source $(VIVADO_SETTINGS) && bootgen -image build/boot.bif -o i build/BOOT.bin -w on"
 
 
 SDIMGDIR=$(CURDIR)/build_sdimg
-sdimg: build/
-	mkdir $(SDIMGDIR)
+.PHONY: sdimg
+sdimg: build/BOOT.bin build/system_top.bit build/uImage build/uboot-env.txt build/device_tree.dtb build/rootfs.cpio.gz
+	mkdir -p $(SDIMGDIR)
 	cp build/BOOT.bin $(SDIMGDIR)/
-	cp build/antsdr_$(TARGET).bit $(SDIMGDIR)/antsdr.bit
+	cp build/system_top.bit $(SDIMGDIR)/antsdr.bit
 	cp build/uImage $(SDIMGDIR)/
 	cp build/uboot-env.txt $(SDIMGDIR)/uEnv.txt
 	cp build/device_tree.dtb $(SDIMGDIR)/devicetree.dtb
 	cp build/rootfs.cpio.gz $(SDIMGDIR)/ramdisk.image.gz
 	mkimage -A arm -T ramdisk -C gzip -d $(SDIMGDIR)/ramdisk.image.gz $(SDIMGDIR)/uramdisk.image.gz
 	rm $(SDIMGDIR)/ramdisk.image.gz
+	@echo "ANTSDR-$(shell echo $(TARGET) | tr a-z A-Z) SD image ready: $(SDIMGDIR)"
 
 clean-build:
 	rm -rf build
 	rm -rf build_sdimg
-	make -C fpga/antsdr_$(TARGET) clean
 
 
 clean: clean-build
 	make -C linux ARCH=arm CROSS_COMPILE=$(CROSS_COMPILE) distclean
 	make -C u-boot-xlnx ARCH=arm CROSS_COMPILE=$(CROSS_COMPILE) distclean
 	make -C fpga/antsdr_$(TARGET) clean
-	rm -rf build_sdimg
-

@@ -9,6 +9,7 @@
 
 module simple_gemac
   (input clk125, input reset,
+	   input tx_ce, input rx_ce,
    // GMII
    output GMII_GTX_CLK, output GMII_TX_EN, output GMII_TX_ER, output [7:0] GMII_TXD,
    input GMII_RX_CLK, input GMII_RX_DV, input GMII_RX_ER, input [7:0] GMII_RXD,
@@ -26,6 +27,7 @@ module simple_gemac
    // TX Client Interface
    output tx_clk, input [7:0] tx_data, input tx_valid, input tx_error, output tx_ack,
 
+   output pause_rx_event,
    output [31:0] debug
    );
 
@@ -37,9 +39,10 @@ module simple_gemac
 
    wire [15:0] pause_quanta_rcvd;
    wire        pause_rcvd, pause_apply, paused;
+   assign pause_rx_event = pause_rcvd;
    
    simple_gemac_tx simple_gemac_tx
-     (.clk125(clk125),.reset(rst_txclk),
+     (.clk125(clk125),.reset(rst_txclk), .tx_ce(tx_ce),
       .GMII_GTX_CLK(GMII_GTX_CLK), .GMII_TX_EN(GMII_TX_EN),
       .GMII_TX_ER(GMII_TX_ER), .GMII_TXD(GMII_TXD),
       .tx_clk(tx_clk), .tx_data(tx_data), .tx_valid(tx_valid), .tx_error(tx_error), .tx_ack(tx_ack),
@@ -49,7 +52,7 @@ module simple_gemac
       );
 
    simple_gemac_rx simple_gemac_rx
-     (.reset(rst_rxclk),
+     (.reset(rst_rxclk), .rx_ce(rx_ce),
       .GMII_RX_CLK(GMII_RX_CLK), .GMII_RX_DV(GMII_RX_DV), 
       .GMII_RX_ER(GMII_RX_ER), .GMII_RXD(GMII_RXD),
       .rx_clk(rx_clk), .rx_data(rx_data), .rx_valid(rx_valid), .rx_error(rx_error), .rx_ack(rx_ack),
@@ -61,7 +64,7 @@ module simple_gemac
       );
 
    flow_ctrl_tx flow_ctrl_tx
-     (.rst(rst_txclk), .tx_clk(tx_clk),
+     (.rst(rst_txclk), .tx_clk(tx_clk), .tx_ce(tx_ce),
       .tx_pause_en(pause_respect_en),
       .pause_quanta(pause_quanta_rcvd), // 16 bit value
       .pause_quanta_val(pause_rcvd),

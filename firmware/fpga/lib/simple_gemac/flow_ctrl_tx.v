@@ -10,8 +10,9 @@
 // TX side of flow control -- when other side sends PAUSE, we wait
 
 module flow_ctrl_tx
-  (input        rst,
-   input        tx_clk,
+	  (input        rst,
+	   input        tx_clk,
+	   input        tx_ce,
    //host processor
    input        tx_pause_en,
    // From MAC_rx_ctrl
@@ -39,7 +40,7 @@ module flow_ctrl_tx
        pause_quanta_counter <= 0;
      else if (pqval_d1 & ~pqval_d2)
        pause_quanta_counter <= {pause_quanta, 6'b0}; 
-     else if((pause_quanta_counter!=0) & paused)
+	     else if(tx_ce & (pause_quanta_counter!=0) & paused)
        pause_quanta_counter <= pause_quanta_counter - 1;
 
    assign	pause_apply = tx_pause_en & (pause_quanta_counter != 0);

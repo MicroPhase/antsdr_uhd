@@ -8,7 +8,7 @@
 
 
 module ll8_to_txmac
-  (input clk, input reset, input clear,
+  (input clk, input reset, input clear, input tx_ce,
    input [7:0] ll_data, input ll_eof, input ll_src_rdy, output ll_dst_rdy,
    output [7:0] tx_data, output tx_valid, output tx_error, input tx_ack );
 
@@ -23,7 +23,7 @@ module ll8_to_txmac
    always @(posedge clk)
      if(reset | clear)
        xfer_state 	    <= XFER_IDLE;
-     else
+	     else if(tx_ce)
        case(xfer_state)
 	 XFER_IDLE :
 	   if(tx_ack)
@@ -42,10 +42,10 @@ module ll8_to_txmac
 	     xfer_state <= XFER_IDLE;
        endcase // case (xfer_state)
 
-   assign ll_dst_rdy 	 = (xfer_state == XFER_ACTIVE) | tx_ack | (xfer_state == XFER_DROP);
+   assign ll_dst_rdy 	 = tx_ce & ((xfer_state == XFER_ACTIVE) | tx_ack |
+				    (xfer_state == XFER_DROP));
    assign tx_valid 	 = (ll_src_rdy & (xfer_state == XFER_IDLE))|(xfer_state == XFER_ACTIVE);
    assign tx_data 	 = ll_data;
    assign tx_error 	 = (xfer_state == XFER_UNDERRUN);
    
 endmodule // ll8_to_txmac
-

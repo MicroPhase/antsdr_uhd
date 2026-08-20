@@ -17,20 +17,97 @@ python3-ruamel.yaml
 - **Generate Makefile with CMake**
 ```sh
 cd host/
-mkdir build
-cd build
-cmake -DENABLE_X400=OFF -DENABLE_N320=OFF -DENABLE_X300=OFF -DENABLE_USRP2=OFF -DENABLE_USRP1=OFF -DENABLE_N300=OFF -DENABLE_E320=OFF -DENABLE_E300=OFF ../
+cmake -S . -B build-antsdr \
+  -DCMAKE_BUILD_TYPE=Release \
+  -DCMAKE_INSTALL_PREFIX=/opt/antsdr-uhd \
+  -DENABLE_ANT=ON -DENABLE_USB=ON \
+  -DENABLE_X400=OFF -DENABLE_N320=OFF -DENABLE_X300=OFF \
+  -DENABLE_USRP2=OFF -DENABLE_USRP1=OFF -DENABLE_N300=OFF \
+  -DENABLE_E320=OFF -DENABLE_E300=OFF -DENABLE_B200=OFF \
+  -DENABLE_B100=OFF -DENABLE_OCTOCLOCK=OFF \
+  -DENABLE_PYTHON_API=ON -DENABLE_TESTS=OFF
 ```
 - **Make**
 ```sh
-make
+cmake --build build-antsdr --parallel
 ```
 - **Install**
 ```sh
-sudo make install
-sudo ldconfig
+sudo cmake --install build-antsdr
 ```
-The default installation path: /usr/local/lib/uhd
+The example above installs the ANTSDR-enabled UHD in `/opt/antsdr-uhd`,
+without replacing an existing UHD installation. The ANT component in this
+source tree currently has a build-time dependency on `ENABLE_USB`, so keep
+that option enabled even though E200 data/control traffic uses Ethernet.
+
+Use the matching tools and library together:
+
+```sh
+export PATH=/opt/antsdr-uhd/bin:$PATH
+export LD_LIBRARY_PATH=/opt/antsdr-uhd/lib:${LD_LIBRARY_PATH:-}
+export UHD_IMAGES_DIR=/opt/antsdr-uhd/share/uhd/images
+uhd_find_devices --args="addr=192.168.1.10"
+uhd_usrp_probe --args="addr=192.168.1.10"
+```
+
+When using a direct `addr=` argument, product discovery metadata may not be
+present. In that case specify the ANTSDR model explicitly so the driver can
+select the matching FPGA flow-control behavior:
+
+```sh
+uhd_usrp_probe --args="addr=192.168.1.10,product=E200"
+# or: product=E310\  v2 for ANTSDR-E310V2
+```
+
+This `product` key refers only to ANTSDR-E200/ANTSDR-E310V2. Ettus USRP E3XX
+devices use UHD's separate native E3XX driver.
+
+Do not mix these UHD 4.1 tools/library with applications linked against a
+different UHD ABI (for example UHD 4.9). Rebuild the application against the
+headers and `libuhd.so` from the same prefix, or invoke it with the environment
+above. Only make this installation the system default after it has been
+validated with the target application.
+
+### Long-duration test with two E200 devices
+
+To test two E200 devices connected through the same switch, run concurrent
+continuous RX streams while logging ping and Ethernet statistics:
+
+```sh
+cd host
+ANTSDR_SSH_PASSWORD=microphase \
+    utils/antsdr_dual_e200_stress.sh \
+    --addr-a 192.168.1.10 --addr-b 192.168.1.11 \
+    --duration 14400 --rate 7.68e6 --channels 0
+```
+
+The test forces tools and `libuhd` from `/opt/antsdr-uhd`. A timestamped
+result directory contains the UHD summaries, per-device ping logs, host NIC
+counters, and optional board-side `ethtool`/kernel snapshots. The default
+single-channel rate produces about 492 Mbit/s of aggregate sc16 RX payload
+for two devices, leaving headroom on the host's 1 GbE interface.
+
+### Simultaneous UHD RX/TX test with two E200 devices
+
+To exercise both directions on both boards at the same time, use the full-duplex
+wrapper around UHD's `benchmark_rate` example:
+
+```sh
+cd host
+ANTSDR_SSH_PASSWORD=microphase \
+    utils/antsdr_dual_e200_txrx.sh \
+    --addr-a 192.168.1.10 --addr-b 192.168.1.12 \
+    --duration 300 --rate 1e6
+```
+
+The program starts one RX and one TX stream on each E200 concurrently. Each
+device is opened with an explicit `addr=...,product=E200` argument, so the test
+does not depend on discovery ordering. `SUMMARY.txt` reports received and
+transmitted samples, RX drops/overruns/sequence errors, TX underruns and
+timeouts. Start at 1 MS/s; two devices produce about 128 Mbit/s of aggregate
+sc16 RX+TX payload at that rate. Increase the rate only after checking the
+host NIC and switch capacity, and connect TX outputs to a suitable load or
+attenuator during hardware testing.
 
 ## Test with e200
 After connecting the netword port and powering the e200, run the command uhd_usrp_probe. The running example is as follows:
@@ -110,4 +187,3 @@ jcc@jcc:~$ uhd_usrp_probe
 |   |   |   |   Gain Elements: None
 ```
 When you can see the above output, uhd can run on the e200.
-

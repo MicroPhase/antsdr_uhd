@@ -21,12 +21,16 @@
 #include <boost/format.hpp>
 #include <boost/functional/hash.hpp>
 #include <boost/lexical_cast.hpp>
+#include <algorithm>
+#include <cctype>
 #include <chrono>
 #include <cmath>
 #include <cstdio>
+#include <cstring>
 #include <ctime>
 #include <functional>
 #include <memory>
+#include <string>
 
 
 #include "uhd/transport/if_addrs.hpp"
@@ -43,6 +47,19 @@ using namespace uhd::transport;
 
 namespace {
 constexpr int64_t REENUMERATION_TIMEOUT_MS = 3000;
+
+std::string trim_board_string(const char* data, const size_t size)
+{
+    std::string value(data, size);
+    const size_t terminator = value.find('\0');
+    if (terminator != std::string::npos) {
+        value.resize(terminator);
+    }
+    while (not value.empty() && std::isspace(static_cast<unsigned char>(value.back()))) {
+        value.pop_back();
+    }
+    return value;
+}
 }
 
 
@@ -188,43 +205,41 @@ static device_addrs_t ant_find(const device_addr_t& hint)
             and ntohl(ctrl_data_in->check) == MICROPHASE_CHECK
             and ntohl(ctrl_data_in->serial) == MICROPHASE_SERIAL_DUDE
             and ntohl(ctrl_data_in->auth) == MICROPHASE_AUTHOR_DUDE) {
-            // make a boost asio ipv4 with the raw addr in host byte order1
-
+            // The first discovery response already contains the board serial
+            // and model.  Do not send another discovery packet here: every
+            // ANTSDR will answer it again, which used to keep this receive
+            // loop alive forever when more than one board was present.
             device_addr_t mp_addr;
             mp_addr["type"] = "ant";
             mp_addr["addr"] = udp_transport->get_recv_addr();
 
-            udp_simple::sptr ctrl_xport = udp_simple::make_connected(
-                    mp_addr["addr"], BOOST_STRINGIZE(MICROPHASE_ANT_UDP_FIND_PORT)
-            );
-            udp_transport->send(boost::asio::buffer(&ctrl_data_out, sizeof(ctrl_data_out)));
-            size_t len = udp_transport->recv(boost::asio::buffer(microphase_ant_ctrl_data_in_mem));
-            if (len > offsetof(microphase_ant_ctrl_data_t, serial)
-                and ntohl(ctrl_data_in->id) == MICROPHASE_CTRL_ID_WAZZUP_DUDE
-                and ntohl(ctrl_data_in->check) == MICROPHASE_CHECK
-                and ntohl(ctrl_data_in->serial) == MICROPHASE_SERIAL_DUDE
-                and ntohl(ctrl_data_in->auth) == MICROPHASE_AUTHOR_DUDE) {
-                uint8_t serial[32];
-                memcpy(serial,ctrl_data_in->serial_all,sizeof(serial));
-                std::string serial_str((char *)serial);
-                std::transform(serial_str.begin(),serial_str.end(),serial_str.begin(),::toupper);
-                uint8_t board_version[8];
-                memcpy(board_version,ctrl_data_in->board_version,sizeof(board_version));
-                std::string board_str((char*)board_version,sizeof(board_version));
-                if(board_str.at(0) != 'E')
-                    mp_addr["product"] = "E200";
-                else
-                    mp_addr["product"] = board_str;
-                mp_addr["serial"] = serial_str.substr(0,32);
-                if(mp_addr["product"] == "E310  v2")
-                    mp_addr["name"] = "ANTSDR-E310";
-                else
-                    mp_addr["name"] = "ANTSDR-E200";
-                // found the device,open up for communication!
-                ant_addrs.push_back(mp_addr);
+            uint8_t serial[32];
+            memcpy(serial, ctrl_data_in->serial_all, sizeof(serial));
+            std::string serial_str = trim_board_string(
+                reinterpret_cast<const char*>(serial), sizeof(serial));
+            std::transform(serial_str.begin(),
+                serial_str.end(),
+                serial_str.begin(),
+                [](const unsigned char value) { return std::toupper(value); });
+            uint8_t board_version[8];
+            memcpy(board_version, ctrl_data_in->board_version, sizeof(board_version));
+            const std::string board_str = trim_board_string(
+                reinterpret_cast<const char*>(board_version), sizeof(board_version));
+            if (board_str.empty() || board_str.at(0) != 'E')
+                mp_addr["product"] = "E200";
+            else
+                mp_addr["product"] = board_str;
+            mp_addr["serial"] = serial_str;
+            if (mp_addr["product"].find("E200") == 0) {
+                mp_addr["name"] = "ANTSDR-E200";
+            } else if (mp_addr["product"].find("E310") == 0) {
+                mp_addr["name"] = "ANTSDR-E310V2";
             } else {
-                continue;
+                mp_addr["name"] = "ANTSDR-" + mp_addr["product"];
             }
+            // Found a device. Keep receiving until the discovery timeout so
+            // all boards on the broadcast domain are returned.
+            ant_addrs.push_back(mp_addr);
         }
         if (len == 0)
             break;
@@ -259,7 +274,8 @@ UHD_STATIC_BLOCK(register_ant_device)
  * Structors
  **********************************************************************/
 ant_impl::ant_impl(const uhd::device_addr_t &device_addr)
-    : _product(B200)
+    : _antsdr_product(antsdr_product_t::UNKNOWN)
+    , _product(B200)
     , // Some safe value
     _revision(0)
     , _enable_user_regs(device_addr.has_key("enable_user_regs"))
@@ -276,11 +292,18 @@ ant_impl::ant_impl(const uhd::device_addr_t &device_addr)
          * so there is no iface
          * */
 
-        /* set the product is B200
-         * because the e310 is using b200_driver
-         * */
+        // The RF/DSP structure is B210-compatible. ANTSDR transport and
+        // product handling remain isolated in ant_impl.
         _product = B210;
-        _product_mp = E310;
+        const std::string ant_product =
+            device_addr.has_key("product") ? device_addr["product"] : "";
+        if (ant_product.find("E200") == 0) {
+            _antsdr_product = antsdr_product_t::E200;
+        } else if (ant_product.find("E310") == 0) {
+            _antsdr_product = antsdr_product_t::E310V2;
+        } else {
+            _antsdr_product = antsdr_product_t::UNKNOWN;
+        }
         const std::string addr = device_addr["addr"];
         UHD_LOGGER_INFO("ANT") << "Detected Device: ANTSDR";
 
@@ -298,7 +321,7 @@ ant_impl::ant_impl(const uhd::device_addr_t &device_addr)
                 );
 
         _gpsdo_capable = 0;
-        if(device_addr["product"] == "E310  v2")
+        if(ant_product == "E310  v2")
             _gpsdo_capable = 1;
         ////////////////////////////////////////////////////////////////////
         // Set up frontend mapping

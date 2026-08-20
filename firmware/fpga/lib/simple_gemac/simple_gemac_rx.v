@@ -10,7 +10,8 @@
 
 module simple_gemac_rx
   (input reset,
-   input GMII_RX_CLK, input GMII_RX_DV, input GMII_RX_ER, input [7:0] GMII_RXD,
+	   input GMII_RX_CLK, input GMII_RX_DV, input GMII_RX_ER, input [7:0] GMII_RXD,
+	   input rx_ce,
    output rx_clk, output [7:0] rx_data, output reg rx_valid, output rx_error, output reg rx_ack,
    input [47:0] ucast_addr, input [47:0] mcast_addr, 
    input pass_ucast, input pass_mcast, input pass_bcast, input pass_pause, input pass_all,
@@ -38,31 +39,62 @@ module simple_gemac_rx
    reg rx_dv_d1, rx_er_d1;
    assign rx_clk     = GMII_RX_CLK;
    
-   always @(posedge rx_clk)
-     begin
-	rx_dv_d1    <= GMII_RX_DV;
-	rx_er_d1    <= GMII_RX_ER;
-	rxd_d1 	    <= GMII_RXD;
-     end
+	 always @(posedge rx_clk)
+	   if (reset) begin
+		rx_dv_d1 <= 1'b0;
+		rx_er_d1 <= 1'b0;
+		rxd_d1   <= 8'h0;
+	   end else if (rx_ce) begin
+		rx_dv_d1    <= GMII_RX_DV;
+		rx_er_d1    <= GMII_RX_ER;
+		rxd_d1 	    <= GMII_RXD;
+	   end
 
    reg [7:0] rx_state;
    wire [7:0] rxd_del;
    wire rx_dv_del, rx_er_del;
-   reg go_filt;
+	   reg go_filt;
    
    wire match_crc;
    wire clear_crc 	 = rx_state == RX_IDLE;
    wire calc_crc 	 = (rx_state == RX_FRAME) | rx_state[7:4]==4'h1;
 
    localparam DELAY  = 6;
-   delay_line #(.WIDTH(10)) rx_delay
-     (.clk(rx_clk), .delay(DELAY), .din({rx_dv_d1,rx_er_d1,rxd_d1}),.dout({rx_dv_del,rx_er_del,rxd_del}));
+   /*
+    * Preserve the exact latency of the original delay_line implementation.
+    * SRL16E address DELAY has DELAY+1 registered stages (address zero is
+    * already a one-cycle delay).  The first three-speed implementation used
+    * a DELAY-element register array here, shortening this path by one clock.
+    * rx_valid therefore opened one byte too late and every received Ethernet
+    * frame lost its first destination-MAC byte.
+    *
+    * Keep the SRL implementation and only add rx_ce to its clock enable so
+    * 10/100 operation can pause the byte pipeline without changing 1G timing.
+    */
+   wire [9:0] rx_delay_in = {rx_dv_d1, rx_er_d1, rxd_d1};
+   wire [9:0] rx_delay_out;
+   generate
+      genvar delay_bit;
+      for (delay_bit = 0; delay_bit < 10; delay_bit = delay_bit + 1) begin : gen_rx_delay
+         SRL16E rx_delay_srl (
+            .Q   (rx_delay_out[delay_bit]),
+            .A0  (DELAY[0]),
+            .A1  (DELAY[1]),
+            .A2  (DELAY[2]),
+            .A3  (DELAY[3]),
+            .CE  (rx_ce),
+            .CLK (rx_clk),
+            .D   (rx_delay_in[delay_bit])
+         );
+      end
+   endgenerate
+   assign {rx_dv_del, rx_er_del, rxd_del} = rx_delay_out;
 
    always @(posedge rx_clk)
      if(reset)
        rx_ack 	   <= 0;
-     else
-       rx_ack <= (rx_state == RX_GOODFRAME);
+	     else if(rx_ce)
+	       rx_ack <= (rx_state == RX_GOODFRAME);
 
    wire is_ucast, is_bcast, is_mcast, is_pause, is_any_ucast;
    wire keep_packet  = (pass_all & is_any_ucast) | (pass_ucast & is_ucast) | (pass_mcast & is_mcast) | 
@@ -74,39 +106,42 @@ module simple_gemac_rx
    always @(posedge rx_clk)
      if(reset)
        rx_valid <= 0;
-     else if(keep_packet)
-       rx_valid <= 1;
-     else if((rx_state == RX_IDLE)|(rx_state == RX_ERROR))
-       rx_valid <= 0;
+	     else if(rx_ce & keep_packet)
+	       rx_valid <= 1;
+	     else if(rx_ce & ((rx_state == RX_IDLE)|(rx_state == RX_ERROR)))
+	       rx_valid <= 0;
    
-   address_filter af_ucast (.clk(rx_clk), .reset(reset), .go(go_filt), .data(rxd_d1),
+   address_filter af_ucast (.clk(rx_clk), .reset(reset), .ce(rx_ce), .go(go_filt), .data(rxd_d1),
 			    .address(ucast_addr), .match(is_ucast), .done());
-   address_filter af_mcast (.clk(rx_clk), .reset(reset), .go(go_filt), .data(rxd_d1),
+   address_filter af_mcast (.clk(rx_clk), .reset(reset), .ce(rx_ce), .go(go_filt), .data(rxd_d1),
 			    .address(mcast_addr), .match(is_mcast), .done());
-   address_filter af_bcast (.clk(rx_clk), .reset(reset), .go(go_filt), .data(rxd_d1),
+   address_filter af_bcast (.clk(rx_clk), .reset(reset), .ce(rx_ce), .go(go_filt), .data(rxd_d1),
 			    .address(48'hFFFF_FFFF_FFFF), .match(is_bcast), .done());
-   address_filter af_pause (.clk(rx_clk), .reset(reset), .go(go_filt), .data(rxd_d1),
+   address_filter af_pause (.clk(rx_clk), .reset(reset), .ce(rx_ce), .go(go_filt), .data(rxd_d1),
 			    .address(48'h0180_c200_0001), .match(is_pause), .done());
-   address_filter_promisc af_promisc (.clk(rx_clk), .reset(reset), .go(go_filt), .data(rxd_d1),
+   address_filter_promisc af_promisc (.clk(rx_clk), .reset(reset), .ce(rx_ce), .go(go_filt), .data(rxd_d1),
 				      .match(is_any_ucast), .done());
 
    always @(posedge rx_clk)
-     go_filt 			 <= (rx_state==RX_PREAMBLE) & (rxd_d1 == 8'hD5);
+	     if (reset)
+	       go_filt <= 1'b0;
+	     else if (rx_ce)
+	       go_filt <= (rx_state==RX_PREAMBLE) & (rxd_d1 == 8'hD5);
 
    reg [15:0] pkt_len_ctr;
    always @(posedge rx_clk)
      if(reset |(rx_state == RX_IDLE))
        pkt_len_ctr 	<= 0;
-     else
-       pkt_len_ctr 	<= pkt_len_ctr + 1;
+	     else if(rx_ce)
+	       pkt_len_ctr 	<= pkt_len_ctr + 1;
 
    localparam MIN_PAUSE_LEN = 71;  // 6
    wire pkt_long_enough  = (pkt_len_ctr >= MIN_PAUSE_LEN);
    always @(posedge rx_clk)
      if(reset)
        rx_state 	<= RX_IDLE;
-     else
-       if(rx_er_d1 & ~((rxd_d1==8'h0F)&(~rx_dv_d1)))  //Handle odd-length pkts from Xilinx IP.
+	     else if(rx_ce)
+	       if(rx_er_d1 & ~((rxd_d1==8'h0F)&(~rx_dv_d1)))  //Handle odd-length pkts from Xilinx IP.
 	 rx_state 	<= RX_ERROR;
        else
 	 case(rx_state)
@@ -170,14 +205,14 @@ module simple_gemac_rx
 
    assign pause_rcvd = (rx_state == RX_DO_PAUSE);
    crc crc_check(.clk(rx_clk),.reset(reset),.clear(clear_crc),
-		 .data(rxd_d1),.calc(calc_crc),.crc_out(),.match(match_crc));
+		 .data(rxd_d1),.calc(calc_crc & rx_ce),.crc_out(),.match(match_crc));
 
    always @(posedge rx_clk)
      if(reset)
        pause_quanta_rcvd <= 0;
-     else if(rx_state == RX_PAUSE_STORE_MSB)
-       pause_quanta_rcvd[15:8] <= rxd_d1;
-     else if(rx_state == RX_PAUSE_STORE_LSB)
+	     else if(rx_ce & (rx_state == RX_PAUSE_STORE_MSB))
+	       pause_quanta_rcvd[15:8] <= rxd_d1;
+	     else if(rx_ce & (rx_state == RX_PAUSE_STORE_LSB))
        pause_quanta_rcvd[7:0] <= rxd_d1;
    
    assign debug = rx_state;

@@ -9,6 +9,7 @@
 
 module simple_gemac_tx
   (input clk125, input reset,
+	   input tx_ce,
    output GMII_GTX_CLK, output reg GMII_TX_EN, output reg GMII_TX_ER, output reg [7:0] GMII_TXD,
    output tx_clk, input [7:0] tx_data, input tx_valid, input tx_error, output tx_ack,
    input [7:0] ifg, input [47:0] mac_addr,
@@ -53,8 +54,8 @@ module simple_gemac_tx
    always @(posedge tx_clk)
      if(reset |(tx_state == TX_IDLE))
        frame_len_ctr 	    <= 0;
-     else
-       frame_len_ctr 	    <= frame_len_ctr + 1;
+	     else if(tx_ce)
+	       frame_len_ctr 	    <= frame_len_ctr + 1;
    
    reg send_pause;
    reg [15:0] pause_time_held;
@@ -74,8 +75,8 @@ module simple_gemac_tx
    always @(posedge tx_clk)
      if(reset)
        tx_state        <= TX_IDLE;
-     else 
-       case(tx_state)
+	     else if(tx_ce)
+	       case(tx_state)
 	 TX_IDLE :
 	   if(~in_ifg)
 	     if(send_pause)
@@ -121,8 +122,8 @@ module simple_gemac_tx
 	  tx_er_pre <= 0;
 	  txd_pre   <= 0;
        end
-     else
-       casex(tx_state)
+	     else if(tx_ce)
+	       casex(tx_state)
 	 TX_IDLE :
 	   begin
 	      tx_en_pre <= 0;
@@ -153,7 +154,7 @@ module simple_gemac_tx
 
    localparam SGE_FLOW_CTRL_ADDR  = 48'h01_80_C2_00_00_01;
    always @(posedge tx_clk)
-     case(tx_state)
+	     if(tx_ce) case(tx_state)
        TX_PAUSE_SOF :
 	 pause_dat    <= SGE_FLOW_CTRL_ADDR[47:40];  // Note everything must be 1 cycle early
        TX_PAUSE_SOF + 1:
@@ -190,15 +191,15 @@ module simple_gemac_tx
 	 pause_dat <= pause_time_held[15:8];
        TX_PAUSE_SOF + 17:
 	 pause_dat <= pause_time_held[7:0];
-     endcase // case (tx_state)
+	     endcase // case (tx_state)
    
    wire start_ifg   = (tx_state == TX_CRC_3);
    always @(posedge tx_clk)
      if(reset)
        ifg_ctr 	   <= 100;
-     else if(start_ifg)
-       ifg_ctr 	   <= ifg;
-     else if(ifg_ctr != 0)
+	     else if(tx_ce & start_ifg)
+	       ifg_ctr 	   <= ifg;
+	     else if(tx_ce & (ifg_ctr != 0))
        ifg_ctr 	   <= ifg_ctr - 1;
 
    wire clear_crc   = (tx_state == TX_IDLE);
@@ -210,13 +211,17 @@ module simple_gemac_tx
 	(tx_state[6]);
 
    crc crc(.clk(tx_clk), .reset(reset), .clear(clear_crc),
-	    .data(txd_pre), .calc(calc_crc), .crc_out(crc_out));
+		    .data(txd_pre), .calc(calc_crc & tx_ce), .crc_out(crc_out));
 
    assign tx_ack    = (tx_state == TX_FIRSTBYTE);
 
-   always @(posedge tx_clk) 
-     begin
-	GMII_TX_EN <= tx_en_pre;
+   always @(posedge tx_clk)
+	   if(reset) begin
+		GMII_TX_EN <= 1'b0;
+		GMII_TX_ER <= 1'b0;
+		GMII_TXD   <= 8'h0;
+	   end else if(tx_ce) begin
+		GMII_TX_EN <= tx_en_pre;
 	GMII_TX_ER <= tx_er_pre;
 	case(tx_state)
 	  TX_CRC_0 :
@@ -230,7 +235,7 @@ module simple_gemac_tx
 	  default :
 	    GMII_TXD <= txd_pre;
 	endcase // case (tx_state)
-     end
+	   end
 
    // report that we are paused only when we get back to IDLE
    always @(posedge tx_clk)

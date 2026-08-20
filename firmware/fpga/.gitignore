@@ -93,3 +93,12 @@ _vmake
 *.qdb
 *.qpg
 *.qtl
+
+# Vivado-generated project and block-design output.  The checked-in Tcl files
+# are the reproducible sources for these directories.
+/antsdr_*/antsdr_*/
+/antsdr_*/bd/*/
+/antsdr_*/vivado/
+/antsdr_*/artifacts/
+/antsdr_*/scripts/vivado/generated/
+.ngc2edfcache/

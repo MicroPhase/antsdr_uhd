@@ -9,8 +9,9 @@
 
 
 module address_filter
-  (input clk,
-   input reset,
+	  (input clk,
+	   input reset,
+	   input ce,
    input go,
    input [7:0] data,
    input [47:0] address,
@@ -22,8 +23,8 @@ module address_filter
    always @(posedge clk)
      if(reset)
        af_state     <= 0;
-     else
-       if(go)
+	     else if(ce)
+	       if(go)
 	 af_state <= (data == address[47:40]) ? 1 : 7;
        else
 	 case(af_state)

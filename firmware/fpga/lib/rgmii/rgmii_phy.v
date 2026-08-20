@@ -38,12 +38,15 @@ module rgmii_phy(
 
     assign gmii_txc = gmii_rxc;
 
-    rgmii_to_gmii u_rgmii_to_gmii(
-        .rst           ( rst           ),
+	    rgmii_to_gmii u_rgmii_to_gmii(
+	        .rst           ( rst           ),
+	        .speed         ( 2'b10         ),
+	        .rgmii_rxc_io  ( rgmii_rxc     ),
         .rgmii_rxc     ( rgmii_rxc  ),
         .rgmii_rx_ctl  ( rgmii_rx_ctl  ),
         .rgmii_rd      ( rgmii_rd      ),
-        .gmii_rxc      ( gmii_rxc      ),
+	        .gmii_rxc      ( gmii_rxc      ),
+	        .gmii_rx_ce    (                ),
         .gmii_rx_dv    ( gmii_rx_dv    ),
         .gmii_rx_er    ( gmii_rx_er    ),
         .gmii_rd       ( gmii_rd       )
@@ -51,9 +54,11 @@ module rgmii_phy(
 
 
 
-    gmii_to_rgmii u_gmii_to_rgmii(
-        .rst          ( rst          ),
-        .gmii_txc     ( gmii_txc     ),
+	    gmii_to_rgmii u_gmii_to_rgmii(
+	        .rst          ( rst          ),
+	        .speed        ( 2'b10        ),
+	        .gmii_txc     ( gmii_txc     ),
+	        .gmii_tx_ce   (              ),
         .gmii_tx_en   ( gmii_tx_en   ),
         .gmii_tx_er   ( gmii_tx_er   ),
         .gmii_td      ( gmii_td      ),

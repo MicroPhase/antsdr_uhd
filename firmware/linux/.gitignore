@@ -1,0 +1,103 @@
+# SPDX-License-Identifier: GPL-2.0
+# Linux in-tree build output
+.*
+*.a
+*.asn1.[ch]
+*.bin
+*.bz2
+*.c.[012]*.*
+*.dtb
+*.dtb.S
+*.dwo
+*.elf
+*.gcno
+*.gz
+*.i
+*.ko
+*.lex.c
+*.ll
+*.lst
+*.lz4
+*.lzma
+*.lzo
+*.mod
+*.mod.c
+*.ns_deps
+*.o
+*.o.*
+*.s
+*.so
+*.so.dbg
+*.su
+*.symtypes
+*.tab.[ch]
+*.tar
+*.xz
+Module.symvers
+modules.builtin
+modules.order
+
+# Top-level kernel images and metadata
+/linux
+/vmlinux
+/vmlinux.32
+/vmlinux-gdb.py
+/vmlinuz
+/System.map
+/Module.markers
+/modules.builtin.modinfo
+
+# Package output
+/*.spec
+/debian/
+/snap/
+/tar-install/
+
+# Keep repository metadata visible despite the dot-file rule above.
+!.clang-format
+!.cocciconfig
+!.get_maintainer.ignore
+!.gitattributes
+!.gitignore
+!.mailmap
+
+# Generated include files
+/include/config/
+/include/generated/
+/include/ksym/
+/arch/*/include/generated/
+
+# Development-tool output
+patches-*
+patches
+series
+/tags
+/TAGS
+cscope.*
+ncscope.*
+GPATH
+GRTAGS
+GSYMS
+GTAGS
+ID
+*.orig
+*~
+\#*#
+
+# Module-signing output
+extra_certificates
+signing_key.pem
+signing_key.priv
+signing_key.x509
+x509.genkey
+
+# Kconfig presets and generated configuration
+/all.config
+/alldef.config
+/allmod.config
+/allno.config
+/allrandom.config
+/allyes.config
+/defconfig
+
+*.kdev4

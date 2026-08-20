@@ -20,6 +20,11 @@ using namespace uhd;
 using namespace uhd::usrp;
 using namespace uhd::transport;
 
+namespace {
+constexpr size_t ANT_RX_FC_WINDOW_PACKETS = 128;
+constexpr size_t ANT_RX_FC_UPDATE_PACKETS = 16;
+}
+
 /***********************************************************************
  * update streamer rates
  **********************************************************************/
@@ -470,6 +475,23 @@ rx_streamer::sptr ant_impl::get_rx_stream(const uhd::stream_args_t& args_)
             std::bind(&rx_vita_core_3000::issue_stream_command,
                 perif.framer,
                 std::placeholders::_1));
+
+        // ANTSDR-E200 builds radio_legacy with SOURCE_FLOW_CONTROL enabled. Return
+        // credits frequently enough that several lost control datagrams do
+        // not stop the stream, while keeping the window below the host UDP
+        // receive-buffer capacity. ANTSDR-E310V2 currently uses a different
+        // FPGA configuration and must not receive these packets. Ettus E3XX
+        // devices are handled by the separate upstream e3xx driver.
+        if (_antsdr_product == antsdr_product_t::E200) {
+            perif.framer->configure_flow_control(ANT_RX_FC_WINDOW_PACKETS);
+            boost::shared_ptr<rx_fc_cache_t> fc_cache(new rx_fc_cache_t(
+                _ctrl_transport, radio_index == 0 ? ANT_RX_FC0_SID : ANT_RX_FC1_SID));
+            my_streamer->set_xport_handle_flowctrl(stream_i,
+                boost::bind(&ant_impl::_send_rx_flow_control,
+                    fc_cache,
+                    boost::placeholders::_1),
+                ANT_RX_FC_UPDATE_PACKETS);
+        }
         perif.rx_streamer = my_streamer; // store weak pointer
 
         // sets all tick and samp rates on this streamer
@@ -484,11 +506,65 @@ rx_streamer::sptr ant_impl::get_rx_stream(const uhd::stream_args_t& args_)
     return my_streamer;
 }
 
+void ant_impl::_send_rx_flow_control(
+    boost::shared_ptr<rx_fc_cache_t> fc_cache, const size_t packet_count)
+{
+    std::lock_guard<std::mutex> lock(fc_cache->mutex);
+
+    // CHDR only carries a 12-bit packet counter. Extend it to the 32-bit
+    // sequence consumed by source_flow_control_legacy, including wraparound.
+    const uint32_t seq12 = static_cast<uint32_t>(packet_count) & 0xfff;
+    if (fc_cache->initialized) {
+        const uint32_t delta = (seq12 - (fc_cache->last_seq & 0xfff)) & 0xfff;
+        fc_cache->last_seq += delta;
+    } else {
+        fc_cache->last_seq = seq12;
+        fc_cache->initialized = true;
+    }
+
+    managed_send_buffer::sptr buff = fc_cache->xport->get_send_buff(0.01);
+    if (not buff) {
+        UHD_LOGGER_WARNING("ANT") << "Timed out sending RX flow-control credit";
+        return;
+    }
+
+    vrt::if_packet_info_t packet_info;
+    packet_info.link_type = vrt::if_packet_info_t::LINK_TYPE_CHDR;
+    // The legacy FPGA block expects an extension-context packet rather than
+    // the newer CHDR FC packet type.
+    packet_info.packet_type = vrt::if_packet_info_t::PACKET_TYPE_CONTEXT;
+    packet_info.num_payload_words32 = 2;
+    packet_info.num_payload_bytes = 2 * sizeof(uint32_t);
+    packet_info.packet_count = fc_cache->fc_packet_count++;
+    packet_info.sid = fc_cache->sid;
+    packet_info.has_sid = true;
+    packet_info.has_cid = false;
+    packet_info.has_tsi = false;
+    packet_info.has_tsf = false;
+    packet_info.has_tlr = false;
+    packet_info.sob = false;
+    packet_info.eob = false;
+    packet_info.error = false;
+    packet_info.fc_ack = false;
+
+    uint32_t* packet = buff->cast<uint32_t*>();
+    b200_if_hdr_pack_le(packet, packet_info);
+    // A 64-bit AXI word is represented as high word followed by low word on
+    // this transport. The FPGA consumes the credit from the low 32 bits.
+    packet[packet_info.num_header_words32] = uhd::htowx(uint32_t(0));
+    packet[packet_info.num_header_words32 + 1] = uhd::htowx(fc_cache->last_seq);
+    buff->commit(packet_info.num_packet_words32 * sizeof(uint32_t));
+}
+
 void ant_impl::handle_overflow(const size_t radio_index)
 {
     std::shared_ptr<sph::recv_packet_streamer> my_streamer =
         std::dynamic_pointer_cast<sph::recv_packet_streamer>(
             _radio_perifs[radio_index].rx_streamer.lock());
+    if (not my_streamer) {
+        return;
+    }
+
     if (my_streamer->get_num_channels() == 2) // MIMO time
     {
         // find out if we were in continuous mode before stopping
@@ -496,29 +572,27 @@ void ant_impl::handle_overflow(const size_t radio_index)
             _radio_perifs[radio_index].framer->in_continuous_streaming_mode();
         // stop streaming
         my_streamer->issue_stream_cmd(stream_cmd_t::STREAM_MODE_STOP_CONTINUOUS);
-        // flush demux
-        _demux->realloc_sid(ANT_RX_DATA0_SID);
-        _demux->realloc_sid(ANT_RX_DATA1_SID);
-        // flush actual transport
-        while (_data_rx_transport->get_recv_buff(0.001)) {
-
+        // Drain both demux queues as well as packets which are still arriving
+        // from the shared UDP transport. Reading the transport directly would
+        // race the demux and could discard only one channel's state.
+        while (_demux->get_recv_buff(ANT_RX_DATA0_SID, 0.001)) {
+        }
+        while (_demux->get_recv_buff(ANT_RX_DATA1_SID, 0.001)) {
         }
         // restart streaming
         if (in_continuous_streaming_mode) {
             stream_cmd_t stream_cmd(stream_cmd_t::STREAM_MODE_START_CONTINUOUS);
             stream_cmd.stream_now = false;
             stream_cmd.time_spec =
-                _radio_perifs[radio_index].time64->get_time_now() + time_spec_t(0.01);
-            // FIXME: temporarily remove the start stream command.
-            // This will avoid an issue that gets the b210 in a bad state.
-            // my_streamer->issue_stream_cmd(stream_cmd);
+                _radio_perifs[radio_index].time64->get_time_now() + time_spec_t(0.05);
+            my_streamer->issue_stream_cmd(stream_cmd);
         }
     } else {
-        while (_data_rx_transport->get_recv_buff(0.001)) {
+        const uint32_t sid =
+            radio_index == 0 ? ANT_RX_DATA0_SID : ANT_RX_DATA1_SID;
+        while (_demux->get_recv_buff(sid, 0.001)) {
         }
-        // FIXME: temporarily remove the overflow handling that re-issues a stream
-        //        command. This will avoid an issue that gets the b210 in a bad state.
-//         _radio_perifs[radio_index].framer->handle_overflow();
+        _radio_perifs[radio_index].framer->handle_overflow();
     }
 }
 
@@ -543,14 +617,13 @@ tx_streamer::sptr ant_impl::get_tx_stream(const uhd::stream_args_t& args_)
 
     std::shared_ptr<sph::send_packet_streamer> my_streamer;
     for (size_t stream_i = 0; stream_i < args.channels.size(); stream_i++) {
-        /* microphase */
-        const size_t chan = args.channels[stream_i];
-
         const size_t radio_index =
             _tree->access<std::vector<size_t>>("/mboards/0/tx_chan_dsp_mapping")
                 .get()
                 .at(args.channels[stream_i]);
         radio_perifs_t& perif = _radio_perifs[radio_index];
+        const zero_copy_if::sptr tx_xport =
+            radio_index == 0 ? _data_tx_transport : _data_tx1_transport;
         if (args.otw_format == "sc16")
             perif.ctrl->poke32(TOREG(SR_TX_FMT), 0);
         if (args.otw_format == "sc12")
@@ -591,52 +664,30 @@ tx_streamer::sptr ant_impl::get_tx_stream(const uhd::stream_args_t& args_)
         perif.deframer->clear();
         perif.deframer->setup(args);
         perif.duc->setup(args);
-        if(_product_mp == E310) {
-            // flow control setup
-            size_t fc_window = _get_tx_flow_control_window(bpp, BUFF_SIZE);
-            // In packets
-            perif.deframer->configure_flow_control(0/* cycs off */, 30);
-            boost::shared_ptr<tx_fc_cache_t> fc_cache(new tx_fc_cache_t());
-            fc_cache->stream_channel = stream_i;
-            fc_cache->device_channel = chan;
-            fc_cache->async_queue = _async_task_data->async_md;
-            fc_cache->old_async_queue = _async_task_data->async_md;
+        // Both ANTSDR-E200 and ANTSDR-E310V2 use the same packet-based Ethernet
+        // transmit flow control. The USB B210 transport does not need this
+        // path, but all devices instantiated by ant_impl do.
+        const size_t fc_window = _get_tx_flow_control_window(bpp, BUFF_SIZE);
+        perif.deframer->configure_flow_control(0 /* cycles off */, 30);
+        boost::shared_ptr<tx_fc_cache_t> fc_cache(new tx_fc_cache_t());
+        fc_cache->stream_channel = stream_i;
+        fc_cache->device_channel = radio_index;
+        fc_cache->async_queue = _async_task_data->async_md;
 
-            tick_rate_retriever_t get_tick_rate_fn =
-                    boost::bind(&ant_impl::get_tick_rate, this);
+        const tick_rate_retriever_t get_tick_rate_fn =
+            boost::bind(&ant_impl::get_tick_rate, this);
+        task::sptr task = task::make(boost::bind(&ant_impl::_handle_tx_async_msgs,
+            fc_cache,
+            tx_xport,
+            get_tick_rate_fn));
 
-            if(chan == 0){
-                task::sptr task =
-                        task::make(boost::bind(&ant_impl::_handle_tx_async_msgs,
-                                               fc_cache,
-                                               _data_tx_transport,
-                                               get_tick_rate_fn));
-
-                my_streamer->set_xport_chan_get_buff(stream_i,
-                                                     boost::bind(&ant_impl::_get_tx_buff_with_flowctrl,
-                                                                 task,
-                                                                 fc_cache,
-                                                                 _data_tx_transport,
-                                                                 fc_window,
-                                                                 boost::placeholders::_1));
-            }
-            else if(chan == 1){
-                task::sptr task =
-                        task::make(boost::bind(&ant_impl::_handle_tx_async_msgs,
-                                               fc_cache,
-                                               _data_tx1_transport,
-                                               get_tick_rate_fn));
-
-                my_streamer->set_xport_chan_get_buff(stream_i,
-                                                     boost::bind(&ant_impl::_get_tx_buff_with_flowctrl,
-                                                                 task,
-                                                                 fc_cache,
-                                                                 _data_tx1_transport,
-                                                                 fc_window,
-                                                                 boost::placeholders::_1));
-            }
-
-        }
+        my_streamer->set_xport_chan_get_buff(stream_i,
+            boost::bind(&ant_impl::_get_tx_buff_with_flowctrl,
+                task,
+                fc_cache,
+                tx_xport,
+                fc_window,
+                boost::placeholders::_1));
 
 
         my_streamer->set_async_receiver(boost::bind(
@@ -682,6 +733,11 @@ void ant_impl::_handle_tx_async_msgs(boost::shared_ptr<tx_fc_cache_t> fc_cache,
         b200_if_hdr_unpack_le(packet_buff, if_packet_info);
     } catch (const std::exception& ex) {
         UHD_LOGGER_ERROR("ANT") << "Error parsing ctrl packet: " << ex.what();
+        return;
+    }
+    if (if_packet_info.num_payload_words32 < 2) {
+        UHD_LOGGER_ERROR("ANT") << "Short TX flow-control packet";
+        return;
     }
     async_metadata_t metadata;
     load_metadata_from_buff(endian_conv,
@@ -693,7 +749,10 @@ void ant_impl::_handle_tx_async_msgs(boost::shared_ptr<tx_fc_cache_t> fc_cache,
 
     const size_t seq = metadata.user_payload[0];
     fc_cache->seq_queue.push_with_pop_on_full(seq);
-    standard_async_msg_prints(metadata);
+    if (metadata.event_code != 0) {
+        fc_cache->async_queue->push_with_pop_on_full(metadata);
+        standard_async_msg_prints(metadata);
+    }
 }
 
 uhd::transport::managed_send_buffer::sptr ant_impl::_get_tx_buff_with_flowctrl(uhd::task::sptr,

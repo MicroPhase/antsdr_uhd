@@ -23,7 +23,7 @@ module ll8_to_axi64
    wire 	  valid_int, ready_int;
    
    axi_fifo_short #(.WIDTH(10)) ll8_fifo
-     (.clk(clk), .reset(reset), .clear(0),
+	     (.clk(clk), .reset(reset), .clear(1'b0),
       .i_tdata({ll_error, ll_eof, ll_data}), .i_tvalid(ll_src_rdy), .i_tready(ll_dst_rdy),
       .o_tdata({error_int, eof_int, data_int}), .o_tvalid(valid_int), .o_tready(ready_int),
       .space(), .occupied());

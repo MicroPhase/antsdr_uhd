@@ -605,6 +605,7 @@ module antsdr_e200 (
 
     // assign mdio = mdio_tri ? mdio_out : 1'bz;
     // assign mdio_in = mdio;
+    // Keep the RTL8211F out of reset, matching the original board design.
     assign eth_phy_rst_n = 1'b1;
 
     IOBUF MDIO_PHY_mdio_iobuf(
@@ -613,19 +614,6 @@ module antsdr_e200 (
         .O(mdio_in),
         .T(mdio_tri)
     );
-
-
-    wire        rgmii_rx_ctl_dly;
-    wire [3:0]  rgmii_rxd_dly;
-    rgmii_if_idelay u_rgmii_if_idelay(
-        .ref_clk          ( clk200          ),
-        .rst              ( bus_rst          ),
-        .rgmii_rx_ctl     ( rgmii_rx_ctl     ),
-        .rgmii_rxd        ( rgmii_rxd        ),
-        .rgmii_rx_ctl_dly ( rgmii_rx_ctl_dly ),
-        .rgmii_rxd_dly    ( rgmii_rxd_dly    )
-    );
-
 
 
     e200_rgmii_wrapper #(
@@ -640,15 +628,17 @@ module antsdr_e200 (
         .areset(bus_rst),
         .bus_rst(bus_rst),
         .bus_clk(bus_clk),
-        // .clk200(clk200)
+        .clk200(clk200),
 
         .mdc            (mdc),
         .mdio_out       (mdio_out),
         .mdio_tri       (mdio_tri),
         .mdio_in        (mdio_in),
         .rgmii_rxc      (rgmii_rxc),
-        .rgmii_rx_ctl   (rgmii_rx_ctl_dly),
-        .rgmii_rxd      (rgmii_rxd_dly),
+        // RTL8211F RXDLY/TXDLY straps provide the RGMII-ID delays.
+        // Do not add a second data delay inside the FPGA.
+        .rgmii_rx_ctl   (rgmii_rx_ctl),
+        .rgmii_rxd      (rgmii_rxd),
         .rgmii_txc      (rgmii_txc),
         .rgmii_tx_ctl   (rgmii_tx_ctl),
         .rgmii_txd      (rgmii_txd),
@@ -747,81 +737,81 @@ module antsdr_e200 (
         .o_tready(arm_eth_rx_tready)
     );
 
-    /////////////////////////////////////////////////////////////////////
-    //
-    // Internal Ethernet Interface
-    // This module will be used in the future
-    // This module will implement a ethernet interface in the fpga pl 
-    // so that the device can work in a standalone mode.
-    //////////////////////////////////////////////////////////////////////
-    eth_internal #(
-        .DWIDTH(REG_DWIDTH),
-        .AWIDTH(REG_AWIDTH),
-        .PORTNUM(8'd1)
-    ) eth_internal_i (
-        // Resets
-        .bus_rst (bus_rst),
+    // /////////////////////////////////////////////////////////////////////
+    // //
+    // // Internal Ethernet Interface
+    // // This module will be used in the future
+    // // This module will implement a ethernet interface in the fpga pl
+    // // so that the device can work in a standalone mode.
+    // //////////////////////////////////////////////////////////////////////
+    // eth_internal #(
+    //     .DWIDTH(REG_DWIDTH),
+    //     .AWIDTH(REG_AWIDTH),
+    //     .PORTNUM(8'd1)
+    // ) eth_internal_i (
+    //     // Resets
+    //     .bus_rst (bus_rst),
 
-        // Clocks
-        .bus_clk (bus_clk),
+    //     // Clocks
+    //     .bus_clk (bus_clk),
 
-        //Axi-lite
-        .s_axi_aclk     (clk40),
-        .s_axi_aresetn  (clk40_rstn),
-        .s_axi_awaddr   (m_axi_eth_internal_awaddr),
-        .s_axi_awvalid  (m_axi_eth_internal_awvalid),
-        .s_axi_awready  (m_axi_eth_internal_awready),
+    //     //Axi-lite
+    //     .s_axi_aclk     (clk40),
+    //     .s_axi_aresetn  (clk40_rstn),
+    //     .s_axi_awaddr   (m_axi_eth_internal_awaddr),
+    //     .s_axi_awvalid  (m_axi_eth_internal_awvalid),
+    //     .s_axi_awready  (m_axi_eth_internal_awready),
 
-        .s_axi_wdata    (m_axi_eth_internal_wdata),
-        .s_axi_wstrb    (m_axi_eth_internal_wstrb),
-        .s_axi_wvalid   (m_axi_eth_internal_wvalid),
-        .s_axi_wready   (m_axi_eth_internal_wready),
+    //     .s_axi_wdata    (m_axi_eth_internal_wdata),
+    //     .s_axi_wstrb    (m_axi_eth_internal_wstrb),
+    //     .s_axi_wvalid   (m_axi_eth_internal_wvalid),
+    //     .s_axi_wready   (m_axi_eth_internal_wready),
 
-        .s_axi_bresp    (m_axi_eth_internal_bresp),
-        .s_axi_bvalid   (m_axi_eth_internal_bvalid),
-        .s_axi_bready   (m_axi_eth_internal_bready),
+    //     .s_axi_bresp    (m_axi_eth_internal_bresp),
+    //     .s_axi_bvalid   (m_axi_eth_internal_bvalid),
+    //     .s_axi_bready   (m_axi_eth_internal_bready),
 
-        .s_axi_araddr   (m_axi_eth_internal_araddr),
-        .s_axi_arvalid  (m_axi_eth_internal_arvalid),
-        .s_axi_arready  (m_axi_eth_internal_arready),
+    //     .s_axi_araddr   (m_axi_eth_internal_araddr),
+    //     .s_axi_arvalid  (m_axi_eth_internal_arvalid),
+    //     .s_axi_arready  (m_axi_eth_internal_arready),
 
-        .s_axi_rdata    (m_axi_eth_internal_rdata),
-        .s_axi_rresp    (m_axi_eth_internal_rresp),
-        .s_axi_rvalid   (m_axi_eth_internal_rvalid),
-        .s_axi_rready   (m_axi_eth_internal_rready),
+    //     .s_axi_rdata    (m_axi_eth_internal_rdata),
+    //     .s_axi_rresp    (m_axi_eth_internal_rresp),
+    //     .s_axi_rvalid   (m_axi_eth_internal_rvalid),
+    //     .s_axi_rready   (m_axi_eth_internal_rready),
 
-        // Host-Ethernet DMA interface
-        .e2h_tdata    (e2h_tdata),
-        .e2h_tkeep    (e2h_tkeep),
-        .e2h_tlast    (e2h_tlast),
-        .e2h_tvalid   (e2h_tvalid),
-        .e2h_tready   (e2h_tready),
+    //     // Host-Ethernet DMA interface
+    //     .e2h_tdata    (e2h_tdata),
+    //     .e2h_tkeep    (e2h_tkeep),
+    //     .e2h_tlast    (e2h_tlast),
+    //     .e2h_tvalid   (e2h_tvalid),
+    //     .e2h_tready   (e2h_tready),
 
-        .h2e_tdata    (h2e_tdata),
-        .h2e_tkeep    (h2e_tkeep),
-        .h2e_tlast    (h2e_tlast),
-        .h2e_tvalid   (h2e_tvalid),
-        .h2e_tready   (h2e_tready),
+    //     .h2e_tdata    (h2e_tdata),
+    //     .h2e_tkeep    (h2e_tkeep),
+    //     .h2e_tlast    (h2e_tlast),
+    //     .h2e_tvalid   (h2e_tvalid),
+    //     .h2e_tready   (h2e_tready),
 
-        // Vita router interface
-        .e2v_tdata    (m_axis_dma_tdata),
-        .e2v_tlast    (m_axis_dma_tlast),
-        .e2v_tvalid   (m_axis_dma_tvalid),
-        .e2v_tready   (m_axis_dma_tready),
+    //     // Vita router interface
+    //     .e2v_tdata    (m_axis_dma_tdata),
+    //     .e2v_tlast    (m_axis_dma_tlast),
+    //     .e2v_tvalid   (m_axis_dma_tvalid),
+    //     .e2v_tready   (m_axis_dma_tready),
 
-        .v2e_tdata    (s_axis_dma_tdata),
-        .v2e_tlast    (s_axis_dma_tlast),
-        .v2e_tvalid   (s_axis_dma_tvalid),
-        .v2e_tready   (s_axis_dma_tready),
+    //     .v2e_tdata    (s_axis_dma_tdata),
+    //     .v2e_tlast    (s_axis_dma_tlast),
+    //     .v2e_tvalid   (s_axis_dma_tvalid),
+    //     .v2e_tready   (s_axis_dma_tready),
 
-        // MISC
-        .port_info    (),
-        .device_id    (device_id),
+    //     // MISC
+    //     .port_info    (),
+    //     .device_id    (device_id),
 
-        .link_up      (),
-        .activity     ()
+    //     .link_up      (),
+    //     .activity     ()
 
-    );
+    // );
 
 
 
@@ -931,19 +921,19 @@ module antsdr_e200 (
         .m_axi_net_wdata            ( m_axi_net_wdata            ),
         .m_axi_net_wready           ( m_axi_net_wready           ),
         .m_axi_net_wstrb            ( m_axi_net_wstrb            ),
-        .m_axi_net_wvalid           ( m_axi_net_wvalid           ),
+        .m_axi_net_wvalid           ( m_axi_net_wvalid           )
 
-        .m_axis_dma_tdata           ( h2e_tdata           ),
-        .m_axis_dma_tkeep           ( h2e_tkeep           ),
-        .m_axis_dma_tlast           ( h2e_tlast           ),
-        .m_axis_dma_tready          ( h2e_tready          ),
-        .m_axis_dma_tvalid          ( h2e_tvalid          ),
+        // .m_axis_dma_tdata           ( h2e_tdata           ),
+        // .m_axis_dma_tkeep           ( h2e_tkeep           ),
+        // .m_axis_dma_tlast           ( h2e_tlast           ),
+        // .m_axis_dma_tready          ( h2e_tready          ),
+        // .m_axis_dma_tvalid          ( h2e_tvalid          ),
 
-        .s_axis_dma_tdata           ( e2h_tdata           ),
-        .s_axis_dma_tkeep           ( e2h_tkeep           ),
-        .s_axis_dma_tlast           ( e2h_tlast           ),
-        .s_axis_dma_tready          ( e2h_tready          ),
-        .s_axis_dma_tvalid          ( e2h_tvalid          )
+        // .s_axis_dma_tdata           ( e2h_tdata           ),
+        // .s_axis_dma_tkeep           ( e2h_tkeep           ),
+        // .s_axis_dma_tlast           ( e2h_tlast           ),
+        // .s_axis_dma_tready          ( e2h_tready          ),
+        // .s_axis_dma_tvalid          ( e2h_tvalid          )
     );
     
 endmodule

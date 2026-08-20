@@ -53,7 +53,7 @@ module axi64_to_ll8
      data_int <= axi64_tdata_gated[state*8 +: 8];
 
    axi_fifo_short #(.WIDTH(9)) ll8_fifo
-     (.clk(clk), .reset(reset), .clear(0),
+	     (.clk(clk), .reset(reset), .clear(1'b0),
       .i_tdata({eof_int, data_int}), .i_tvalid(valid_int), .i_tready(ready_int),
       .o_tdata({ll_eof, ll_data}), .o_tvalid(ll_src_rdy), .o_tready(ll_dst_rdy),
       .space(), .occupied());

@@ -9,8 +9,9 @@
 
 
 module address_filter_promisc
-  (input clk,
-   input reset,
+	  (input clk,
+	   input reset,
+	   input ce,
    input go,
    input [7:0] data,
    output match,
@@ -21,8 +22,8 @@ module address_filter_promisc
    always @(posedge clk)
      if(reset)
        af_state     <= 0;
-     else
-       if(go)
+	     else if(ce)
+	       if(go)
 	 af_state <= 1;//(data[0] == 1'b0) ? 1 : 7;
        else
 	 case(af_state)

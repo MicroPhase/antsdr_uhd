@@ -9,8 +9,8 @@
 
 module simple_gemac_wrapper
   #(parameter RX_FLOW_CTRL=0,
-    parameter PORTNUM=8'd0)
-   (input clk125, input reset,
+	    parameter PORTNUM=8'd0)
+   (input clk125, input reset, input tx_ce, input rx_ce,
     // GMII
     output GMII_GTX_CLK, output GMII_TX_EN, output GMII_TX_ER, output [7:0] GMII_TXD,
     input GMII_RX_CLK, input GMII_RX_DV, input GMII_RX_ER, input [7:0] GMII_RXD,
@@ -18,7 +18,15 @@ module simple_gemac_wrapper
     // Client FIFO Interfaces
     input sys_clk,
     output [63:0] rx_tdata, output [3:0] rx_tuser, output rx_tlast, output rx_tvalid, input rx_tready,
-    input [63:0] tx_tdata, input [3:0] tx_tuser, input tx_tlast, input tx_tvalid, output tx_tready,
+	    input [63:0] tx_tdata, input [3:0] tx_tuser, input tx_tlast, input tx_tvalid, output tx_tready,
+
+	    input [47:0] mac_addr,
+	    input pause_request_en,
+	    input pause_respect_en,
+	    output reg [31:0] rx_overrun_count,
+	    output reg [31:0] rx_error_count,
+	    output reg [31:0] pause_tx_count,
+	    output reg [31:0] pause_rx_count,
     
 
     // Wishbone Bus
@@ -50,8 +58,8 @@ module simple_gemac_wrapper
    wire 	  rx_clk, rx_valid, rx_error, rx_ack;
    
    wire 	  pause_req;
-   wire 	  pause_request_en, pause_respect_en;
-   wire [15:0] 	  pause_time, pause_thresh, pause_time_req, rx_fifo_space;
+	   wire [15:0] 	  pause_time, pause_thresh, pause_time_req, rx_fifo_space;
+	   wire              pause_rx_event;
 
    wire [31:0] 	  debug_state;
       
@@ -59,26 +67,29 @@ module simple_gemac_wrapper
    reset_sync reset_sync_tx (.clk(tx_clk),.reset_in(reset),.reset_out(tx_reset));
    reset_sync reset_sync_rx (.clk(rx_clk),.reset_in(reset),.reset_out(rx_reset));
    
-   simple_gemac simple_gemac
-     (.clk125(clk125),  .reset(reset),
+	   simple_gemac simple_gemac
+	     (.clk125(clk125),  .reset(reset), .tx_ce(tx_ce), .rx_ce(rx_ce),
       .GMII_GTX_CLK(GMII_GTX_CLK), .GMII_TX_EN(GMII_TX_EN),  
       .GMII_TX_ER(GMII_TX_ER), .GMII_TXD(GMII_TXD),
       .GMII_RX_CLK(GMII_RX_CLK), .GMII_RX_DV(GMII_RX_DV),  
       .GMII_RX_ER(GMII_RX_ER), .GMII_RXD(GMII_RXD),
       .pause_req(RX_FLOW_CTRL ? pause_req : 1'b0), .pause_time_req(RX_FLOW_CTRL ? pause_time_req : 16'd0), 
       .pause_respect_en(pause_respect_en),
-      .ucast_addr(48'h0), .mcast_addr(48'h0),
+	      .ucast_addr(mac_addr), .mcast_addr(48'h0),
       .pass_ucast(1'b0), .pass_mcast(1'b0), .pass_bcast(1'b0), 
       .pass_pause(1'b0), .pass_all(1'b1),
       .rx_clk(rx_clk), .rx_data(rx_data),
       .rx_valid(rx_valid), .rx_error(rx_error), .rx_ack(rx_ack),
       .tx_clk(tx_clk), .tx_data(tx_data), 
       .tx_valid(tx_valid), .tx_error(tx_error), .tx_ack(tx_ack),
-      .debug(debug_state)
-      );
-   
-   assign pause_respect_en = 1'b0;
-   assign pause_request_en = 1'b0;
+	      .pause_rx_event(pause_rx_event), .debug(debug_state)
+	      );
+
+	   /* A 2048-quanta pause lasts about 1 ms at 1 Gb/s and scales with
+	    * wire speed.  Request it while at least 6 KiB of the 8 KiB RX FIFO
+	    * is still free, leaving room for in-flight frames from the peer. */
+	   assign pause_time = 16'h0800;
+	   assign pause_thresh = 16'd768;
 
    // /////////////////////////////////////////////////////////////////////////////////////
    // RX FIFO Chain
@@ -89,27 +100,29 @@ module simple_gemac_wrapper
    wire [3:0] 	  rx_tuser_int;
    wire 	  rx_tlast_int, rx_tvalid_int, rx_tready_int;
    
-   rxmac_to_ll8 rxmac_to_ll8
-     (.clk(rx_clk), .reset(rx_reset), .clear(0),
+	   rxmac_to_ll8 rxmac_to_ll8
+	     (.clk(rx_clk), .reset(rx_reset), .clear(1'b0), .rx_ce(rx_ce),
       .rx_data(rx_data), .rx_valid(rx_valid), .rx_error(rx_error), .rx_ack(rx_ack),
       .ll_data(rx_ll_data), .ll_sof(), .ll_eof(rx_ll_eof), .ll_error(rx_ll_error),  // ignore sof
       .ll_src_rdy(rx_ll_src_rdy), .ll_dst_rdy(rx_ll_dst_rdy));
 
    ll8_to_axi64 #(.START_BYTE(6), .LABEL(PORTNUM)) ll8_to_axi64
-     (.clk(rx_clk), .reset(rx_reset), .clear(0),
+	     (.clk(rx_clk), .reset(rx_reset), .clear(1'b0),
       .ll_data(rx_ll_data), .ll_eof(rx_ll_eof), .ll_error(rx_ll_error), .ll_src_rdy(rx_ll_src_rdy), .ll_dst_rdy(rx_ll_dst_rdy),
       .axi64_tdata(rx_tdata_int), .axi64_tlast(rx_tlast_int), .axi64_tuser(rx_tuser_int),
       .axi64_tvalid(rx_tvalid_int), .axi64_tready(rx_tready_int));
    
-   axi64_8k_2clk_fifo rxfifo_2clk
+	   wire [10:0] rx_fifo_occupied;
+	   axi64_8k_2clk_fifo rxfifo_2clk
      (.s_aresetn(~rx_reset),
       .s_aclk(rx_clk),  .s_axis_tvalid(rx_tvalid_int),  .s_axis_tready(rx_tready_int),
       .s_axis_tdata(rx_tdata_int),  .s_axis_tlast(rx_tlast_int), .s_axis_tuser(rx_tuser_int),
-      .axis_wr_data_count(),
+	      .axis_wr_data_count(rx_fifo_occupied),
       
       .m_aclk(sys_clk),  .m_axis_tvalid(rx_tvalid),  .m_axis_tready(rx_tready),
       .m_axis_tdata(rx_tdata),  .m_axis_tlast(rx_tlast), .m_axis_tuser(rx_tuser),
-      .axis_rd_data_count() );
+	      .axis_rd_data_count() );
+	   assign rx_fifo_space = 16'd1024 - {5'd0, rx_fifo_occupied};
    
    // /////////////////////////////////////////////////////////////////////////////////////
    // TX FIFO Chain
@@ -131,25 +144,63 @@ module simple_gemac_wrapper
       .axis_rd_data_count() );
    
    axi64_to_ll8 #(.START_BYTE(6)) axi64_to_ll8
-     (.clk(tx_clk), .reset(tx_reset), .clear(0),
+	     (.clk(tx_clk), .reset(tx_reset), .clear(1'b0),
       .axi64_tdata(tx_tdata_int), .axi64_tlast(tx_tlast_int), .axi64_tuser(tx_tuser_int),
       .axi64_tvalid(tx_tvalid_int), .axi64_tready(tx_tready_int),
       .ll_data(tx_ll_data), .ll_eof(tx_ll_eof), .ll_src_rdy(tx_ll_src_rdy), .ll_dst_rdy(tx_ll_dst_rdy));
    
-   ll8_to_txmac ll8_to_txmac
-     (.clk(tx_clk), .reset(tx_reset), .clear(clear),
+	   ll8_to_txmac ll8_to_txmac
+	     (.clk(tx_clk), .reset(tx_reset), .clear(clear), .tx_ce(tx_ce),
       .ll_data(tx_ll_data), .ll_eof(tx_ll_eof), .ll_src_rdy(tx_ll_src_rdy), .ll_dst_rdy(tx_ll_dst_rdy),
       .tx_data(tx_data), .tx_valid(tx_valid), .tx_error(tx_error), .tx_ack(tx_ack));
 
    // /////////////////////////////////////////////////////////////////////////////////////
    // Flow Control
-   generate
-      if(RX_FLOW_CTRL==1)
-	flow_ctrl_rx flow_ctrl_rx
-	  (.pause_request_en(pause_request_en), .pause_time(pause_time), .pause_thresh(pause_thresh),
-	   .rx_clk(rx_clk), .rx_reset(rx_reset), .rx_fifo_space(rx_fifo_space),
-	   .tx_clk(tx_clk), .tx_reset(tx_reset), .pause_req(pause_req), .pause_time_req(pause_time_req));
-   endgenerate
+	   generate
+	      if(RX_FLOW_CTRL==1) begin : gen_rx_flow_control
+		flow_ctrl_rx flow_ctrl_rx
+		  (.pause_request_en(pause_request_en), .pause_time(pause_time), .pause_thresh(pause_thresh),
+		   .rx_clk(rx_clk), .rx_reset(rx_reset), .rx_fifo_space(rx_fifo_space),
+		   .rx_ce(rx_ce),
+		   .tx_clk(tx_clk), .tx_reset(tx_reset), .pause_req(pause_req), .pause_time_req(pause_time_req));
+	      end else begin : gen_no_rx_flow_control
+		assign pause_req = 1'b0;
+		assign pause_time_req = 16'd0;
+	      end
+	   endgenerate
+
+	   /* Keep the counters in the clock domains where their events occur.
+	    * They are synchronized as status values by the enclosing core. */
+	   reg rx_stalled = 1'b0;
+	   reg rx_error_d = 1'b0;
+	   reg pause_rx_d = 1'b0;
+	   always @(posedge rx_clk) begin
+	      if (rx_reset) begin
+		 rx_stalled      <= 1'b0;
+		 rx_error_d      <= 1'b0;
+		 pause_rx_d      <= 1'b0;
+		 rx_overrun_count <= 32'd0;
+		 rx_error_count   <= 32'd0;
+		 pause_rx_count   <= 32'd0;
+	      end else begin
+		 rx_stalled <= rx_ll_src_rdy & ~rx_ll_dst_rdy;
+		 rx_error_d <= rx_error;
+		 pause_rx_d <= pause_rx_event;
+		 if (rx_ll_src_rdy & ~rx_ll_dst_rdy & ~rx_stalled)
+		   rx_overrun_count <= rx_overrun_count + 1'b1;
+		 if (rx_error & ~rx_error_d)
+		   rx_error_count <= rx_error_count + 1'b1;
+		 if (pause_rx_event & ~pause_rx_d)
+		   pause_rx_count <= pause_rx_count + 1'b1;
+	      end
+	   end
+
+	   always @(posedge tx_clk) begin
+	      if (tx_reset)
+		pause_tx_count <= 32'd0;
+	      else if (pause_req)
+		pause_tx_count <= pause_tx_count + 1'b1;
+	   end
 
    assign debug_tx  = { { tx_ll_data },
 			{ 1'b0, tx_ll_eof, tx_ll_src_rdy, tx_ll_dst_rdy, 4'b0 },
@@ -182,4 +233,3 @@ module simple_gemac_wrapper
    );
 
 endmodule // simple_gemac_wrapper
-

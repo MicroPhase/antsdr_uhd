@@ -97,6 +97,8 @@ add_files {
     ../lib/vita_200/float_to_iq.v
     ../lib/simple_gemac/flow_ctrl_rx.v
     ../lib/simple_gemac/flow_ctrl_tx.v
+    ../lib/control/gmii2rgmii_wrapper.v
+    ../lib/control/util_gmii_to_rgmii.v
     ../lib/rgmii/gmii_to_rgmii.v
     ../lib/control/gpio_atr.v
     ../lib/dsp/hb47_int.v

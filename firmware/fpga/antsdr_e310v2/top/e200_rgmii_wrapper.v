@@ -58,6 +58,7 @@ module e200_rgmii_wrapper #(
   // Resets
   input         areset,
   input         bus_rst,
+  input         clk200,
 
   // Clocks
   input         bus_clk,
@@ -266,6 +267,7 @@ module e200_rgmii_wrapper #(
     ) u_e200_eth_if_core (
       //must reset all channels on quad when sfp1 gtx core is reset
       .areset         (areset),
+      .clk200         (clk200),
 
       .bus_rst        (bus_rst),
       .bus_clk        (bus_clk),
