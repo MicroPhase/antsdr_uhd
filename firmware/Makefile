@@ -94,8 +94,14 @@ build/uImage: linux/arch/arm/boot/uImage | build
 	cp $< $@
 
 ## device tree
-linux/arch/arm/boot/dts/zynq-$(TARGET).dtb: 
+# Make the DTB follow its source.  Without this prerequisite an existing DTB
+# can silently survive a DTS change and be copied into the next SD image.
+linux/arch/arm/boot/dts/zynq-$(TARGET).dtb: linux/arch/arm/boot/dts/zynq-$(TARGET).dts
 	make -C linux -j $(NCORES) ARCH=arm CROSS_COMPILE=$(CROSS_COMPILE) zynq-${TARGET}.dtb
+
+# build/device_tree.dtb is shared by all products, so always refresh it when
+# switching TARGET between E200 and E310V2.
+.PHONY: linux/arch/arm/boot/dts/zynq-$(TARGET).dtb
 
 build/device_tree.dtb: linux/arch/arm/boot/dts/zynq-$(TARGET).dtb | build
 	cp $< $@
