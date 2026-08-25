@@ -90,6 +90,8 @@ typedef struct {
     uint8_t board_version[8];
 } microphase_ant_ctrl_data_t;
 
+class ant_device_process_lock;
+
 static const uint8_t ANT_FW_COMPAT_NUM_MAJOR = 8;
 static const uint8_t ANT_FW_COMPAT_NUM_MINOR = 0;
 static const uint16_t B200_FPGA_COMPAT_NUM    = 16;
@@ -159,6 +161,10 @@ private:
     //! This flag is true if the FPGA has custom (user) registers and access to
     // those needs to be enabled from software.
     const bool _enable_user_regs;
+
+    // Held for the complete lifetime of this device object. Declared before
+    // transports/controllers so it is released only after they are destroyed.
+    std::unique_ptr<ant_device_process_lock> _device_process_lock;
 
     // controllers
     radio_ctrl_core_3000::sptr _local_ctrl;
