@@ -10,6 +10,7 @@
 
 #include <cstdint>
 #include <string>
+#include <cstdint>
 
 namespace uhd { namespace rfnoc {
 
