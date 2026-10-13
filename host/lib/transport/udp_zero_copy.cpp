@@ -252,7 +252,7 @@ private:
     size_t _next_recv_buff_index, _next_send_buff_index;
 
     // asio guts -> socket and service
-    asio::io_service _io_service;
+    asio_context _io_service;
     socket_sptr _socket;
     int _sock_fd;
 };

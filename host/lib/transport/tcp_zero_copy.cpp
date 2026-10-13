@@ -154,9 +154,8 @@ public:
             << boost::format("Creating tcp transport for %s %s") % addr % port;
 
         // resolve the address
-        asio::ip::tcp::resolver resolver(_io_service);
-        asio::ip::tcp::resolver::query query(asio::ip::tcp::v4(), addr, port);
-        asio::ip::tcp::endpoint receiver_endpoint = *resolver.resolve(query);
+        asio::ip::tcp::endpoint receiver_endpoint =
+            resolve_asio_endpoint<asio::ip::tcp>(_io_service, addr, port);
 
         // create, open, and connect the socket
         _socket.reset(new asio::ip::tcp::socket(_io_service));
@@ -230,7 +229,7 @@ private:
     size_t _next_recv_buff_index, _next_send_buff_index;
 
     // asio guts -> socket and service
-    asio::io_service _io_service;
+    asio_context _io_service;
     std::shared_ptr<asio::ip::tcp::socket> _socket;
     int _sock_fd;
 };
