@@ -9,6 +9,7 @@
 #include <uhd/transport/udp_zero_copy.hpp>
 #include <uhd/utils/log.hpp>
 #include <uhdlib/transport/udp_common.hpp>
+#include <uhdlib/transport/udp_send_buffer.hpp>
 #include <uhdlib/utils/atomic.hpp>
 #include <boost/format.hpp>
 #include <chrono>
@@ -76,7 +77,12 @@ public:
             return sptr();
 
         const int32_t timeout_ms = static_cast<int32_t>(timeout * 1000);
-        _len = recv_udp_packet(_sock_fd, _mem, _frame_size, timeout_ms);
+        try {
+            _len = recv_udp_packet(_sock_fd, _mem, _frame_size, timeout_ms);
+        } catch (...) {
+            _claimer.release();
+            throw;
+        }
 
         if (_len > 0) {
             index++;
@@ -92,39 +98,6 @@ private:
     int _sock_fd;
     size_t _frame_size;
     ssize_t _len;
-    simple_claimer _claimer;
-};
-
-/***********************************************************************
- * Reusable managed send buffer:
- *  - commit performs the send operation
- **********************************************************************/
-class udp_zero_copy_asio_msb : public managed_send_buffer
-{
-public:
-    udp_zero_copy_asio_msb(void* mem, int sock_fd, const size_t frame_size)
-        : _mem(mem), _sock_fd(sock_fd), _frame_size(frame_size)
-    { /*NOP*/
-    }
-
-    void release(void) override
-    {
-        send_udp_packet(_sock_fd, _mem, size());
-        _claimer.release();
-    }
-
-    UHD_INLINE sptr get_new(const double timeout, size_t& index)
-    {
-        if (not _claimer.claim_with_wait(timeout))
-            return sptr();
-        index++; // advances the caller's buffer
-        return make(this, _mem, _frame_size);
-    }
-
-private:
-    void* _mem;
-    int _sock_fd;
-    size_t _frame_size;
     simple_claimer _claimer;
 };
 
@@ -153,6 +126,7 @@ public:
               xport_params.num_send_frames, xport_params.send_frame_size))
         , _next_recv_buff_index(0)
         , _next_send_buff_index(0)
+        , _send_error(std::make_shared<udp_send_error>(addr + ":" + port))
     {
         UHD_LOGGER_TRACE("UDP")
             << boost::format("Creating UDP transport to %s:%s") % addr % port;
@@ -176,7 +150,7 @@ public:
         // allocate re-usable managed send buffers
         for (size_t i = 0; i < get_num_send_frames(); i++) {
             _msb_pool.push_back(std::make_shared<udp_zero_copy_asio_msb>(
-                _send_buffer_pool->at(i), _sock_fd, get_send_frame_size()));
+                _send_buffer_pool->at(i), _sock_fd, get_send_frame_size(), _send_error));
         }
     }
 
@@ -198,9 +172,18 @@ public:
      ******************************************************************/
     managed_recv_buffer::sptr get_recv_buff(double timeout) override
     {
+        _send_error->rethrow_if_pending();
         if (_next_recv_buff_index == _num_recv_frames)
             _next_recv_buff_index = 0;
-        return _mrb_pool[_next_recv_buff_index]->get_new(timeout, _next_recv_buff_index);
+        managed_recv_buffer::sptr buff;
+        try {
+            buff = _mrb_pool[_next_recv_buff_index]->get_new(timeout, _next_recv_buff_index);
+        } catch (...) {
+            _send_error->rethrow_if_pending();
+            throw;
+        }
+        _send_error->rethrow_if_pending();
+        return buff;
     }
 
     size_t get_num_recv_frames(void) const override
@@ -218,9 +201,13 @@ public:
      ******************************************************************/
     managed_send_buffer::sptr get_send_buff(double timeout) override
     {
+        _send_error->rethrow_if_pending();
         if (_next_send_buff_index == _num_send_frames)
             _next_send_buff_index = 0;
-        return _msb_pool[_next_send_buff_index]->get_new(timeout, _next_send_buff_index);
+        auto buff = _msb_pool[_next_send_buff_index]->get_new(timeout, _next_send_buff_index);
+        // Release skips sending if another outstanding buffer has failed.
+        _send_error->rethrow_if_pending();
+        return buff;
     }
 
     size_t get_num_send_frames(void) const override
@@ -250,6 +237,7 @@ private:
     std::vector<std::shared_ptr<udp_zero_copy_asio_msb>> _msb_pool;
     std::vector<std::shared_ptr<udp_zero_copy_asio_mrb>> _mrb_pool;
     size_t _next_recv_buff_index, _next_send_buff_index;
+    std::shared_ptr<udp_send_error> _send_error;
 
     // asio guts -> socket and service
     asio::io_service _io_service;

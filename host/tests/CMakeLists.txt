@@ -89,6 +89,10 @@ if(ENABLE_C_API)
     )
 endif(ENABLE_C_API)
 
+if(UNIX)
+    list(APPEND test_sources udp_zero_copy_test.cpp)
+endif()
+
 include_directories("${CMAKE_SOURCE_DIR}/lib/include")
 include_directories("${CMAKE_BINARY_DIR}/lib/include")
 include_directories("${CMAKE_CURRENT_SOURCE_DIR}/common")
