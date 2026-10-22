@@ -66,6 +66,10 @@ set(test_sources
     multichan_register_iface_test.cpp
 )
 
+if(ENABLE_ANT AND UNIX)
+    list(APPEND test_sources ant_device_lock_test.cpp)
+endif()
+
 # Note: Python-based tests cannot have the same name as a C++-based test (i.e.,
 # only differ in the cpp/py file extension). If in doubt, prepend 'py'
 set(pytest_sources
