@@ -20,7 +20,7 @@ The directory contains fpga source code, firmware uboot and linux kernel source 
 The source code is the UHD driver developed by [Ettus](https://github.com/EttusResearch), and we have added the driver interface of E200 based on its source code.
 
 ## Quick start guide
-### ANTSDR-E310v2/ANTSDR-E200 for linux user
+### ANTSDR-E316/ANTSDR-E200 for linux user
 - Step 1
 
   Download the latest firmware v1.0/build_sdimg.zip file from our [github release](https://github.com/MicroPhase/antsdr_uhd/releases/tag/v1.0).
@@ -42,7 +42,7 @@ The source code is the UHD driver developed by [Ettus](https://github.com/EttusR
   Then you can use gnuradio or other software and build your own application.
 
 ## NOTE
-The ethernet of ANTSDR-E200 or ANTSDR-E310V2 can only works at 1000M speed, make sure the connection speed of your computer to the device is 1000M.
+The ethernet of ANTSDR-E200 or ANTSDR-E316 can only works at 1000M speed, make sure the connection speed of your computer to the device is 1000M.
 
 ## Related Links(documentation or supported projects)
 - [Online Doc](https://antsdr-doc-en.readthedocs.io/en/latest/index.html): Online documentation about ANTSDR E200
