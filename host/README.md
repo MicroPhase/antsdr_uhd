@@ -6,13 +6,21 @@ This document will describe how to compile UHD from source code.
 ## Build on Ubuntu
 ### Build Dependencies
 You can install all the dependencies through the package manager:
+#### For Ubuntu 22.04 (Jammy) and Older
 ```sh
 sudo apt-get install autoconf automake build-essential ccache cmake cpufrequtils doxygen ethtool \
 g++ git inetutils-tools libboost-all-dev libncurses5 libncurses5-dev libusb-1.0-0 libusb-1.0-0-dev \
 libusb-dev python3-dev python3-mako python3-numpy python3-requests python3-scipy python3-setuptools \
 python3-ruamel.yaml
 ```
+#### For Ubuntu 24.04 (Noble Numbat) and Newer
+Starting with Ubuntu 24.04, `libncurses5` and  `libncurses5-dev` is no longer available in the default repositories and has been replaced by `libncurses6` and `libncurses-dev`.
 
+```sh
+sudo apt-get install autoconf automake build-essential ccache cmake cpufrequtils doxygen ethtool \
+g++ git inetutils-tools libboost-all-dev libncurses6 libncurses-dev libusb-1.0-0 libusb-1.0-0-dev \
+libusb-dev python3-dev python3-mako python3-numpy python3-requests python3-scipy python3-setuptools \
+```
 ### Build Instructions
 - **Generate Makefile with CMake**
 ```sh
