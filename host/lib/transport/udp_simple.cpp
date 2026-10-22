@@ -27,10 +27,10 @@ public:
             << boost::format("Creating udp transport for %s %s") % addr % port;
 
         // resolve the address
-        asio::ip::udp::resolver resolver(_io_service);
-        asio::ip::udp::resolver::query query(
-            asio::ip::udp::v4(), addr, port, asio::ip::resolver_query_base::all_matching);
-        _send_endpoint = *resolver.resolve(query);
+        _send_endpoint = resolve_asio_endpoint<asio::ip::udp>(_io_service,
+            addr,
+            port,
+            asio_resolver_base::all_matching);
 
         // create and open the socket
         _socket = socket_sptr(new asio::ip::udp::socket(_io_service));
@@ -72,7 +72,7 @@ public:
 
 private:
     bool _connected;
-    asio::io_service _io_service;
+    asio_context _io_service;
     socket_sptr _socket;
     asio::ip::udp::endpoint _send_endpoint;
     asio::ip::udp::endpoint _recv_endpoint;

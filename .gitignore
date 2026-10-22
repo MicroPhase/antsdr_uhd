@@ -54,3 +54,7 @@ xvlog.pb
 
 # Local ANTSDR UHD out-of-tree build
 /host/build-antsdr/
+
+# Local macOS builds and Python build environment
+/host/build-macos/
+/.venv-build/
