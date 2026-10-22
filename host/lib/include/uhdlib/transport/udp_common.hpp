@@ -17,6 +17,7 @@
 #include <uhdlib/utils/narrow.hpp>
 #include <boost/asio.hpp>
 #include <boost/format.hpp>
+#include <chrono>
 #include <thread>
 
 namespace uhd { namespace transport {
@@ -125,26 +126,36 @@ UHD_INLINE size_t recv_udp_packet(
     return 0; // timeout
 }
 
-UHD_INLINE void send_udp_packet(int sock_fd, void* mem, size_t len)
+template <typename Send>
+UHD_INLINE void send_udp_packet_with_retry(int sock_fd, void* mem, size_t len, Send send_fn)
 {
     // Retry logic because send may fail with ENOBUFS.
     // This is known to occur at least on some OSX systems.
     // But it should be safe to always check for the error.
+    const auto deadline = std::chrono::steady_clock::now() + std::chrono::milliseconds(100);
     while (true) {
         const ssize_t ret =
-            uhd::narrow_cast<ssize_t>(::send(sock_fd, (const char*)mem, len, 0));
+            uhd::narrow_cast<ssize_t>(send_fn(sock_fd, (const char*)mem, len, 0));
         if (ret == ssize_t(len))
             break;
-        if (ret == -1 and errno == ENOBUFS) {
+        const int send_error = errno;
+        if (ret == -1 and send_error == ENOBUFS
+            and std::chrono::steady_clock::now() < deadline) {
             std::this_thread::sleep_for(std::chrono::microseconds(1));
             continue; // try to send again
         }
         if (ret == -1) {
             throw uhd::io_error(
-                str(boost::format("send error on socket: %s") % strerror(errno)));
+                str(boost::format("send error on socket: %s (errno %d)")
+                    % strerror(send_error) % send_error));
         }
         UHD_ASSERT_THROW(ret == ssize_t(len));
     }
+}
+
+UHD_INLINE void send_udp_packet(int sock_fd, void* mem, size_t len)
+{
+    send_udp_packet_with_retry(sock_fd, mem, len, ::send);
 }
 
 template <typename Opt>
