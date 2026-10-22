@@ -140,7 +140,7 @@ set_output_delay -clock CAT_FB_CLK -clock_fall -min -add_delay 4.500 [get_ports 
 set_false_path -from [get_pins radio_sync/reset_out_reg/C]
 set_false_path -from [get_pins clk40_reset_gen/reset_out_reg/C]
 
-set_clock_groups -name async_clk0_clk1 -asynchronous -group [get_clocks -include_generated_clocks CAT_DCLK_P] -group [get_clocks -include_generated_clocks CLK_40MHz_FPGA]
-set_clock_groups -name async_clk0_clk1 -asynchronous -group [get_clocks -include_generated_clocks rgmii_rxc] -group [get_clocks -include_generated_clocks CLK_40MHz_FPGA]
+set_clock_groups -name async_cat_fpga -asynchronous -group [get_clocks -include_generated_clocks CAT_DCLK_P] -group [get_clocks -include_generated_clocks CLK_40MHz_FPGA]
+set_clock_groups -name async_rgmii_fpga -asynchronous -group [get_clocks -include_generated_clocks rgmii_rxc] -group [get_clocks -include_generated_clocks CLK_40MHz_FPGA]
 
 set_false_path -from [get_clocks CAT_DCLK_P] -to [get_clocks u_antsdr_e200_io/BUFR_inst/O]

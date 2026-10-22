@@ -192,7 +192,7 @@ module b205_ref_pll#(
     wire signed [28:0] lag = lead + period;
     reg signed [28:0] phase_err;
     reg signed [28:0] err;
-    reg signed [28:0] shift;
+    reg [2:0] shift;
     reg signed [28:0] adj;
     wire signed [28:0] dacv = {13'd0, daco};
     reg signed [28:0] sum;
@@ -202,7 +202,7 @@ module b205_ref_pll#(
             state <= MEASURE;
             daco <= dac_dflt;
             err <= 29'sd0;
-            shift <= 29'sd0;
+            shift <= 3'd0;
             adj <= 29'sd0;
             ld <= 3'd0;
         end
@@ -233,7 +233,7 @@ module b205_ref_pll#(
                     state <= ref_is_10M ? CALCULATE_10M_GAIN : CALCULATE_ADJUSTMENT;
                 end
                 CALCULATE_10M_GAIN: begin
-                    shift <= (err < -7 || err > 7) ? 7 : (err < 0 ? -err : err);
+                    shift <= (err < -7 || err > 7) ? 3'd7 : (err < 0 ? -err : err);
                     state <= CALCULATE_ADJUSTMENT;
                 end
                 CALCULATE_ADJUSTMENT: begin
