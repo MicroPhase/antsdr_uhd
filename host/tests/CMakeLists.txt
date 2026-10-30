@@ -63,6 +63,8 @@ set(test_sources
     link_test.cpp
     rx_streamer_test.cpp
     tx_streamer_test.cpp
+    antsdr_b200_mapping_test.cpp
+    gps_ctrl_test.cpp
     block_id_test.cpp
     rfnoc_property_test.cpp
     multichan_register_iface_test.cpp
@@ -100,6 +102,9 @@ include_directories("${CMAKE_CURRENT_SOURCE_DIR}/common")
 foreach(test_source ${test_sources})
     get_filename_component(test_name ${test_source} NAME_WE)
     add_executable(${test_name} ${test_source})
+    if(test_name STREQUAL "gps_ctrl_test")
+        target_sources(${test_name} PRIVATE ${UHD_SOURCE_DIR}/lib/usrp/gps_ctrl.cpp)
+    endif()
     target_link_libraries(${test_name}
         PUBLIC uhd uhd_test Boost::unit_test_framework)
     UHD_ADD_TEST(${test_name} ${test_name})

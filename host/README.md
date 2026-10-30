@@ -35,33 +35,92 @@ the listserve.
 
 This branch keeps the Ettus UHD 4.9 host tree as the baseline and adds the
 AntSDR backend behind the `ENABLE_ANT` CMake option. The ANT backend supports
-the existing AntSDR Ethernet discovery/control path for E200 and
-E310V2-compatible boards (including the E316 product line where the firmware
-reports the E310V2 identity). The B200 backend also contains the shared
-AD9361 compatibility path used by U220/U220V2/U200; these boards still require
-hardware validation on the target setup.
+the existing AntSDR Ethernet discovery/control path for E200 and E316.
+The B200 backend follows the Ettus B-series profiles for the AntSDR USB
+boards: U220 and U220V2 use the B210 profile, while U200 uses the B205mini
+profile. This keeps the RX gain, ATR, FE swap, antenna mapping, and related
+AD9361 control behavior aligned with the corresponding B-series device. These
+boards still require hardware validation with the target FPGA image.
 
-A host-only build with AntSDR enabled can be configured as follows:
+### Recommended build for AntSDR and USRP B-series
+
+Run the following commands from the `host` directory. Use a new build directory
+instead of reusing an old CMake cache. The explicit component switches keep this
+host build limited to:
+
+- AntSDR E200 and E316 through the `ANT` Ethernet backend;
+- AntSDR U220/U220V2/U200 through the shared `B200`/AD9361 USB backend;
+- Ettus USRP B100/B200-series devices through the `B100` and `B200` backends.
 
 ```sh
-cmake -S host -B build-uhd49 \
+cd host
+mkdir build
+cd build
+
+cmake ../ \
     -DCMAKE_BUILD_TYPE=Release \
     -DENABLE_LIBUHD=ON \
-    -DENABLE_USB=OFF \
+    -DENABLE_UTILS=ON \
+    -DENABLE_EXAMPLES=ON \
     -DENABLE_ANT=ON \
-    -DENABLE_UTILS=ON
-cmake --build build-uhd49 -j$(nproc)
+    -DENABLE_USB=ON \
+    -DENABLE_B100=ON \
+    -DENABLE_B200=ON \
+    -DENABLE_USRP1=OFF \
+    -DENABLE_USRP2=OFF \
+    -DENABLE_X300=OFF \
+    -DENABLE_MPMD=OFF \
+    -DENABLE_SIM=OFF \
+    -DENABLE_N300=OFF \
+    -DENABLE_N320=OFF \
+    -DENABLE_E300=OFF \
+    -DENABLE_E320=OFF \
+    -DENABLE_X400=OFF \
+    -DENABLE_OCTOCLOCK=OFF \
+    -DENABLE_DPDK=OFF
+
+make -j$(nproc)
 ```
 
-`ENABLE_USB=OFF` is sufficient for ANT-only builds because AntSDR uses
-Ethernet/UDP. Keep `ENABLE_USB=ON` when building the shared B200 path for
-U220/U220V2/U200 together with Ettus USB devices.
+`ENABLE_SIM=OFF` is required for this repository layout unless the matching
+UHD MPM Python source tree is also checked out at `../mpm/python`. Without this
+switch, a default `cmake ../` may fail with an error such as:
+
+```text
+add_subdirectory given source ".../mpm/python" which is not an existing directory
+```
+
+The Python API remains enabled by default. If only the command-line utilities
+are needed and Python bindings are not required, add:
+
+```sh
+-DENABLE_PYTHON_API=OFF -DENABLE_PYMOD_UTILS=OFF
+```
+
+For a system installation after a successful build:
+
+```sh
+sudo make install
+```
+
+For USB access as a normal user, install the UHD udev rules once and reload
+them:
+
+```sh
+sudo install -m 0644 ../utils/uhd-usrp.rules /etc/udev/rules.d/uhd-usrp.rules
+sudo udevadm control --reload-rules
+sudo udevadm trigger
+```
+
+`ENABLE_USB=OFF` is appropriate only for an ANT-only build. It must remain
+`ON` when the same UHD build is expected to operate U220/U220V2/U200 or Ettus
+USRP B-series USB devices.
 
 After connecting an AntSDR board, discovery can be checked with:
 
 ```sh
-build-uhd49/utils/uhd_find_devices --args="type=ant"
-build-uhd49/utils/uhd_usrp_probe --args="type=ant,addr=<device-ip>"
+./utils/uhd_find_devices --args="type=ant"
+./utils/uhd_usrp_probe --args="type=ant,addr=<device-ip>"
 ```
 
 The build and unit tests do not replace board-level validation. RX/TX smoke

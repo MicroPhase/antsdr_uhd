@@ -6,6 +6,7 @@
 //
 
 #include "b200_impl.hpp"
+#include "antsdr_b200_mapping.hpp"
 #include "../../transport/libusb1_base.hpp"
 #include "b200_regs.hpp"
 #include <uhd/cal/database.hpp>
@@ -43,42 +44,6 @@ constexpr bool is_b2xx_mini(const b200_product_t& product)
 {
     return product == B200MINI || product == B205MINI || product == B206MINI;
 }
-
-// AntSDR U220/U220V2/U200-compatible AD9361 wiring.
-// These products use the same digital interface timing as B200, but their
-// RF path is hard-wired so all band edges must select the default port.
-class antsdr_u220_family_ad9361_client_t : public ad9361_params
-{
-public:
-    ~antsdr_u220_family_ad9361_client_t() override {}
-    double get_band_edge(frequency_band_t band) override
-    {
-        switch (band) {
-            case AD9361_RX_BAND0:
-            case AD9361_RX_BAND1:
-            case AD9361_TX_BAND0:
-            default:
-                return 0;
-        }
-    }
-    clocking_mode_t get_clocking_mode() override
-    {
-        return clocking_mode_t::AD9361_XTAL_N_CLK_PATH;
-    }
-    digital_interface_mode_t get_digital_interface_mode() override
-    {
-        return AD9361_DDR_FDD_LVCMOS;
-    }
-    digital_interface_delays_t get_digital_interface_timing() override
-    {
-        digital_interface_delays_t delays;
-        delays.rx_clk_delay  = 0;
-        delays.rx_data_delay = 0xF;
-        delays.tx_clk_delay  = 0;
-        delays.tx_data_delay = 0xF;
-        return delays;
-    }
-};
 
 // B200 + B210:
 class b200_ad9361_client_t : public ad9361_params
@@ -157,29 +122,6 @@ public:
 /***********************************************************************
  * Helpers
  **********************************************************************/
-std::string normalize_antsdr_product_id(const std::string& product)
-{
-    std::string normalized;
-    normalized.reserve(product.size());
-    for (const unsigned char value : product) {
-        if (std::isalnum(value)) {
-            normalized.push_back(static_cast<char>(std::toupper(value)));
-        }
-    }
-    return normalized;
-}
-
-bool is_antsdr_u220_family(const device_addr_t& device_addr)
-{
-    for (const char* key : {"name", "product"}) {
-        const std::string product = normalize_antsdr_product_id(device_addr.get(key, ""));
-        if (product == "U220" || product == "U220V2" || product == "U200") {
-            return true;
-        }
-    }
-    return false;
-}
-
 std::string check_option_valid(const std::string& name,
     const std::vector<std::string>& valid_options,
     const std::string& option)
@@ -469,6 +411,16 @@ b200_impl::b200_impl(
     ////////////////////////////////////////////////////////////////////
     std::string default_file_name;
     std::string product_name;
+
+    // Discovery normally puts the EEPROM name into device_addr, but a user
+    // may open a board directly by serial number. Include the EEPROM name in
+    // the mapping decision so the AntSDR profile is selected in both cases.
+    device_addr_t mapping_addr = device_addr;
+    if (mapping_addr.get("name", "").empty() and not mb_eeprom["name"].empty()) {
+        mapping_addr["name"] = mb_eeprom["name"];
+    }
+    const antsdr_b200_mapping antsdr_mapping = get_antsdr_b200_mapping(mapping_addr);
+
     try {
         // This will throw if the product ID is invalid:
         _product          = get_b200_product(handle, mb_eeprom);
@@ -480,8 +432,22 @@ b200_impl::b200_impl(
         if (not device_addr.has_key("fpga")) {
             throw e;
         }
-        // In this case, we must provide a default product name:
+        // The AntSDR board may intentionally use an FPGA image whose product
+        // code is not one of the Ettus EEPROM product IDs.
         product_name = "B200?";
+    }
+
+    // Apply the AntSDR compatibility profile after EEPROM probing as well as
+    // after successful Ettus product detection. This is important when a
+    // custom U220/U200 FPGA image is supplied with an AntSDR EEPROM code.
+    if (antsdr_mapping == antsdr_b200_mapping::B210) {
+        _product          = B210;
+        default_file_name = B2XX_FPGA_FILE_NAME.get(_product);
+        product_name      = B2XX_STR_NAMES.get(_product);
+    } else if (antsdr_mapping == antsdr_b200_mapping::B205) {
+        _product          = B205MINI;
+        default_file_name = B2XX_FPGA_FILE_NAME.get(_product);
+        product_name      = B2XX_STR_NAMES.get(_product);
     }
     if (not mb_eeprom["revision"].empty()) {
         _revision = boost::lexical_cast<size_t>(mb_eeprom["revision"]);
@@ -512,13 +478,6 @@ b200_impl::b200_impl(
         _fe1                 = 0; // map radio0 to FE1
         _fe2                 = 1; // map radio1 to FE2
         _gpio_state.swap_atr = 0; // ATRs for radio0 are mapped to FE1
-    }
-
-    // AntSDR U220-family boards use the direct A->FE1/B->FE2 mapping.
-    if (is_antsdr_u220_family(device_addr)) {
-        _fe1                 = 0;
-        _fe2                 = 1;
-        _gpio_state.swap_atr = 0;
     }
 
     ////////////////////////////////////////////////////////////////////
@@ -568,7 +527,7 @@ b200_impl::b200_impl(
     _async_task_data.reset(new AsyncTaskData());
     _async_task_data->async_md.reset(new async_md_type(1000 /*messages deep*/));
     if (_gpsdo_capable) {
-        const uint32_t gps_baud = is_antsdr_u220_family(device_addr) ? 9600 : 115200;
+        const uint32_t gps_baud = get_antsdr_b200_gps_baud(mapping_addr);
         _async_task_data->gpsdo_uart =
             b200_uart::make(_ctrl_transport, B200_TX_GPS_UART_SID, gps_baud);
     }
@@ -595,10 +554,16 @@ b200_impl::b200_impl(
     // Create the GPSDO control
     ////////////////////////////////////////////////////////////////////
     if (_gpsdo_capable) {
-        if ((_local_ctrl->peek32(RB32_CORE_STATUS) & 0xff) != B200_GPSDO_ST_NONE) {
+        const uint32_t core_status = _local_ctrl->peek32(RB32_CORE_STATUS);
+        const bool is_antsdr_u220 = is_antsdr_u220_gps_profile(mapping_addr);
+        // U220 exposes a real GPS UART but its B200-compatible FPGA image
+        // reports the Ettus "no GPSDO" status (0x83). Do not use that status
+        // byte as a gate for U220; probe its UART explicitly.
+        if (is_antsdr_u220 or (core_status & 0xff) != B200_GPSDO_ST_NONE) {
             UHD_LOGGER_INFO("B200") << "Detecting internal GPSDO.... " << std::flush;
             try {
-                _gps = gps_ctrl::make(_async_task_data->gpsdo_uart);
+                _gps = gps_ctrl::make(_async_task_data->gpsdo_uart,
+                    is_antsdr_u220_gps_profile(mapping_addr));
             } catch (std::exception& e) {
                 UHD_LOGGER_ERROR("B200")
                     << "An error occurred making GPSDO control: " << e.what();
@@ -697,8 +662,6 @@ b200_impl::b200_impl(
     ad9361_params::sptr client_settings;
     if (is_b2xx_mini(_product)) {
         client_settings = std::make_shared<b2xxmini_ad9361_client_t>();
-    } else if (is_antsdr_u220_family(device_addr)) {
-        client_settings = std::make_shared<antsdr_u220_family_ad9361_client_t>();
     } else {
         client_settings = std::make_shared<b200_ad9361_client_t>();
     }

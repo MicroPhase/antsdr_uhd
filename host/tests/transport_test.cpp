@@ -6,7 +6,9 @@
 
 #include "common/mock_link.hpp"
 #include "common/mock_transport.hpp"
+#include <uhd/transport/udp_zero_copy.hpp>
 #include <uhdlib/transport/inline_io_service.hpp>
+#include <boost/asio/ip/udp.hpp>
 #include <boost/test/unit_test.hpp>
 
 using namespace uhd::transport;
@@ -186,3 +188,43 @@ BOOST_AUTO_TEST_CASE(test_oversubscribed)
     UHD_ASSERT_THROW(recv_xport->get_msg(msg) == false);
 }
 */
+
+
+BOOST_AUTO_TEST_CASE(test_udp_send_buffer_uses_available_frame)
+{
+    boost::asio::io_context io_context;
+    boost::asio::ip::udp::socket receiver(
+        io_context, boost::asio::ip::udp::endpoint(boost::asio::ip::udp::v4(), 0));
+    const std::string port = std::to_string(receiver.local_endpoint().port());
+
+    zero_copy_xport_params params;
+    params.recv_frame_size = 64;
+    params.send_frame_size = 64;
+    params.num_recv_frames = 1;
+    params.num_send_frames = 3;
+
+    udp_zero_copy::buff_params actual_params;
+    auto xport = udp_zero_copy::make("127.0.0.1", port, params, actual_params);
+
+    // Hold frame 0, then frame 1. Release frame 1 and frame 2 so the
+    // round-robin cursor returns to frame 0 while frame 1 is available.
+    auto held0 = xport->get_send_buff(0.0);
+    BOOST_REQUIRE(held0);
+    held0->commit(1);
+    auto held1 = xport->get_send_buff(0.0);
+    BOOST_REQUIRE(held1);
+    held1->commit(1);
+    held1.reset();
+    auto held2 = xport->get_send_buff(0.0);
+    BOOST_REQUIRE(held2);
+    held2->commit(1);
+    held2.reset();
+
+    // The current cursor points at held0, but frame 1 is free. A transport
+    // that only checks the cursor falsely reports a timeout here.
+    auto available = xport->get_send_buff(0.0);
+    BOOST_REQUIRE(available);
+    available->commit(1);
+    available.reset();
+    held0.reset();
+}

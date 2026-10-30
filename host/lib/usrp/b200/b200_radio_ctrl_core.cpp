@@ -25,6 +25,7 @@ using namespace uhd::transport;
 static const double ACK_TIMEOUT     = 2.0; // supposed to be worst case practical timeout
 static const double MASSIVE_TIMEOUT = 10.0; // for when we wait on a timed command
 static const size_t SR_READBACK     = 32;
+static const double CTRL_SEND_TIMEOUT = 0.01;
 
 b200_radio_ctrl_core::~b200_radio_ctrl_core(void)
 {
@@ -131,8 +132,11 @@ private:
      ******************************************************************/
     UHD_INLINE void send_pkt(const uint32_t addr, const uint32_t data = 0)
     {
-        managed_send_buffer::sptr buff = _ctrl_xport->get_send_buff(0.0);
+        managed_send_buffer::sptr buff = _ctrl_xport->get_send_buff(CTRL_SEND_TIMEOUT);
         if (not buff) {
+            UHD_LOGGER_WARNING("radio_ctrl")
+                << "Timed out getting a control send buffer for SID 0x" << std::hex << _sid
+                << std::dec;
             throw uhd::runtime_error("fifo ctrl timed out getting a send buffer");
         }
         uint32_t* pkt = buff->cast<uint32_t*>();

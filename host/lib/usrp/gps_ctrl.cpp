@@ -16,6 +16,8 @@
 #include <boost/thread/thread_time.hpp>
 #include <boost/tokenizer.hpp>
 #include <chrono>
+#include <sstream>
+#include <vector>
 #include <ctime>
 #include <mutex>
 #include <regex>
@@ -148,6 +150,7 @@ private:
 
         static const std::regex servo_regex("^\\d\\d-\\d\\d-\\d\\d.*$");
         static const std::regex gp_msg_regex("^\\$GP.*,\\*[0-9A-F]{2}$");
+        static const std::regex gn_msg_regex("^\\$GN.*,\\*[0-9A-F]{2}$");
         std::map<std::string, std::string> msgs;
 
         // Get all GPSDO messages available
@@ -173,10 +176,22 @@ private:
                     msg, servo_regex, std::regex_constants::match_continuous)) {
                 UHD_LOG_TRACE("GPS", "Received new SERVO message: " << msg);
                 msgs["SERVO"] = msg;
-            } else if (std::regex_match(msg, gp_msg_regex) and is_nmea_checksum_ok(msg)) {
-                UHD_LOG_TRACE(
-                    "GPS", "Received new " << msg.substr(1, 5) << " message: " << msg);
-                msgs[msg.substr(1, 5)] = msg;
+            } else if ((std::regex_match(msg, gp_msg_regex)
+                           or (_is_antsdr_u220 and std::regex_match(msg, gn_msg_regex)))
+                       and is_nmea_checksum_ok(msg)) {
+                std::string key = msg.substr(1, 5);
+                if (_is_antsdr_u220) {
+                    // UHD's public sensor names are historically GPGGA/GPRMC.
+                    // U220 modules emit the equivalent GN talker IDs, so map
+                    // only the cache key and preserve the original NMEA text.
+                    if (key == "GNGGA") {
+                        key = "GPGGA";
+                    } else if (key == "GNRMC") {
+                        key = "GPRMC";
+                    }
+                }
+                UHD_LOG_TRACE("GPS", "Received new " << key << " message: " << msg);
+                msgs[key] = msg;
             } else {
                 if (!msg_key_hint.empty()) {
                     UHD_LOG_DEBUG(
@@ -202,7 +217,10 @@ private:
     }
 
 public:
-    gps_ctrl_impl(uart_iface::sptr uart) : _uart(uart), _gps_type(GPS_TYPE_NONE)
+    gps_ctrl_impl(uart_iface::sptr uart, const bool is_antsdr_u220)
+        : _uart(uart)
+        , _gps_type(GPS_TYPE_NONE)
+        , _is_antsdr_u220(is_antsdr_u220)
     {
         std::string reply;
         bool i_heard_some_nmea = false, i_heard_something_weird = false;
@@ -211,6 +229,36 @@ public:
         _flush(); // get whatever junk is in the rx buffer right now, and throw it away
 
         _send("*IDN?\r\n"); // request identity from the GPSDO
+
+        if (_is_antsdr_u220) {
+            // U220's u-blox module uses 9600 baud and needs the same startup
+            // message profile as the legacy AntSDR UHD backend. The binary
+            // messages are sent with CR/LF because the FPGA UART path is
+            // line-oriented, just like the legacy implementation.
+            const std::vector<std::string> init_cmds_hex = {
+                "b5 62 06 01 03 00 f0 03 00 fd 15",
+                "b5 62 06 01 03 00 f0 01 00 fb 11",
+                "b5 62 06 01 03 00 f0 02 00 fc 13",
+                "b5 62 06 01 03 00 f0 03 00 fd 15",
+                "b5 62 06 01 03 00 f0 05 00 ff 19",
+                "b5 62 06 31 20 00 01 01 00 00 00 00 00 00 01 00 "
+                "00 00 80 96 98 00 00 00 00 80 00 00 00 80 00 00 "
+                "00 00 ef 00 00 00 f7 b0"};
+
+            for (const auto& hex_cmd : init_cmds_hex) {
+                std::stringstream ss(hex_cmd);
+                std::string byte_text;
+                std::string cmd;
+                while (ss >> byte_text) {
+                    cmd.push_back(static_cast<char>(
+                        std::stoul(byte_text, nullptr, 16)));
+                }
+                cmd += "\r\n";
+                _send(cmd);
+                std::this_thread::sleep_for(
+                    std::chrono::milliseconds(GPSDO_COMMAND_DELAY_MS));
+            }
+        }
 
         // then we loop until we either timeout, or until we get a response that indicates
         // we're a JL device maximum response time was measured at ~320ms, so we set the
@@ -225,7 +273,8 @@ public:
                 or reply.find("GPSTCXO") != std::string::npos) {
                 _gps_type = GPS_TYPE_INTERNAL_GPSDO;
                 break;
-            } else if (reply.substr(0, 3) == "$GP") {
+            } else if (reply.substr(0, 3) == "$GP"
+                       or (_is_antsdr_u220 and reply.substr(0, 3) == "$GN")) {
                 i_heard_some_nmea = true; // but keep looking
             } else if (not reply.empty()) {
                 // wrong baud rate or firmware still initializing
@@ -456,12 +505,13 @@ private:
     }
 
     enum { GPS_TYPE_INTERNAL_GPSDO, GPS_TYPE_GENERIC_NMEA, GPS_TYPE_NONE } _gps_type;
+    const bool _is_antsdr_u220;
 };
 
 /***********************************************************************
  * Public make function for the GPS control
  **********************************************************************/
-gps_ctrl::sptr gps_ctrl::make(uart_iface::sptr uart)
+gps_ctrl::sptr gps_ctrl::make(uart_iface::sptr uart, bool is_antsdr_u220)
 {
-    return sptr(new gps_ctrl_impl(uart));
+    return sptr(new gps_ctrl_impl(uart, is_antsdr_u220));
 }

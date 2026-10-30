@@ -13,6 +13,7 @@
 #include <boost/format.hpp>
 #include <chrono>
 #include <memory>
+#include <mutex>
 #include <thread>
 #include <vector>
 
@@ -218,9 +219,31 @@ public:
      ******************************************************************/
     managed_send_buffer::sptr get_send_buff(double timeout) override
     {
-        if (_next_send_buff_index == _num_send_frames)
-            _next_send_buff_index = 0;
-        return _msb_pool[_next_send_buff_index]->get_new(timeout, _next_send_buff_index);
+        // A transport can be shared by several control paths. Search all
+        // buffers before reporting a timeout instead of only trying the
+        // current round-robin slot.
+        std::unique_lock<std::mutex> lock(_send_mutex);
+        const auto deadline = std::chrono::steady_clock::now()
+                              + std::chrono::duration<double>(std::max(0.0, timeout));
+        while (true) {
+            for (size_t offset = 0; offset < _num_send_frames; offset++) {
+                const size_t index = (_next_send_buff_index + offset) % _num_send_frames;
+                size_t next_index  = index;
+                auto buff = _msb_pool[index]->get_new(0.0, next_index);
+                if (buff) {
+                    _next_send_buff_index = next_index % _num_send_frames;
+                    return buff;
+                }
+            }
+
+            if (timeout <= 0.0 || std::chrono::steady_clock::now() >= deadline) {
+                return managed_send_buffer::sptr();
+            }
+
+            lock.unlock();
+            std::this_thread::yield();
+            lock.lock();
+        }
     }
 
     size_t get_num_send_frames(void) const override
@@ -250,6 +273,7 @@ private:
     std::vector<std::shared_ptr<udp_zero_copy_asio_msb>> _msb_pool;
     std::vector<std::shared_ptr<udp_zero_copy_asio_mrb>> _mrb_pool;
     size_t _next_recv_buff_index, _next_send_buff_index;
+    std::mutex _send_mutex;
 
     // asio guts -> socket and service
     asio::io_context _io_context;
