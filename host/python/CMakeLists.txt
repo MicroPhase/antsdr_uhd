@@ -145,8 +145,11 @@ else()
     )
 endif(WIN32)
 target_include_directories(pyuhd PUBLIC
-    ${PYTHON_INCLUDE_DIRS}
+    # Prefer the NumPy headers reported by the selected Python interpreter.
+    # On Debian/Ubuntu, ${PYTHON_INCLUDE_DIRS} may also contain an older
+    # system numpy/ directory and can otherwise shadow NumPy 2 headers.
     ${PYTHON_NUMPY_INCLUDE_DIR}
+    ${PYTHON_INCLUDE_DIRS}
     ${UHD_SOURCE_DIR}/lib
     ${pybind11_INCLUDE_DIR}
     # Directory will exist as the Python API build depends on LibUHD being enabled
