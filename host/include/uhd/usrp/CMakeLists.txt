@@ -14,9 +14,9 @@ UHD_INSTALL(FILES
     dboard_id.hpp
     dboard_iface.hpp
     dboard_manager.hpp
+    zbx_tune_map_item.hpp
 
     ### utilities ###
-    gps_ctrl.hpp
     gpio_defs.hpp
     mboard_eeprom.hpp
     subdev_spec.hpp
@@ -24,7 +24,7 @@ UHD_INSTALL(FILES
     ### interfaces ###
     multi_usrp.hpp
 
-    DESTINATION ${INCLUDE_DIR}/uhd/usrp
+    DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/uhd/usrp
     COMPONENT headers
 )
 
@@ -34,7 +34,7 @@ if(ENABLE_C_API)
         mboard_eeprom.h
         subdev_spec.h
         usrp.h
-        DESTINATION ${INCLUDE_DIR}/uhd/usrp
+        DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/uhd/usrp
         COMPONENT headers
     )
 endif(ENABLE_C_API)

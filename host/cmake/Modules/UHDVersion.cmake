@@ -15,13 +15,18 @@ find_package(Git QUIET)
 #  - Increment API on API changes
 #  - Increment ABI on ABI changes
 #  - Increment patch for bugfixes and docs
+#    (but use 'git' for master to represent 'ahead of the latest stable
+#     release)
 #  - set UHD_VERSION_DEVEL to true for master and development branches
 ########################################################################
-set(UHD_VERSION_MAJOR 4)
-set(UHD_VERSION_API   1)
-set(UHD_VERSION_ABI   0)
-set(UHD_VERSION_PATCH 0)
-set(UHD_VERSION_DEVEL FALSE)
+set(UHD_VERSION_MAJOR      4)
+set(UHD_VERSION_API        9)
+set(UHD_VERSION_ABI        0)
+set(UHD_VERSION_PATCH      0)
+#TODO add a version tag variable which allows to store additional 
+#     branch information instead of overwriting the patch version.
+set(UHD_VERSION_PATCH_ORIG ${UHD_VERSION_PATCH})
+set(UHD_VERSION_DEVEL      TRUE)
 
 ########################################################################
 # If we're on a development branch, we skip the patch version
@@ -36,16 +41,26 @@ endif(NOT DEFINED UHD_VERSION_DEVEL)
 set(UHD_GIT_BRANCH "")
 if(GIT_FOUND)
     execute_process(
-        WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
+        WORKING_DIRECTORY ${UHD_SOURCE_DIR}
         COMMAND ${GIT_EXECUTABLE} rev-parse --abbrev-ref HEAD
         OUTPUT_VARIABLE _git_branch OUTPUT_STRIP_TRAILING_WHITESPACE
         RESULT_VARIABLE _git_branch_result
     )
     if(_git_branch_result EQUAL 0)
+        # This is a special case for Azure Pipelines where it runs
+        # in detached HEAD mode. The branch name is instead stored
+        # in the envionement variable BUILD_SOURCEBRANCH with values
+        # like refs/heads/master for the branch master and
+        # refs/pull/1/merge for pull request 1
+        # The regex removes the first two path segments to match
+        # the "git rev-parse --abbrev-ref HEAD" output
+        if("${_git_branch}" STREQUAL "HEAD" AND DEFINED ENV{BUILD_SOURCEBRANCH})
+            string(REGEX REPLACE "^[^\/]*\/[^\/]*\/" "" _git_branch $ENV{BUILD_SOURCEBRANCH})
+        endif()
         set(UHD_GIT_BRANCH ${_git_branch})
         if(UHD_GIT_BRANCH MATCHES "^UHD-")
             message(STATUS "Operating on release branch (${UHD_GIT_BRANCH}).")
-	    set(UHD_VERSION_DEVEL FALSE)
+            set(UHD_VERSION_DEVEL FALSE)
         elseif(UHD_GIT_BRANCH STREQUAL "master")
             message(STATUS "Operating on master branch.")
             set(UHD_VERSION_DEVEL TRUE)
@@ -75,7 +90,7 @@ endif(DEFINED UHD_GIT_BRANCH_OVERRIDE)
 
 #grab the git ref id for the current head
 execute_process(
-    WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
+    WORKING_DIRECTORY ${UHD_SOURCE_DIR}
     COMMAND ${GIT_EXECUTABLE} describe --always --abbrev=8 --long
     OUTPUT_VARIABLE _git_describe OUTPUT_STRIP_TRAILING_WHITESPACE
     RESULT_VARIABLE _git_describe_result
@@ -85,7 +100,7 @@ execute_process(
 if(_git_describe_result EQUAL 0)
     if(NOT UHD_GIT_COUNT)
         execute_process(
-            WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
+            WORKING_DIRECTORY ${UHD_SOURCE_DIR}
             COMMAND ${PYTHON_EXECUTABLE} -c "
 try:
     print('${_git_describe}'.split('-')[-2])
@@ -97,7 +112,7 @@ except IndexError:
     endif()
     if(NOT UHD_GIT_HASH)
         execute_process(
-            WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
+            WORKING_DIRECTORY ${UHD_SOURCE_DIR}
             COMMAND ${PYTHON_EXECUTABLE} -c "
 try:
     print('${_git_describe}'.split('-')[-1])
@@ -123,16 +138,29 @@ if(UHD_RELEASE_MODE)
 
     #Ignore UHD_GIT_COUNT in UHD_VERSION if the string 'release' is in UHD_RELEASE_MODE
     execute_process(
-        WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
+        WORKING_DIRECTORY ${UHD_SOURCE_DIR}
         COMMAND ${PYTHON_EXECUTABLE} -c "print ('release' in '${UHD_RELEASE_MODE}') or ('rc' in '${UHD_RELEASE_MODE}')"
         OUTPUT_VARIABLE TRIM_UHD_VERSION OUTPUT_STRIP_TRAILING_WHITESPACE
     )
 endif()
 
+# extract the current tag, if any
+set(UHD_GIT_TAG "" CACHE STRING "GIT tag associated with the current code")
+if(GIT_FOUND)
+    execute_process(
+        WORKING_DIRECTORY ${UHD_SOURCE_DIR}
+        COMMAND ${GIT_EXECUTABLE} describe --exact-match --tags
+        OUTPUT_VARIABLE UHD_GIT_TAG OUTPUT_STRIP_TRAILING_WHITESPACE
+        RESULT_VARIABLE _uhd_git_tag_result
+    )
+    if (NOT _uhd_git_tag_result EQUAL 0)
+        set(UHD_GIT_TAG "")
+    endif()
+endif()
 
 ########################################################################
 # Define the derived version variables:
-if(DEFINED UHD_VERSION)
+if(UHD_VERSION)
     set(UHD_VERSION "${UHD_VERSION}" CACHE STRING "Set UHD_VERSION to a custom value")
 elseif(TRIM_UHD_VERSION STREQUAL "True")
     set(UHD_VERSION "${UHD_VERSION_MAJOR}.${UHD_VERSION_API}.${UHD_VERSION_ABI}.${UHD_VERSION_PATCH}-${UHD_GIT_HASH}")
@@ -144,6 +172,11 @@ if(DEFINED UHD_ABI_VERSION)
         CACHE STRING "Set UHD_ABI_VERSION to a custom value")
 else()
     set(UHD_ABI_VERSION "${UHD_VERSION_MAJOR}.${UHD_VERSION_API}.${UHD_VERSION_ABI}")
+endif()
+
+if(UNDERSCORE_UHD_VERSION)
+    string(REPLACE "-" "_" _uhd_version ${UHD_VERSION})
+    set(UHD_VERSION "${_uhd_version}")
 endif()
 
 set(UHD_COMPONENT "UHD")

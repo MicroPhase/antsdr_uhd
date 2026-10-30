@@ -10,16 +10,17 @@
 #include <uhd/config.hpp>
 #include <uhd/types/serial.hpp>
 #include <uhd/types/time_spec.hpp>
-#include <uhd/usrp/fe_connection.hpp>
 #include <uhd/usrp/gpio_defs.hpp>
-#include <uhd/utils/pimpl.hpp>
-#include <stdint.h>
-#include <boost/thread/thread.hpp>
+#include <chrono>
+#include <cstddef>
+#include <cstdint>
+#include <functional>
 #include <memory>
 #include <string>
 #include <vector>
 
 namespace uhd { namespace usrp {
+class fe_connection_t;
 
 //! Special properties that differentiate this daughterboard slot
 struct UHD_API dboard_iface_special_props_t
@@ -280,7 +281,18 @@ public:
      * Sleep for a set time
      * \param time time to sleep in nanoseconds
      */
-    virtual void sleep(const boost::chrono::nanoseconds& time);
+    virtual void sleep(const std::chrono::nanoseconds& time);
+
+    /*! Used to allow daughterboards to be able to call into the
+     * define_custom_register_space function of the NoC block, see register_iface.hpp for
+     * more information.
+     */
+    virtual void define_custom_register_space(const uint32_t,
+        const uint32_t,
+        std::function<void(uint32_t, uint32_t)>,
+        std::function<uint32_t(uint32_t)>)
+    { /* noop*/
+    }
 };
 
 }} // namespace uhd::usrp

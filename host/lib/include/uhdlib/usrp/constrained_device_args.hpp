@@ -227,8 +227,8 @@ public: // Types
                 }
             } catch (std::exception& ex) {
                 throw uhd::value_error(
-                    str(boost::format("Error parsing boolean parameter %s: %s.")
-                        % key() % ex.what()));
+                    str(boost::format("Error parsing boolean parameter %s: %s.") % key()
+                        % ex.what()));
             }
         }
         inline std::string to_string() const override
@@ -243,12 +243,6 @@ public: // Types
 public: // Methods
     constrained_device_args_t() {}
     virtual ~constrained_device_args_t() {}
-
-    void parse(const std::string& str_args)
-    {
-        device_addr_t dev_args(str_args);
-        _parse(dev_args);
-    }
 
     void parse(const device_addr_t& dev_args)
     {

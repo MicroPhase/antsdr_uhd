@@ -18,7 +18,10 @@ class b200_uart : uhd::noncopyable, public uhd::uart_iface
 {
 public:
     typedef std::shared_ptr<b200_uart> sptr;
-    static sptr make(uhd::transport::zero_copy_if::sptr, const uint32_t sid,int baud);
+    static sptr make(
+        uhd::transport::zero_copy_if::sptr,
+        const uint32_t sid,
+        const uint32_t baud = 115200);
     virtual void handle_uart_packet(uhd::transport::managed_recv_buffer::sptr buff) = 0;
 };
 

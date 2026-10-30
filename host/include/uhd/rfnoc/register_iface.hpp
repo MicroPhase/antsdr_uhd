@@ -8,12 +8,61 @@
 
 #include <uhd/types/device_addr.hpp>
 #include <uhd/types/time_spec.hpp>
+#include <boost/optional.hpp>
 #include <cstdint>
 #include <functional>
 #include <memory>
 #include <vector>
 
 namespace uhd { namespace rfnoc {
+
+/*! custom_register_space doesn't store start_addr, as start_addr should be stored as the
+ * key value for the map that keeps track of custom register spaces
+ */
+struct custom_register_space
+{
+    uint32_t end_addr;
+    std::function<void(uint32_t, uint32_t)> poke_fn;
+    std::function<uint32_t(uint32_t)> peek_fn;
+};
+
+/*! Statistics for register interface operations.
+ *
+ * This struct contains counters for various register interface operations,
+ * useful for debugging and performance monitoring.
+ *
+ * Notes:
+ *
+ * - Dropped packets are detected when there is a sequence gap between incoming
+ *   ACKs. If the incoming ACK sequence numbers are [0,1,3] then we assume
+ *   number 2 dropped, and ctrl_dropped is incremented.
+ * - Out-of-sequence packets are only counted when packets with unexpected
+ *   sequence numbers arrive. If the incoming ACK sequence numbers are [0,2,1],
+ *   then first we assume that sequence number 1 was dropped (and ctrl_dropped
+ *   is incremented). We therefore no longer expect sequence number 1, and when
+ *   it is detected after sequence number 2, ctrl_out_of_sequence is incremented.
+ *   When ACKs are reordered, they therefore cause both drop counts and
+ *   out-of-sequence counts.
+ */
+struct register_iface_stats
+{
+    //! Number of control packets sent
+    uint64_t ctrl_packets_sent = 0;
+    //! Number of ACK packets received
+    uint64_t ack_packets_received = 0;
+    //! Number of async packets received
+    uint64_t async_packets_received = 0;
+    //! Number of ACK packets sent
+    uint64_t ack_packets_sent = 0;
+    //! Number of control packets dropped (or ACKs not received)
+    uint64_t ctrl_dropped = 0;
+    //! Number of out-of-sequence control packets
+    uint64_t ctrl_out_of_sequence = 0;
+    //! The fullness of the buffer in the FPGA, as calculated by the software
+    ssize_t buffer_fullness = 0;
+
+    std::string UHD_API to_string() const;
+};
 
 /*!  A software interface to access low-level registers in a NoC block.
  *
@@ -312,6 +361,25 @@ public:
      * \return The 10-bit port number
      */
     virtual uint16_t get_port_num() const = 0;
+
+    /*! Define a custom register space that overrides peek and poke operations,
+     *  directing peek and poke operations that fall within the custom space to
+     *  the provided custom peek and poke functions instead.
+     *
+     *  Callers should be aware of the NoC block's register space, so that peeks and
+     *  pokes do not unintentionally override existing functionality.
+     *
+     * \param start_addr The start address of the custom register space
+     * \param length The length of the custom address space
+     * \param poke_fn The function to call when the custom register space is poked
+     * \param peek_fn The function to call when the custom register space is peeked
+     */
+    virtual void define_custom_register_space(const uint32_t start_addr,
+        const uint32_t length,
+        std::function<void(uint32_t, uint32_t)> poke_fn,
+        std::function<uint32_t(uint32_t)> peek_fn) = 0;
+
+    virtual register_iface_stats get_stats() const = 0;
 
 }; // class register_iface
 

@@ -12,12 +12,12 @@
 #include <uhd/device.hpp>
 #include <uhd/exception.hpp>
 #include <uhd/image_loader.hpp>
-#include <uhd/transport/nirio/niusrprio_session.h>
-#include <uhd/transport/nirio/status.h>
 #include <uhd/transport/udp_simple.hpp>
 #include <uhd/utils/byteswap.hpp>
 #include <uhd/utils/paths.hpp>
 #include <uhd/utils/static.hpp>
+#include <uhdlib/transport/nirio/niusrprio_session.h>
+#include <uhdlib/transport/nirio/status.h>
 #include <boost/algorithm/string.hpp>
 #include <boost/filesystem.hpp>
 #include <boost/property_tree/ptree.hpp>
@@ -36,13 +36,13 @@ using namespace uhd::transport;
  */
 #define X300_FPGA_BIN_SIZE_BYTES 15877916
 #define X300_FPGA_BIT_SIZE_BYTES 15878042
-#define X300_FPGA_PROG_UDP_PORT 49157
-#define X300_FLASH_SECTOR_SIZE 131072
-#define X300_PACKET_SIZE_BYTES 256
-#define X300_FPGA_SECTOR_START 32
-#define X300_MAX_RESPONSE_BYTES 128
-#define UDP_TIMEOUT 3
-#define FPGA_LOAD_TIMEOUT 15
+#define X300_FPGA_PROG_UDP_PORT  49157
+#define X300_FLASH_SECTOR_SIZE   131072
+#define X300_PACKET_SIZE_BYTES   256
+#define X300_FPGA_SECTOR_START   32
+#define X300_MAX_RESPONSE_BYTES  128
+#define UDP_TIMEOUT              3
+#define FPGA_LOAD_TIMEOUT        15
 
 /*
  * Bitstream header pattern
@@ -138,8 +138,8 @@ static void x300_validate_image(x300_session_t& session)
             boost::format("Could not find image at path \"%s\".") % session.filepath));
     }
 
-    std::string extension = fs::extension(session.filepath);
-    session.lvbitx        = (extension == ".lvbitx");
+    const std::string extension = fs::path(session.filepath).extension().string();
+    session.lvbitx              = (extension == ".lvbitx");
 
     if (session.lvbitx) {
         extract_from_lvbitx(session);
@@ -241,13 +241,12 @@ static void x300_setup_session(x300_session_t& session,
             throw uhd::runtime_error(
                 "Found a device but could not auto-generate an image filename.");
         } else {
-            session.filepath =
-                find_image_path("usrp_" + sanitized_product_name +  
-                                "_fpga_" + session.fpga_type + ".bit");
+            session.filepath = find_image_path(
+                "usrp_" + sanitized_product_name + "_fpga_" + session.fpga_type + ".bit");
         }
     } else {
         session.fpga_type = "";
-        session.filepath = filepath;
+        session.filepath  = filepath;
     }
 
     /*
@@ -292,7 +291,7 @@ static UHD_INLINE bool x300_recv_ok(const x300_fpga_update_data_t* pkt_in, size_
 {
     return (len > 0
             and ((ntohl(pkt_in->flags) & X300_FPGA_PROG_FLAGS_ERROR)
-                    != X300_FPGA_PROG_FLAGS_ERROR));
+                 != X300_FPGA_PROG_FLAGS_ERROR));
 }
 
 // Image data needs to be bitswapped

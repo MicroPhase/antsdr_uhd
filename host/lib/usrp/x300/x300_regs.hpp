@@ -17,11 +17,10 @@ static const int BL_ADDRESS = 0;
 static const int BL_DATA    = 1;
 
 // wishbone settings map - relevant to host code
-#define SET0_BASE 0xa000
-#define SETXB_BASE 0xb000
-#define BOOT_LDR_BASE 0xfa00
-#define I2C0_BASE 0xfe00
-#define I2C1_BASE 0xff00
+#define SET0_BASE             0xa000
+#define BOOT_LDR_BASE         0xfa00
+#define I2C0_BASE             0xfe00
+#define I2C1_BASE             0xff00
 #define SR_ADDR(base, offset) ((base) + (offset)*4)
 
 // I2C1 device addresses
@@ -30,41 +29,68 @@ static const int BL_DATA    = 1;
 static const int ZPU_SR_LEDS        = 00;
 static const int ZPU_SR_SW_RST      = 01;
 static const int ZPU_SR_CLOCK_CTRL  = 02;
-static const int ZPU_SR_XB_LOCAL    = 03;
+static const int ZPU_SR_DEVICE_ID   = 03;
 static const int ZPU_SR_REF_FREQ    = 04;
 static const int ZPU_SR_SPI         = 32;
 static const int ZPU_SR_ETHINT0     = 40;
 static const int ZPU_SR_ETHINT1     = 56;
 static const int ZPU_SR_FP_GPIO_SRC = 72;
+// Base addresses for transport adapter info registers (see below for offsets)
+static const int ZPU_SR_SFP0_ADAPTER = 144;
+static const int ZPU_SR_SFP1_ADAPTER = 160;
+
+// Offsets for transport adapter controls. The values aren't used in UHD
+// anywhere, but since this files mirrors x300_defs.h in all the other parts,
+// we keep these lines in here for reference.
+// static const int TA_COMPAT_NUM    = 0; // 8 bits major, 8 bits minor
+// static const int TA_INFO          = 1;
+// static const int TA_NODE_INST     = 2; // read-only
+// static const int TA_KV_MAC_LO     = 3;
+// static const int TA_KV_MAC_HI     = 4;
+// static const int TA_KV_IPV4       = 5;
+// static const int TA_KV_UDP_PORT   = 6;
+// static const int TA_KV_CFG        = 7;
+// static const int TA_KV_IPV4_W_ARP = 8; // not a true SR!
 
 // reset bits
-#define ZPU_SR_SW_RST_ETH_PHY (1 << 0)
-#define ZPU_SR_SW_RST_RADIO_RST (1 << 1)
-#define ZPU_SR_SW_RST_RADIO_CLK_PLL (1 << 2)
+#define ZPU_SR_SW_RST_ETH_PHY        (1 << 0)
+#define ZPU_SR_SW_RST_RADIO_RST      (1 << 1)
+#define ZPU_SR_SW_RST_RADIO_CLK_PLL  (1 << 2)
 #define ZPU_SR_SW_RST_ADC_IDELAYCTRL (1 << 3)
 
+// These registers are read directly out of the FPGA via wishbone (starting at
+// SET0_BASE). They have corresponding localparams in bus_int.v.
 static const int ZPU_RB_SPI         = 2;
 static const int ZPU_RB_CLK_STATUS  = 3;
-static const int ZPU_RB_COMPAT_NUM  = 6;
-static const int ZPU_RB_NUM_CE      = 7;
-static const int ZPU_RB_GIT_HASH    = 10;
 static const int ZPU_RB_SFP0_TYPE   = 4;
 static const int ZPU_RB_SFP1_TYPE   = 5;
+static const int ZPU_RB_COMPAT_NUM  = 6;
+static const int ZPU_RB_RFNOC_INFO  = 7; // See defines below for bits
+static const int ZPU_RB_GIT_HASH    = 10;
+static const int ZPU_RB_XADC_VALS   = 11;
 static const int ZPU_RB_FP_GPIO_SRC = 13;
+static const int ZPU_RB_DEVICE_ID   = 14;
+static const int ZPU_RB_BUILD_SEED  = 15;
+static const int ZPU_RB_DNA_LO      = 16;
+static const int ZPU_RB_DNA_HI      = 17;
+// RFNoC info bits
+#define ZPU_RB_RFNOC_INFO_PROTOVER(X)   (((X) >> 0) & 0xFFFF)
+#define ZPU_RB_RFNOC_INFO_CHDR_WIDTH(X) (((X) >> 16) & 0xFFFF)
 
 static const uint32_t RB_SFP_1G_ETH  = 0;
 static const uint32_t RB_SFP_10G_ETH = 1;
 static const uint32_t RB_SFP_AURORA  = 2;
 
+
 // spi slaves on radio
-#define DB_DAC_SEN (1 << 7)
-#define DB_ADC_SEN (1 << 6)
+#define DB_DAC_SEN      (1 << 7)
+#define DB_ADC_SEN      (1 << 6)
 #define DB_RX_LSADC_SEN (1 << 5)
 #define DB_RX_LSDAC_SEN (1 << 4)
 #define DB_TX_LSADC_SEN (1 << 3)
 #define DB_TX_LSDAC_SEN (1 << 2)
-#define DB_RX_SEN (1 << 1)
-#define DB_TX_SEN (1 << 0)
+#define DB_RX_SEN       (1 << 1)
+#define DB_TX_SEN       (1 << 0)
 
 //-------------------------------------------------------------------
 // PCIe Registers
@@ -156,8 +182,8 @@ static const uint32_t PCIE_ZPU_DATA_BASE = 0x30000;
 static const uint32_t PCIE_ZPU_READ_BASE = 0x20000; // Trig and Status share the same base
 static const uint32_t PCIE_ZPU_STATUS_BASE = 0x20000;
 
-#define PCIE_ZPU_DATA_REG(X) (PCIE_FPGA_REG(PCIE_ZPU_DATA_BASE) + (X))
-#define PCIE_ZPU_READ_REG(X) (PCIE_FPGA_REG(PCIE_ZPU_READ_BASE) + (X))
+#define PCIE_ZPU_DATA_REG(X)   (PCIE_FPGA_REG(PCIE_ZPU_DATA_BASE) + (X))
+#define PCIE_ZPU_READ_REG(X)   (PCIE_FPGA_REG(PCIE_ZPU_READ_BASE) + (X))
 #define PCIE_ZPU_STATUS_REG(X) (PCIE_FPGA_REG(PCIE_ZPU_STATUS_BASE) + (X))
 
 static const uint32_t PCIE_ZPU_READ_START       = 0x0;

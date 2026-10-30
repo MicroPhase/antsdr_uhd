@@ -16,20 +16,20 @@
 #include <cmath>
 #include <thread>
 
-#define REG_DSP_TX_FREQ _dsp_base + 0
+#define REG_DSP_TX_FREQ     _dsp_base + 0
 #define REG_DSP_TX_SCALE_IQ _dsp_base + 4
-#define REG_DSP_TX_INTERP _dsp_base + 8
+#define REG_DSP_TX_INTERP   _dsp_base + 8
 
-#define REG_TX_CTRL_CLEAR _ctrl_base + 0
-#define REG_TX_CTRL_FORMAT _ctrl_base + 4
-#define REG_TX_CTRL_REPORT_SID _ctrl_base + 8
-#define REG_TX_CTRL_POLICY _ctrl_base + 12
-#define REG_TX_CTRL_CYCLES_PER_UP _ctrl_base + 16
+#define REG_TX_CTRL_CLEAR          _ctrl_base + 0
+#define REG_TX_CTRL_FORMAT         _ctrl_base + 4
+#define REG_TX_CTRL_REPORT_SID     _ctrl_base + 8
+#define REG_TX_CTRL_POLICY         _ctrl_base + 12
+#define REG_TX_CTRL_CYCLES_PER_UP  _ctrl_base + 16
 #define REG_TX_CTRL_PACKETS_PER_UP _ctrl_base + 20
 
-#define FLAG_TX_CTRL_POLICY_WAIT (0x1 << 0)
+#define FLAG_TX_CTRL_POLICY_WAIT        (0x1 << 0)
 #define FLAG_TX_CTRL_POLICY_NEXT_PACKET (0x1 << 1)
-#define FLAG_TX_CTRL_POLICY_NEXT_BURST (0x1 << 2)
+#define FLAG_TX_CTRL_POLICY_NEXT_BURST  (0x1 << 2)
 
 // enable flag for registers: cycles and packets per update packet
 #define FLAG_TX_CTRL_UP_ENB (1ul << 31)
@@ -134,13 +134,13 @@ public:
 
         if (interp > 1 and hb0 == 0 and hb1 == 0) {
             UHD_LOGGER_WARNING("CORES")
-                << boost::format(
-                       "The requested interpolation is odd; the user should expect CIC "
-                       "rolloff.\n"
-                       "Select an even interpolation to ensure that a halfband filter is "
-                       "enabled.\n"
-                       "interpolation = dsp_rate/samp_rate -> %d = (%f MHz)/(%f MHz)\n")
-                       % interp_rate % (_tick_rate / 1e6) % (rate / 1e6);
+                << "The requested interpolation is odd; the user should expect CIC "
+                   "rolloff.\n"
+                   "Select an even interpolation to ensure that a halfband filter is "
+                   "enabled.\n"
+                   "interpolation = dsp_rate/samp_rate -> "
+                << interp_rate << " = (" << (_tick_rate / 1e6) << " MHz)/("
+                << (rate / 1e6) << " MHz)\n";
         }
 
         // Calculate CIC interpolation (i.e., without halfband interpolators)

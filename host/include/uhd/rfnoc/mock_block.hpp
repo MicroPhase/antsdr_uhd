@@ -27,7 +27,7 @@ namespace uhd { namespace rfnoc {
 class UHD_API mock_reg_iface_t : public register_iface
 {
 public:
-    mock_reg_iface_t()          = default;
+    mock_reg_iface_t()           = default;
     ~mock_reg_iface_t() override = default;
 
     /**************************************************************************
@@ -130,6 +130,20 @@ public:
     uint16_t get_port_num() const override
     {
         return 0;
+    }
+
+    void define_custom_register_space(const uint32_t /*start_addr*/,
+        const uint32_t /*length*/,
+        std::function<void(uint32_t, uint32_t)> /*poke_fn*/,
+        std::function<uint32_t(uint32_t)> /*peek_fn*/) override
+    {
+        // nop
+    }
+
+    register_iface_stats get_stats() const override
+    {
+        // Mock implementation - return zero stats
+        return {};
     }
 
     bool force_timeout = false;

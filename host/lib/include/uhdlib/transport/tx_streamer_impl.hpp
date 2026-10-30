@@ -10,8 +10,11 @@
 #include <uhd/convert.hpp>
 #include <uhd/stream.hpp>
 #include <uhd/types/metadata.hpp>
+#include <uhd/utils/log.hpp>
 #include <uhd/utils/tasks.hpp>
 #include <uhdlib/transport/tx_streamer_zero_copy.hpp>
+#include <algorithm>
+#include <atomic>
 #include <limits>
 #include <vector>
 
@@ -105,20 +108,34 @@ public:
         : _zero_copy_streamer(num_chans)
         , _zero_buffs(num_chans, &_zero)
         , _out_buffs(num_chans)
+        , _chans_connected(num_chans, false)
     {
+        if ((stream_args.args.cast<std::string>("transmit_policy", "default")
+                == "stop_on_seq_error")
+            && (num_chans > 1)) {
+            UHD_LOG_THROW(uhd::value_error,
+                "TX Streamer",
+                "STREAM_MODE_STOP_ON_SEQ_ERROR is not supported for multi-channel "
+                "streams.");
+        }
         _setup_converters(num_chans, stream_args);
         _zero_copy_streamer.set_bytes_per_item(_convert_info.bytes_per_otw_item);
 
         if (stream_args.args.has_key("spp")) {
             _spp = stream_args.args.cast<size_t>("spp", _spp);
-            _mtu = _spp * _convert_info.bytes_per_otw_item;
         }
     }
 
     virtual void connect_channel(const size_t channel, typename transport_t::uptr xport)
     {
-        const size_t mtu = xport->get_max_payload_size();
+        const size_t mtu = xport->get_mtu();
+        _hdr_len         = std::max(_hdr_len, xport->get_chdr_hdr_len());
         _zero_copy_streamer.connect_channel(channel, std::move(xport));
+        // Note: The previous call also checks if the channel index was valid.
+        _chans_connected[channel] = true;
+        _all_chans_connected      = std::all_of(_chans_connected.cbegin(),
+            _chans_connected.cend(),
+            [](const bool connected) { return connected; });
 
         if (mtu < _mtu) {
             set_mtu(mtu);
@@ -148,6 +165,28 @@ public:
         const uhd::tx_metadata_t& metadata_,
         const double timeout) override
     {
+        if (_sequence_error.load()) {
+            /* If there is a pending sequence error (implies we have enabled
+             * STREAM_MODE_STOP_ON_SEQ_ERROR), we try to reset the streamer
+             * by calling _send_str_init() several times. If the sequence error
+             * flag is still set after the attempts, we do not send any data.
+             * The FPGA will reject any data with sequence error until the
+             * init stream command is sent.
+             */
+            UHD_LOG_DEBUG(
+                "TX STRM", "Pending sequence error, try to reinitialize stream control.");
+            _send_str_init();
+            if (_sequence_error.load()) {
+                UHD_LOG_DEBUG(
+                    "TX STRM", "Sequence error still pending, not sending data.");
+                return 0;
+            }
+        }
+
+        if (!_all_chans_connected) {
+            throw uhd::runtime_error("[tx_stream] Attempting to call send() before all "
+                                     "channels are connected!");
+        }
         uhd::tx_metadata_t metadata(metadata_);
 
         if (nsamps_per_buff == 0 && metadata.start_of_burst) {
@@ -274,6 +313,12 @@ public:
                     }
 
                     metadata.start_of_burst = false;
+
+                    if (_sequence_error.load()) {
+                        UHD_LOG_DEBUG(
+                            "TX STRM", "Sequence error detected, stop sending data.");
+                        return total_nsamps_sent;
+                    }
                 }
 
                 // Send the final fragment
@@ -317,17 +362,27 @@ protected:
         return _zero_copy_streamer.get_tick_rate();
     }
 
+    //! set maximum number of sample (per packet)
+    void set_max_num_samps(const size_t value)
+    {
+        _spp = value;
+    }
+
     //! Returns the maximum payload size
     size_t get_mtu() const
     {
         return _mtu;
     }
 
-    //! Sets the MTU and calculates spp
+    //! Sets the MTU and checks spp. If spp would exceed the new MTU, it is
+    // reduced accordingly.
     void set_mtu(const size_t mtu)
     {
-        _mtu = mtu;
-        _spp = _mtu / _convert_info.bytes_per_otw_item;
+        _mtu                      = mtu;
+        const size_t spp_from_mtu = (_mtu - _hdr_len) / _convert_info.bytes_per_otw_item;
+        if (spp_from_mtu < _spp) {
+            _spp = spp_from_mtu;
+        }
     }
 
     //! Configures scaling factor for conversion
@@ -348,6 +403,9 @@ protected:
         _zero_copy_streamer.set_tick_rate(rate);
     }
 
+    //! Flag used to indicate that FPGA detected a sequence error.
+    std::atomic_bool _sequence_error = false;
+
 private:
     //! Converter and associated item sizes
     struct convert_info
@@ -356,6 +414,11 @@ private:
         size_t bytes_per_cpu_item;
         size_t otw_item_bit_width;
     };
+
+    void _send_str_init()
+    {
+        _zero_copy_streamer.resend_init();
+    }
 
     //! Convert samples for one channel and sends a packet
     size_t _send_one_packet(const uhd::tx_streamer::buffs_type& buffs,
@@ -444,11 +507,23 @@ private:
     // MTU, determined when xport is connected and modifiable by subclass
     size_t _mtu = std::numeric_limits<std::size_t>::max();
 
-    // Maximum number of samples per packet
+    // Size of CHDR header in bytes
+    size_t _hdr_len = 0;
+
+    // Maximum number of samples per packet. Note that this is not necessarily
+    // related to the MTU, it is a user-chosen value. However, it is always
+    // bounded by the MTU.
     size_t _spp = std::numeric_limits<std::size_t>::max();
 
     // Metadata cache for send calls with no data
     detail::tx_metadata_cache _metadata_cache;
+
+    // Store a list of channels that are already connected
+    std::vector<bool> _chans_connected;
+
+    // Flag to store if all channels are connected. This is to speed up the lookup
+    // of all channels' connected-status.
+    bool _all_chans_connected = false;
 };
 
 }} // namespace uhd::transport

@@ -20,23 +20,23 @@
 #include <thread>
 #include <tuple>
 
-#define REG_DSP_RX_FREQ _dsp_base + 0
+#define REG_DSP_RX_FREQ     _dsp_base + 0
 #define REG_DSP_RX_SCALE_IQ _dsp_base + 4
-#define REG_DSP_RX_DECIM _dsp_base + 8
-#define REG_DSP_RX_MUX _dsp_base + 12
+#define REG_DSP_RX_DECIM    _dsp_base + 8
+#define REG_DSP_RX_MUX      _dsp_base + 12
 
-#define FLAG_DSP_RX_MUX_SWAP_IQ (1 << 0)
+#define FLAG_DSP_RX_MUX_SWAP_IQ   (1 << 0)
 #define FLAG_DSP_RX_MUX_REAL_MODE (1 << 1)
 
 #define REG_RX_CTRL_STREAM_CMD _ctrl_base + 0
-#define REG_RX_CTRL_TIME_HI _ctrl_base + 4
-#define REG_RX_CTRL_TIME_LO _ctrl_base + 8
-#define REG_RX_CTRL_FORMAT _ctrl_base + 12
-#define REG_RX_CTRL_VRT_HDR _ctrl_base + 16
-#define REG_RX_CTRL_VRT_SID _ctrl_base + 20
-#define REG_RX_CTRL_VRT_TLR _ctrl_base + 24
-#define REG_RX_CTRL_NSAMPS_PP _ctrl_base + 28
-#define REG_RX_CTRL_NCHANNELS _ctrl_base + 32
+#define REG_RX_CTRL_TIME_HI    _ctrl_base + 4
+#define REG_RX_CTRL_TIME_LO    _ctrl_base + 8
+#define REG_RX_CTRL_FORMAT     _ctrl_base + 12
+#define REG_RX_CTRL_VRT_HDR    _ctrl_base + 16
+#define REG_RX_CTRL_VRT_SID    _ctrl_base + 20
+#define REG_RX_CTRL_VRT_TLR    _ctrl_base + 24
+#define REG_RX_CTRL_NSAMPS_PP  _ctrl_base + 28
+#define REG_RX_CTRL_NCHANNELS  _ctrl_base + 32
 
 template <class T>
 T ceil_log2(T num)
@@ -83,9 +83,8 @@ public:
 
     ~rx_dsp_core_200_impl(void) override
     {
-        UHD_SAFE_CALL(
-            // shutdown any possible streaming
-            this->clear();)
+        // shutdown any possible streaming
+        UHD_SAFE_CALL(this->clear());
     }
 
     void clear(void) override
@@ -205,13 +204,13 @@ public:
 
         if (decim > 1 and hb0 == 0 and hb1 == 0) {
             UHD_LOGGER_WARNING("CORES")
-                << boost::format(
-                       "The requested decimation is odd; the user should expect CIC "
-                       "rolloff.\n"
-                       "Select an even decimation to ensure that a halfband filter is "
-                       "enabled.\n"
-                       "decimation = dsp_rate/samp_rate -> %d = (%f MHz)/(%f MHz)\n")
-                       % decim_rate % (_tick_rate / 1e6) % (rate / 1e6);
+                << "The requested decimation is odd; the user should expect CIC "
+                   "rolloff.\n"
+                   "Select an even decimation to ensure that a halfband filter is "
+                   "enabled.\n"
+                   "decimation = dsp_rate/samp_rate -> "
+                << decim_rate << " = (" << (_tick_rate / 1e6) << " MHz)/(" << (rate / 1e6)
+                << " MHz)\n";
         }
 
         // Calculate CIC decimation (i.e., without halfband decimators)

@@ -14,6 +14,7 @@
 #include "uhdlib/usrp/common/validate_subdev_spec.hpp"
 #include <functional>
 #include <memory>
+#include <numeric>
 #include <set>
 
 using namespace uhd;
@@ -115,7 +116,7 @@ void ant_impl::set_auto_tick_rate(
             }
             // Clean up floating point rounding errors if they crept in
             this_dsp_rate = std::min(max_tick_rate, this_dsp_rate);
-            lcm_rate      = uhd::math::lcm<uint32_t>(
+            lcm_rate      = std::lcm<uint32_t>(
                 lcm_rate, static_cast<uint32_t>(floor(this_dsp_rate + 0.5)));
         }
     }
@@ -332,7 +333,7 @@ boost::optional<uhd::msg_task::msg_type_t> ant_impl::handle_async_task(
         case ANT_RESP0_MSG_SID:
         case ANT_RESP1_MSG_SID:
         case ANT_LOCAL_RESP_SID: {
-            radio_ctrl_core_3000::sptr ctrl;
+            b200_radio_ctrl_core::sptr ctrl;
             if (sid == ANT_RESP0_MSG_SID)
                 ctrl = data->radio_ctrl[0].lock();
             if (sid == ANT_RESP1_MSG_SID)
@@ -350,7 +351,9 @@ boost::optional<uhd::msg_task::msg_type_t> ant_impl::handle_async_task(
 
         // if the packet is a uart message
         case ANT_RX_GPS_UART_SID: {
-            data->gpsdo_uart->handle_uart_packet(buff);
+            if (data->gpsdo_uart) {
+                data->gpsdo_uart->handle_uart_packet(buff);
+            }
             break;
         }
 

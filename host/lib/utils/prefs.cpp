@@ -1,9 +1,10 @@
 //
 // Copyright 2017-2018 Ettus Research, a National Instruments Company
 //
-// SPDX-License-Identifier: GPL-3.0+
+// SPDX-License-Identifier: GPL-3.0-or-later
 //
 
+#include <uhd/utils/cast.hpp>
 #include <uhd/utils/log.hpp>
 #include <uhd/utils/paths.hpp>
 #include <uhdlib/utils/paths.hpp>
@@ -91,9 +92,9 @@ config_parser& uhd::prefs::get_uhd_config()
         // loaded from ~/.config), but we show a warning.
         if (!user_conf_loaded
             && _update_conf_file(
-                   (get_legacy_config_home() / std::string(UHD_USER_CONF_FILE)).string(),
-                   "user",
-                   _conf_files)) {
+                (get_legacy_config_home() / std::string(UHD_USER_CONF_FILE)).string(),
+                "user",
+                _conf_files)) {
             UHD_LOG_WARNING("PREFS",
                 "Loaded config from " << get_legacy_config_home().string()
                                       << ". This location is considered deprecated, "
@@ -116,6 +117,28 @@ config_parser& uhd::prefs::get_uhd_config()
     return _conf_files;
 }
 
+bool uhd::prefs::is_guided_mode()
+{
+    const std::string guided_mode = uhd::prefs::get_uhd_config().get<std::string>(
+        uhd::prefs::GLOBAL_SECTION, "guided_mode", "true");
+    const std::string guided_mode_suspended =
+        uhd::prefs::get_uhd_config().get<std::string>(
+            uhd::prefs::GLOBAL_SECTION, "guided_mode_suspended", "false");
+    return cast::from_str<bool>(guided_mode)
+           && !cast::from_str<bool>(guided_mode_suspended);
+}
+
+void uhd::prefs::suspend_guided_mode()
+{
+    uhd::prefs::get_uhd_config().set<std::string>(
+        uhd::prefs::GLOBAL_SECTION, "guided_mode_suspended", "true");
+}
+
+void uhd::prefs::resume_guided_mode()
+{
+    uhd::prefs::get_uhd_config().set<std::string>(
+        uhd::prefs::GLOBAL_SECTION, "guided_mode_suspended", "false");
+}
 
 device_addr_t uhd::prefs::get_usrp_args(const uhd::device_addr_t& user_args)
 {

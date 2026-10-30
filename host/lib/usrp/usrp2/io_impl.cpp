@@ -16,9 +16,9 @@
 #include <uhd/utils/log.hpp>
 #include <uhd/utils/tasks.hpp>
 #include <uhd/utils/thread.hpp>
+#include <uhdlib/asio.hpp>
 #include <uhdlib/usrp/common/async_packet_handler.hpp>
 #include <uhdlib/usrp/common/validate_subdev_spec.hpp>
-#include <boost/asio.hpp>
 #include <boost/format.hpp>
 #include <boost/thread/mutex.hpp>
 #include <boost/thread/thread.hpp>
@@ -92,7 +92,7 @@ public:
      */
     UHD_INLINE bool check_fc_condition(double timeout)
     {
-        boost::mutex::scoped_lock lock(_fc_mutex);
+        std::unique_lock<std::mutex> lock(_fc_mutex);
         if (this->ready())
             return true;
         boost::this_thread::disable_interruption di; // disable because the wait can throw
@@ -105,7 +105,7 @@ public:
      */
     UHD_INLINE void update_fc_condition(seq_type seq)
     {
-        boost::mutex::scoped_lock lock(_fc_mutex);
+        std::unique_lock<std::mutex> lock(_fc_mutex);
         _last_seq_ack = seq;
         lock.unlock();
         _fc_cond.notify_one();
@@ -117,7 +117,7 @@ private:
         return seq_type(_last_seq_out - _last_seq_ack) < _max_seqs_out;
     }
 
-    boost::mutex _fc_mutex;
+    std::mutex _fc_mutex;
     boost::condition _fc_cond;
     seq_type _last_seq_out, _last_seq_ack;
     const seq_type _max_seqs_out;
@@ -238,8 +238,7 @@ void usrp2_impl::io_impl::recv_pirate_loop(
  **********************************************************************/
 void usrp2_impl::io_init(void)
 {
-    // create new io impl
-    _io_impl = UHD_PIMPL_MAKE(io_impl, ());
+    _io_impl = std::make_shared<io_impl>();
 
     // init first so we dont have an access race
     for (const std::string& mb : _mbc.keys()) {
@@ -362,9 +361,6 @@ void usrp2_impl::update_rx_subdev_spec(
 
     // compute the new occupancy and resize
     _mbc[which_mb].rx_chan_occ = spec.size();
-    size_t nchan               = 0;
-    for (const std::string& mb : _mbc.keys())
-        nchan += _mbc[mb].rx_chan_occ;
 }
 
 void usrp2_impl::update_tx_subdev_spec(
@@ -385,9 +381,6 @@ void usrp2_impl::update_tx_subdev_spec(
 
     // compute the new occupancy and resize
     _mbc[which_mb].tx_chan_occ = spec.size();
-    size_t nchan               = 0;
-    for (const std::string& mb : _mbc.keys())
-        nchan += _mbc[mb].tx_chan_occ;
 }
 
 /***********************************************************************
@@ -421,12 +414,12 @@ void usrp2_impl::program_stream_dest(
                              "IPv4 Address: %s, UDP Port: %s")
                    % args.args["addr"] % args.args["port"];
 
-        asio::io_service io_service;
-        asio::ip::udp::resolver resolver(io_service);
-        asio::ip::udp::resolver::query query(
-            asio::ip::udp::v4(), args.args["addr"], args.args["port"]);
-        asio::ip::udp::endpoint endpoint = *resolver.resolve(query);
-        stream_ctrl.ip_addr = uhd::htonx(uint32_t(endpoint.address().to_v4().to_ulong()));
+        asio::io_context io_context;
+        asio::ip::udp::resolver resolver(io_context);
+        asio::ip::udp::endpoint endpoint =
+            *resolver.resolve(asio::ip::udp::v4(), args.args["addr"], args.args["port"])
+                 .begin();
+        stream_ctrl.ip_addr  = uhd::htonx(uint32_t(endpoint.address().to_v4().to_uint()));
         stream_ctrl.udp_port = uhd::htonx(uint32_t(endpoint.port()));
 
         for (size_t i = 0; i < 3; i++) {

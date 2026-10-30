@@ -7,9 +7,9 @@
 #include <uhd/convert.hpp>
 #include <uhd/exception.hpp>
 #include <uhd/rfnoc/defaults.hpp>
-#include <uhd/rfnoc/split_stream_block_control.hpp>
 #include <uhd/rfnoc/property.hpp>
 #include <uhd/rfnoc/registry.hpp>
+#include <uhd/rfnoc/split_stream_block_control.hpp>
 #include <string>
 
 using namespace uhd::rfnoc;
@@ -41,6 +41,10 @@ public:
         // the split stream block.
         set_prop_forwarding_policy(forwarding_policy_t::USE_MAP);
         set_action_forwarding_policy(forwarding_policy_t::USE_MAP);
+        // MTU forwarding doesn't allow for USE_MAP, but we assume that packets
+        // coming in may potentially go to any output port. We thus fan out the
+        // MTU propagation.
+        set_mtu_forwarding_policy(forwarding_policy_t::ONE_TO_FAN);
 
         // Property propagation scheme (X --> Y means 'Properties received on
         // X propagate to Y'):
@@ -105,5 +109,8 @@ public:
     }
 };
 
-UHD_RFNOC_BLOCK_REGISTER_DIRECT(
-    split_stream_block_control, SPLIT_STREAM_BLOCK, "SplitStream", CLOCK_KEY_GRAPH, "bus_clk")
+UHD_RFNOC_BLOCK_REGISTER_DIRECT(split_stream_block_control,
+    SPLIT_STREAM_BLOCK,
+    "SplitStream",
+    CLOCK_KEY_GRAPH,
+    "bus_clk")

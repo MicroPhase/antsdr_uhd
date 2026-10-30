@@ -13,14 +13,14 @@
 #include <uhd/transport/if_addrs.hpp>
 #include <uhd/transport/udp_simple.hpp>
 #include <uhd/types/dict.hpp>
-#include <uhd/usrp/gps_ctrl.hpp>
 #include <uhd/usrp_clock/octoclock_eeprom.hpp>
 #include <uhd/utils/byteswap.hpp>
 #include <uhd/utils/log.hpp>
 #include <uhd/utils/paths.hpp>
 #include <uhd/utils/static.hpp>
+#include <uhdlib/asio.hpp>
+#include <uhdlib/utils/paths.hpp>
 #include <stdint.h>
-#include <boost/asio.hpp>
 #include <boost/assign.hpp>
 #include <boost/filesystem.hpp>
 #include <boost/format.hpp>
@@ -301,7 +301,7 @@ octoclock_impl::octoclock_impl(const device_addr_t& _device_addr)
         if (_oc_dict[oc].state.gps_detected) {
             try {
                 _oc_dict[oc].gps = gps_ctrl::make(
-                    octoclock_make_uart_iface(_oc_dict[oc].gpsdo_xport, _proto_ver),false);
+                    octoclock_make_uart_iface(_oc_dict[oc].gpsdo_xport, _proto_ver));
 
                 if (_oc_dict[oc].gps and _oc_dict[oc].gps->gps_detected()) {
                     for (const std::string& name : _oc_dict[oc].gps->get_sensors()) {
@@ -492,8 +492,7 @@ std::string octoclock_impl::_get_images_help_message(const std::string& addr)
 #endif
 
     // Get burner command
-    const std::string burner_path =
-        (fs::path(uhd::get_pkg_path()) / "bin" / "uhd_image_loader").string();
+    const std::string burner_path = uhd::find_uhd_command("uhd_image_loader");
     const std::string burner_cmd =
         str(boost::format("%s %s--addr=\"%s\"") % burner_path % ml % addr);
     return str(boost::format("%s\n%s")

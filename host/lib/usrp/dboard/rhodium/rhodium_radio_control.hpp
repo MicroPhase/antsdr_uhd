@@ -100,8 +100,7 @@ public:
         const std::string& name, const size_t chan) const override;
     void set_rx_lo_source(
         const std::string& src, const std::string& name, const size_t chan) override;
-    const std::string get_rx_lo_source(
-        const std::string& name, const size_t chan) override;
+    std::string get_rx_lo_source(const std::string& name, const size_t chan) override;
     double set_rx_lo_freq(
         double freq, const std::string& name, const size_t chan) override;
     double get_rx_lo_freq(const std::string& name, const size_t chan) override;
@@ -112,8 +111,7 @@ public:
         const std::string& name, const size_t chan) override;
     void set_tx_lo_source(
         const std::string& src, const std::string& name, const size_t chan) override;
-    const std::string get_tx_lo_source(
-        const std::string& name, const size_t chan) override;
+    std::string get_tx_lo_source(const std::string& name, const size_t chan) override;
     double set_tx_lo_freq(
         const double freq, const std::string& name, const size_t chan) override;
     double get_tx_lo_freq(const std::string& name, const size_t chan) override;
@@ -170,7 +168,6 @@ public:
     void set_rx_dc_offset(const bool enb, size_t chan = ALL_CHANS) override;
     void set_rx_dc_offset(const std::complex<double>& offset, size_t chan) override;
     meta_range_t get_rx_dc_offset_range(size_t chan) const override;
-    void set_rx_iq_balance(const bool enb, size_t chan) override;
     void set_rx_iq_balance(const std::complex<double>& correction, size_t chan) override;
 
     /************************************************************************

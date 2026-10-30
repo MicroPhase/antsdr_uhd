@@ -96,7 +96,7 @@ public:
         // Extract buff and sanity check
         const size_t nbytes = boost::asio::buffer_size(user_buff);
         UHD_ASSERT_THROW(nbytes <= _link->get_send_frame_size())
-        const uint8_t* user_data = boost::asio::buffer_cast<const uint8_t*>(user_buff);
+        const uint8_t* user_data = static_cast<const uint8_t*>(user_buff.data());
 
         // Get send buff
         auto buff = _send_io->get_send_buff(SEND_TIMEOUT_MS);
@@ -120,7 +120,7 @@ public:
     size_t recv(const boost::asio::mutable_buffer& user_buff, double timeout) override
     {
         size_t user_buff_size = boost::asio::buffer_size(user_buff);
-        uint8_t* user_data    = boost::asio::buffer_cast<uint8_t*>(user_buff);
+        uint8_t* user_data    = static_cast<uint8_t*>(user_buff.data());
 
         auto buff = _recv_io->get_recv_buff(static_cast<int32_t>(timeout * 1e3));
         if (!buff) {
@@ -129,10 +129,10 @@ public:
 
         // Extract the sender's address. This is only possible because we know
         // the memory layout of the buff
-        struct udp_hdr* udp_hdr_end = (struct udp_hdr*)buff->data();
-        struct ipv4_hdr* ip_hdr_end = (struct ipv4_hdr*)(&udp_hdr_end[-1]);
-        struct ipv4_hdr* ip_hdr     = (struct ipv4_hdr*)(&ip_hdr_end[-1]);
-        _last_recv_addr             = ip_hdr->src_addr;
+        struct rte_udp_hdr* rte_udp_hdr_end = (struct rte_udp_hdr*)buff->data();
+        struct rte_ipv4_hdr* ip_hdr_end = (struct rte_ipv4_hdr*)(&rte_udp_hdr_end[-1]);
+        struct rte_ipv4_hdr* ip_hdr     = (struct rte_ipv4_hdr*)(&ip_hdr_end[-1]);
+        _last_recv_addr                 = ip_hdr->src_addr;
 
         // Extract the buffer data
         const size_t copy_len = std::min(user_buff_size, buff->packet_size());
@@ -162,12 +162,12 @@ private:
     link_params_t _get_default_link_params()
     {
         link_params_t link_params;
-        link_params.recv_frame_size = 8000;
-        link_params.send_frame_size = 8000;
+        link_params.recv_frame_size = 8016;
+        link_params.send_frame_size = 8016;
         link_params.num_recv_frames = 1;
         link_params.num_send_frames = 1;
-        link_params.recv_buff_size  = 8000;
-        link_params.send_buff_size  = 8000;
+        link_params.recv_buff_size  = 8016;
+        link_params.send_buff_size  = 8016;
         return link_params;
     }
 

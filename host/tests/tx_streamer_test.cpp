@@ -35,6 +35,8 @@ public:
 
     mock_tx_data_xport(mock_send_link::sptr send_link) : _send_link(send_link) {}
 
+    void resend_init() {}
+
     buff_t::uptr get_send_buff(const int32_t timeout_ms)
     {
         return _send_link->get_send_buff(timeout_ms);
@@ -53,11 +55,21 @@ public:
         _send_link->release_send_buff(std::move(buff));
     }
 
+    size_t get_mtu() const
+    {
+        return _send_link->get_send_frame_size();
+    }
+
+    size_t get_chdr_hdr_len() const
+    {
+        return sizeof(packet_info_t);
+    }
+
     size_t get_max_payload_size() const
     {
-        return _send_link->get_send_frame_size() - sizeof(packet_info_t);
-        ;
+        return get_mtu() - get_chdr_hdr_len();
     }
+
 
 private:
     mock_send_link::sptr _send_link;
@@ -93,6 +105,12 @@ public:
         uhd::async_metadata_t& /*async_metadata*/, double /*timeout = 0.1*/) override
     {
         return false;
+    }
+
+    void post_output_action(
+        const std::shared_ptr<uhd::rfnoc::action_info>&, const size_t) override
+    {
+        // NOP
     }
 };
 

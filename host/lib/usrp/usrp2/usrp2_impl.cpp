@@ -14,8 +14,8 @@
 #include <uhd/utils/log.hpp>
 #include <uhd/utils/safe_call.hpp>
 #include <uhd/utils/static.hpp>
+#include <uhdlib/asio.hpp>
 #include <uhdlib/usrp/common/apply_corrections.hpp>
-#include <boost/asio.hpp>
 #include <boost/asio/ip/address_v4.hpp>
 #include <boost/format.hpp>
 #include <cmath>
@@ -547,7 +547,7 @@ usrp2_impl::usrp2_impl(const device_addr_t& _device_addr)
             try {
                 _mbc[mb].gps =
                     gps_ctrl::make(udp_simple::make_uart(udp_simple::make_connected(
-                        addr, BOOST_STRINGIZE(USRP2_UDP_UART_GPS_PORT))),false);
+                        addr, BOOST_STRINGIZE(USRP2_UDP_UART_GPS_PORT))));
             } catch (std::exception& e) {
                 UHD_LOGGER_ERROR("USRP2")
                     << "An error occurred making GPSDO control: " << e.what();
@@ -916,7 +916,7 @@ double usrp2_impl::set_tx_dsp_freq(const std::string& mb, const double freq_)
     const double tick_rate = _tree->access<double>("/mboards/" + mb + "/tick_rate").get();
 
     // calculate the DAC shift (multiples of rate)
-    const int zone         = std::max(std::min<int>(std::lround(new_freq / tick_rate), 2), -2);
+    const int zone = std::max(std::min<int>(std::lround(new_freq / tick_rate), 2), -2);
     const double dac_shift = zone * tick_rate;
     new_freq -= dac_shift; // update FPGA DSP target freq
     UHD_LOG_TRACE("USRP2",

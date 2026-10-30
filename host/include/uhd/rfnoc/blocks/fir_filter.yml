@@ -3,7 +3,7 @@ module_name: fir_filter
 version: "1.0"
 rfnoc_version: "1.0"
 chdr_width: 64
-noc_id: 0xF1120000
+noc_id: 0xF1120002
 makefile_srcs: "${fpga_lib_dir}/blocks/rfnoc_block_fir_filter/Makefile.srcs"
 
 parameters:
@@ -12,6 +12,7 @@ parameters:
   NUM_COEFFS: 41
   COEFFS_VEC: "{ 16'h7FFF, {640{1'b0}} }"
   RELOADABLE_COEFFS: 1
+  BLANK_OUTPUT: 1
   SYMMETRIC_COEFFS: 0
   SKIP_ZERO_COEFFS: 0
   USE_EMBEDDED_REGS_COEFFS: 1
@@ -25,7 +26,6 @@ clocks:
     freq: "[]"
 
 control:
-  sw_iface: nocscript
   fpga_iface: ctrlport
   interface_direction: slave
   fifo_depth: 32
@@ -46,7 +46,6 @@ data:
       context_fifo_depth: 2
       payload_fifo_depth: 32
       format: sc16
-      mdata_sig: ~
   outputs:
     out:
       num_ports: NUM_PORTS
@@ -55,8 +54,3 @@ data:
       context_fifo_depth: 2
       payload_fifo_depth: 32
       format: sc16
-      mdata_sig: ~
-
-registers:
-
-properties:

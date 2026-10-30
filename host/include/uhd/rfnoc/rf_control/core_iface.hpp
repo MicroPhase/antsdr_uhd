@@ -9,6 +9,7 @@
 #include <uhd/types/device_addr.hpp>
 #include <uhd/types/ranges.hpp>
 #include <stdint.h>
+#include <memory>
 #include <string>
 #include <vector>
 
@@ -24,6 +25,8 @@ namespace uhd { namespace rfnoc { namespace rf_control {
 class core_iface
 {
 public:
+    using sptr = std::shared_ptr<core_iface>;
+
     virtual ~core_iface() = default;
 
     /*! Return the selected TX antenna for channel \p chan.
@@ -38,7 +41,7 @@ public:
      */
     virtual std::vector<std::string> get_tx_antennas(const size_t chan) const = 0;
 
-    /*! Select RX antenna \p for channel \p chan.
+    /*! Select TX antenna \p for channel \p chan.
      *
      * \throws uhd::value_error if \p ant is not a valid value.
      */
@@ -76,6 +79,15 @@ public:
      * If there is a single LO in this radio, and we're doing direct conversion,
      * then this is the LO frequency.
      *
+     * Note that unlike the uhd::usrp::multi_usrp::set_tx_freq() API, this does
+     * not attempt to tune any attached digital frequency shifter, unless it is
+     * part of the radio. That is why this API only returns a double value (the
+     * actual frequency) instead of a uhd::tune_result_t. If a combined tuning
+     * of digital frequency correction and LO tuning is desired (the same way
+     * that uhd::usrp::multi_usrp does by default), then the caller has to
+     * either also call uhd::rfnoc::dc_block_control::set_freq() with the
+     * residual frequency, or tune through the graph.
+     *
      * \param freq Frequency in Hz
      * \param chan Channel to tune
      *
@@ -107,13 +119,22 @@ public:
      * If there is a single LO in this radio, and we're doing direct conversion,
      * then this is the LO frequency.
      *
+     * Note that unlike the uhd::usrp::multi_usrp::set_rx_freq() API, this does
+     * not attempt to tune any attached digital frequency shifter, unless it is
+     * part of the radio. That is why this API only returns a double value (the
+     * actual frequency) instead of a uhd::tune_result_t. If a combined tuning
+     * of digital frequency correction and LO tuning is desired (the same way
+     * that uhd::usrp::multi_usrp does by default), then the caller has to
+     * either also call uhd::rfnoc::ddc_block_control::set_freq() with the
+     * residual frequency, or tune through the graph.
+     *
      * \param freq Requested frequency
      * \param chan Channel number.
      * \return The actual frequency.
      */
     virtual double set_rx_frequency(const double freq, const size_t chan) = 0;
 
-    /*! Set the TX tune args, if supported by the hardware.
+    /*! Set the RX tune args, if supported by the hardware.
      */
     virtual void set_rx_tune_args(const uhd::device_addr_t& args, const size_t chan) = 0;
 
@@ -308,8 +329,7 @@ public:
      * \param chan the channel index 0 to N-1
      * \return the configured LO source
      */
-    virtual const std::string get_rx_lo_source(
-        const std::string& name, const size_t chan) = 0;
+    virtual std::string get_rx_lo_source(const std::string& name, const size_t chan) = 0;
 
     /*!
      * Set whether the LO used by the usrp device is exported
@@ -398,8 +418,7 @@ public:
      * \param chan the channel index 0 to N-1
      * \return the configured LO source
      */
-    virtual const std::string get_tx_lo_source(
-        const std::string& name, const size_t chan) = 0;
+    virtual std::string get_tx_lo_source(const std::string& name, const size_t chan) = 0;
 
     /*!
      * Set whether the LO used by the usrp device is exported

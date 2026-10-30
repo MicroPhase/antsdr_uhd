@@ -1,7 +1,7 @@
 //
 // Copyright 2018 Ettus Research, a National Instruments Company
 //
-// SPDX-License-Identifier: GPL-3.0+
+// SPDX-License-Identifier: GPL-3.0-or-later
 //
 
 #include <uhd/config.hpp>
@@ -9,6 +9,8 @@
 
 #ifdef BOOST_MSVC
 #    include <windows.h>
+#elif defined(__OpenBSD__)
+#    include <glob.h>
 #else
 #    include <wordexp.h>
 #endif
@@ -27,15 +29,32 @@ std::string uhd::path_expandvars(const std::string& path)
         return path;
     }
     return std::string(result, result + result_len);
+#elif defined(__OpenBSD__)
+    glob_t p;
+    std::string return_value;
+    memset(&p, 0, sizeof(p));
+    if (glob(path.c_str(), GLOB_TILDE, NULL, &p) == 0 && p.gl_pathc > 0) {
+        return_value = std::string(p.gl_pathv[0]);
+    } else {
+        return_value = path;
+    }
+    globfree(&p);
+    return return_value;
 #else
     wordexp_t p;
     std::string return_value;
-    if (wordexp(path.c_str(), &p, 0) == 0 && p.we_wordc > 0) {
+    const int err = wordexp(path.c_str(), &p, 0);
+    if (err == 0 && p.we_wordc > 0) {
         return_value = std::string(p.we_wordv[0]);
     } else {
         return_value = path;
     }
-    wordfree(&p);
+    // According to
+    // https://www.gnu.org/software/libc/manual/html_node/Wordexp-Example.html, p might be
+    // partially allocated, so we need to free it even if we got a NOSPACE error.
+    if (err == 0 || err == WRDE_NOSPACE) {
+        wordfree(&p);
+    }
     return return_value;
 #endif
 }

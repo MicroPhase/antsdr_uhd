@@ -14,19 +14,23 @@
 #include <uhd/usrp/mboard_eeprom.hpp>
 #include <uhd/utils/noncopyable.hpp>
 #include <unordered_map>
+#include <cstddef>
+#include <cstdint>
 #include <functional>
 #include <memory>
+#include <string>
 #include <vector>
 
 namespace uhd { namespace rfnoc {
 
 /*! A default block controller for blocks that can't be found in the registry
  */
-class UHD_API mb_controller : public uhd::noncopyable,
-                              public virtual ::uhd::features::discoverable_feature_getter_iface
+class UHD_API mb_controller
+    : public uhd::noncopyable,
+      public virtual ::uhd::features::discoverable_feature_getter_iface
 {
 public:
-    using sptr = std::shared_ptr<mb_controller>;
+    using sptr          = std::shared_ptr<mb_controller>;
     using sync_source_t = device_addr_t;
 
     /*! Callback function for changing sync sources
@@ -36,15 +40,24 @@ public:
      */
     using sync_source_updater_t = std::function<void(const sync_source_t& sync_source)>;
 
-    virtual ~mb_controller() {}
+    ~mb_controller() override = default;
 
     /**************************************************************************
      * Timebase API
      *************************************************************************/
     /*! Interface to interact with timekeepers
      *
-     * Timekeepers are objects separate from RFNoC blocks. This class is meant
-     * to be subclassed by motherboards implementing it.
+     * A timekeeper is an entity within a USRPs FPGA to track the time. For
+     * example, the execution of timed commands requires the existence of a
+     * timekeeper.
+     *
+     * Timekeepers are objects separate from RFNoC blocks, but RFNoC blocks can
+     * have access to the time provided by timekeepers in order to execute
+     * commands at a certain time (e.g., the radio blocks use this to be able to
+     * assign a timestamp to samples). Note that most other RFNoC blocks do not
+     * require access to a timekeeper to execute timed commands, as they will
+     * execute commands relative to the incoming data.
+     *
      */
     class UHD_API timekeeper
     {
@@ -63,11 +76,27 @@ public:
          * value. Calling this on two synchronized clocks sequentially will
          * definitely return two different values.
          *
+         * When using the RFNoC API, radio blocks also provide API calls
+         * (uhd::rfnoc::radio_control::get_time_now() and
+         * uhd::rfnoc::radio_control::get_ticks_now()) which directly returns the
+         * current time from the radio block itself. This has the advantage that
+         * it is not necessary to know which timekeeper is providing the time to
+         * which radio block when reading the current time, and generally has a
+         * lower latency than executing this call.
+         *
          * \returns the current time
          */
         uhd::time_spec_t get_time_now(void);
 
         /*! Return the current time as a tick count
+         *
+         * When using the RFNoC API, radio blocks also provide API calls
+         * (uhd::rfnoc::radio_control::get_time_now() and
+         * uhd::rfnoc::radio_control::get_ticks_now()) which directly returns the
+         * current time from the radio block itself. This has the advantage that
+         * it is not necessary to know which timekeeper is providing the time to
+         * which radio block when reading the current time, and generally has a
+         * lower latency than executing this call.
          *
          * See also get_time_now().
          *
@@ -91,18 +120,45 @@ public:
         virtual uint64_t get_ticks_last_pps() = 0;
 
         /*! Set the time "now" from a time spec
+         *
+         * This will convert \p time into a tick count value and call
+         * set_ticks_now().
          */
         void set_time_now(const uhd::time_spec_t& time);
 
         /*! Set the ticks "now"
+         *
+         * This will set the tick count on the remote device's timekeeper as
+         * soon as possible. Note that there is some amount of lag between
+         * executing this call and when the device's time will be updated, e.g.,
+         * due to network latency.
          */
         virtual void set_ticks_now(const uint64_t ticks) = 0;
 
         /*! Set the time at next PPS from a time spec
+         *
+         * \b Note: When changing clock sources, a previously set time will
+         * most likely be lost. It is recommended to set the time after
+         * changing the clock source. Otherwise, an unexpected time may line
+         * up with future PPS edges.
+         *
+         * This will convert \p time into a tick count value and use that to
+         * call set_ticks_next_pps().
          */
         void set_time_next_pps(const uhd::time_spec_t& time);
 
         /*! Set the ticks at next PPS
+         *
+         * This will instruct the remote device to set its tick count when the
+         * next PPS edge is detected. Use this to set multiple devices to the
+         * same time (assuming they are synchronized in time and frequency).
+         *
+         * To guarantee that devices are synchronized in time it is recommended
+         * to wait for a PPS edge before calling this command. Otherwise, it
+         * could happen that due to network latency or other reasons, this
+         * command reaches different devices on different sides of the same PPS
+         * edge, causing devices to be unsynchronized in time by exactly one
+         * second.
          */
         virtual void set_ticks_next_pps(const uint64_t ticks) = 0;
 
@@ -137,9 +193,22 @@ public:
 
     //! Returns the number of timekeepers, which equals the number of timebases
     // on this device.
+    //
+    // Most USRPs have one timekeeper. Refer to the manual for your device
+    // family for potential exceptions to this behavior. Custom FPGA images
+    // may also implement multiple timekeepers for various purposes.
     size_t get_num_timekeepers() const;
 
     //! Return a reference to the \p tk_idx-th timekeeper on this motherboard
+    //
+    // For most USRPs, timekeeper index 0 is used to access the main timekeeper.
+    // When using a USRP with multiple timekeepers, refer to the relevant device
+    // family manual for more information on timekeeper mapping and enumeration.
+    //
+    // Custom FPGA images can implement multiple timekeepers.
+    //
+    // To make sure that \p tk_idx is a valid value, get_num_timekeepers() can
+    // be used to query the number of timekeepers available.
     //
     // \throws uhd::index_error if \p tk_idx is not valid
     timekeeper::sptr get_timekeeper(const size_t tk_idx) const;
@@ -287,14 +356,22 @@ public:
      *
      * Example:
      * ~~~{.cpp}
-     * auto usrp = uhd::usrp::multi_usrp::make("");
-     * usrp->set_sync_source(
+     * auto graph = uhd::rfnoc::rfnoc_graph::make("");
+     * graph->get_mb_controller(0)->set_sync_source(
      *     device_addr_t("clock_source=external,time_source=external"));
      * ~~~
      *
      * This function does not force a re-initialization of the underlying
      * hardware when the value does not change. See also set_time_source() and
      * set_clock_source() for more details.
+     *
+     * \b Note: Reconfiguring the sync source may affect the clocking
+     * within the FPGAs of USRPs, and affect timekeeping as well as proper
+     * functioning of blocks that depend on these clocks. It is therefore
+     * strongly recommended to configure clock and time source before doing
+     * anything else. In particular, setting the device time should be done
+     * after calling this, and there should be no ongoing streaming operation
+     * while reconfiguring the sync source.
      *
      * \param sync_source A dictionary representing the various source settings.
      * \throws uhd::value_error if the sources don't actually exist or if the
@@ -349,7 +426,26 @@ public:
      */
     virtual uhd::usrp::mboard_eeprom_t get_eeprom() = 0;
 
-    /*! Synchronize a list of motherboards
+    /*! Synchronize a list of motherboards in time and frequency
+     *
+     * Note: When a uhd::rfnoc_graph is instantiated, this method is called on
+     * all motherboards.
+     *
+     * The exact steps taken when calling this method are hardware-specific, but
+     * primarily can be split in three steps in a specific order:
+     * 1. Pre-timekeeper sync tasks (things here could affect timekeepers)
+     * 2. Timekeeper sync (timekeepers are perfectly aligned after this step)
+     * 3. Post-timekeeper sync ( anything here should not affect timekeepers)
+     * This ensures that timekeepers will not lose synchronization.
+     * In all cases these will ensure that:
+     * - Any hardware settings that need to be applied to synchronize will be
+     *   configured. For example, the X3x0 DAC (AD9146) requires synchronization
+     *   triggers for all the DACs to run synchronously, and the X4x0 RFSoC
+     *   requires programming an identical tile latency.
+     * - Timekeepers are synchronized. That means that timekeepers with the
+     *   same clock rate increment are in unison, and at all times have the same
+     *   time. This allows sending timed commands to the motherboards and
+     *   expect them to be executed at the same time.
      *
      * \param mb_controllers A list of motherboard controllers to synchronize.
      *                       Any motherboard controllers that could not be
@@ -357,10 +453,12 @@ public:
      *                       motherboard controller are removed from the list.
      *                       On return, the list should be (ideally) identical
      *                       to its value at call time.
-     * \param time_spec Time specification to syncrhonize \p mb_controllers to
+     * \param time_spec Time specification to synchronize \p mb_controllers to
      * \param quiet If true, don't print any errors or warnings if
-     *              synchronization fails.
-     * \returns true if all motherboards that were removed from \p mb_controllers
+     *              synchronization fails. During initialization of uhd::rfnoc_graph,
+     *              UHD will call synchronize() on all motherboards with \p quiet
+     *              set to true.
+     * \returns true if all motherboards that were listed in \p mb_controllers
      *          could be synchronized.
      */
     virtual bool synchronize(std::vector<mb_controller::sptr>& mb_controllers,

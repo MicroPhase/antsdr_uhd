@@ -12,16 +12,16 @@
 #include <uhd/utils/log.hpp>
 #include <uhd/utils/static.hpp>
 #include <uhdlib/utils/prefs.hpp>
-#include <boost/format.hpp>
 #include <boost/functional/hash.hpp>
-#include <boost/thread/mutex.hpp>
 #include <future>
 #include <memory>
+#include <mutex>
+#include <set>
 #include <tuple>
 
 using namespace uhd;
 
-static boost::mutex _device_mutex;
+static std::mutex _device_mutex;
 
 /***********************************************************************
  * Helper Functions
@@ -82,7 +82,7 @@ device::~device(void)
  **********************************************************************/
 device_addrs_t device::find(const device_addr_t& hint, device_filter_t filter)
 {
-    boost::mutex::scoped_lock lock(_device_mutex);
+    std::lock_guard<std::mutex> lock(_device_mutex);
 
     device_addrs_t device_addrs;
     std::vector<std::future<device_addrs_t>> find_tasks;
@@ -102,6 +102,19 @@ device_addrs_t device::find(const device_addr_t& hint, device_filter_t filter)
         }
     }
 
+    // find might return duplicate entries if a device received a broadcast multiple
+    // times. These entries needs to be removed from the result.
+    std::set<size_t> device_hashes;
+    device_addrs.erase(std::remove_if(device_addrs.begin(),
+                           device_addrs.end(),
+                           [&device_hashes](const device_addr_t& other) {
+                               size_t hash       = hash_device_addr(other);
+                               const bool result = device_hashes.count(hash);
+                               device_hashes.insert(hash);
+                               return result;
+                           }),
+        device_addrs.end());
+
     return device_addrs;
 }
 
@@ -110,7 +123,7 @@ device_addrs_t device::find(const device_addr_t& hint, device_filter_t filter)
  **********************************************************************/
 device::sptr device::make(const device_addr_t& hint, device_filter_t filter, size_t which)
 {
-    boost::mutex::scoped_lock lock(_device_mutex);
+    std::lock_guard<std::mutex> lock(_device_mutex);
 
     typedef std::tuple<device_addr_t, make_t> dev_addr_make_t;
     std::vector<dev_addr_make_t> dev_addr_makers;
@@ -132,13 +145,13 @@ device::sptr device::make(const device_addr_t& hint, device_filter_t filter, siz
     // check that we found any devices
     if (dev_addr_makers.empty()) {
         throw uhd::key_error(
-            str(boost::format("No devices found for ----->\n%s") % hint.to_pp_string()));
+            std::string("No devices found for ----->\n") + hint.to_pp_string());
     }
 
     // check that the which index is valid
     if (dev_addr_makers.size() <= which) {
-        throw uhd::index_error(str(boost::format("No device at index %d for ----->\n%s")
-                                   % which % hint.to_pp_string()));
+        throw uhd::index_error("No device at index " + std::to_string(which)
+                               + " for ----->\n" + hint.to_pp_string());
     }
 
     // create a unique hash for the device address
@@ -146,7 +159,7 @@ device::sptr device::make(const device_addr_t& hint, device_filter_t filter, siz
     make_t maker;
     std::tie(dev_addr, maker) = dev_addr_makers.at(which);
     size_t dev_hash           = hash_device_addr(dev_addr);
-    UHD_LOGGER_TRACE("UHD") << boost::format("Device hash: %u") % dev_hash;
+    UHD_LOGGER_TRACE("UHD") << "Device hash: " << dev_hash;
 
     // copy keys that were in hint but not in dev_addr
     // this way, we can pass additional transport arguments
@@ -159,16 +172,18 @@ device::sptr device::make(const device_addr_t& hint, device_filter_t filter, siz
     static uhd::dict<size_t, std::weak_ptr<device>> hash_to_device;
 
     // try to find an existing device
-    if (hash_to_device.has_key(dev_hash) and not hash_to_device[dev_hash].expired()) {
-        return hash_to_device[dev_hash].lock();
-    } else {
-        // Add keys from the config files (note: the user-defined keys will
-        // always be applied, see also get_usrp_args()
-        // Then, create and register a new device.
-        device::sptr dev         = maker(prefs::get_usrp_args(dev_addr));
-        hash_to_device[dev_hash] = dev;
-        return dev;
+    if (hash_to_device.has_key(dev_hash)) {
+        if (device::sptr p = hash_to_device[dev_hash].lock()) {
+            return p;
+        }
     }
+
+    // Add keys from the config files (note: the user-defined keys will
+    // always be applied, see also get_usrp_args()
+    // Then, create and register a new device.
+    device::sptr dev         = maker(prefs::get_usrp_args(dev_addr));
+    hash_to_device[dev_hash] = dev;
+    return dev;
 }
 
 uhd::property_tree::sptr device::get_tree(void) const

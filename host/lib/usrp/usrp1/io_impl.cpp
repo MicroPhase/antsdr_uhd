@@ -14,10 +14,10 @@
 #include "../../transport/super_send_packet_handler.hpp"
 #include <uhd/transport/bounded_buffer.hpp>
 #include <uhd/utils/log.hpp>
+#include <uhd/utils/math.hpp>
 #include <uhd/utils/safe_call.hpp>
 #include <uhd/utils/tasks.hpp>
 #include <boost/format.hpp>
-#include <boost/math/special_functions/sign.hpp>
 #include <boost/thread/thread.hpp>
 #include <atomic>
 #include <chrono>
@@ -28,23 +28,23 @@
 
 #define bmFR_RX_FORMAT_SHIFT_SHIFT 0
 #define bmFR_RX_FORMAT_WIDTH_SHIFT 4
-#define bmFR_TX_FORMAT_16_IQ 0
-#define bmFR_RX_FORMAT_WANT_Q (0x1 << 9)
-#define FR_RX_FREQ_0 34
-#define FR_RX_FREQ_1 35
-#define FR_RX_FREQ_2 36
-#define FR_RX_FREQ_3 37
-#define FR_INTERP_RATE 32
-#define FR_DECIM_RATE 33
-#define FR_RX_MUX 38
-#define FR_TX_MUX 39
-#define FR_TX_FORMAT 48
-#define FR_RX_FORMAT 49
-#define FR_TX_SAMPLE_RATE_DIV 0
-#define FR_RX_SAMPLE_RATE_DIV 1
-#define GS_TX_UNDERRUN 0
-#define GS_RX_OVERRUN 1
-#define VRQ_GET_STATUS 0x80
+#define bmFR_TX_FORMAT_16_IQ       0
+#define bmFR_RX_FORMAT_WANT_Q      (0x1 << 9)
+#define FR_RX_FREQ_0               34
+#define FR_RX_FREQ_1               35
+#define FR_RX_FREQ_2               36
+#define FR_RX_FREQ_3               37
+#define FR_INTERP_RATE             32
+#define FR_DECIM_RATE              33
+#define FR_RX_MUX                  38
+#define FR_TX_MUX                  39
+#define FR_TX_FORMAT               48
+#define FR_RX_FORMAT               49
+#define FR_TX_SAMPLE_RATE_DIV      0
+#define FR_RX_SAMPLE_RATE_DIV      1
+#define GS_TX_UNDERRUN             0
+#define GS_RX_OVERRUN              1
+#define VRQ_GET_STATUS             0x80
 
 using namespace uhd;
 using namespace uhd::usrp;
@@ -152,7 +152,7 @@ struct usrp1_impl::io_impl
     ~io_impl(void)
     {
         vandal_loop_exit = true;
-        UHD_SAFE_CALL(flush_send_buff();)
+        UHD_SAFE_CALL(flush_send_buff());
     }
 
     zero_copy_if::sptr data_transport;
@@ -236,7 +236,7 @@ void usrp1_impl::io_impl::flush_send_buff(void)
  **********************************************************************/
 void usrp1_impl::io_init(void)
 {
-    _io_impl = UHD_PIMPL_MAKE(io_impl, (_data_transport));
+    _io_impl = std::make_shared<io_impl>(_data_transport);
 
     // init as disabled, then call the real function (uses restore)
     this->enable_rx(false);
@@ -368,6 +368,13 @@ public:
         _stc->issue_stream_cmd(stream_cmd);
     }
 
+    void post_input_action(
+        const std::shared_ptr<uhd::rfnoc::action_info>&, const size_t) override
+    {
+        throw uhd::not_implemented_error(
+            "post_input_action is currently not implemented here!");
+    }
+
 private:
     size_t _max_num_samps;
     soft_time_ctrl::sptr _stc;
@@ -429,6 +436,13 @@ public:
     bool recv_async_msg(async_metadata_t& async_metadata, double timeout = 0.1) override
     {
         return _stc->get_async_queue().pop_with_timed_wait(async_metadata, timeout);
+    }
+
+    void post_output_action(
+        const std::shared_ptr<uhd::rfnoc::action_info>&, const size_t) override
+    {
+        throw uhd::not_implemented_error(
+            "post_output_action is currently not implemented here!");
     }
 
 private:
@@ -582,10 +596,13 @@ void usrp1_impl::update_rates(void)
 
 double usrp1_impl::update_rx_dsp_freq(const size_t dspno, const double freq_)
 {
-    // correct for outside of rate (wrap around)
-    double freq = std::fmod(freq_, _master_clock_rate);
-    if (std::abs(freq) > _master_clock_rate / 2.0)
-        freq -= boost::math::sign(freq) * _master_clock_rate;
+    // Note: The calculation of freq and freq_word could be done by
+    // get_freq_and_freq_word(), which has implemented this algorithm for all
+    // other USRPs.
+    // We'll not refactor this because it's ancient code, but note that
+    // get_freq_and_freq_word() fixes a numerical overflow issue that is not
+    // fixed here.
+    const double freq = uhd::math::wrap_frequency(freq_, _master_clock_rate);
 
     // calculate the freq register word (signed)
     UHD_ASSERT_THROW(std::abs(freq) <= _master_clock_rate / 2.0);

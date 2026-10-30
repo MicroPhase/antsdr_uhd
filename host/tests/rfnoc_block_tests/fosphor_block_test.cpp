@@ -4,17 +4,18 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 //
 
-#include "../rfnoc_graph_mock_nodes.hpp"
 #include <uhd/rfnoc/actions.hpp>
 #include <uhd/rfnoc/defaults.hpp>
+#include <uhd/rfnoc/detail/graph.hpp>
 #include <uhd/rfnoc/fosphor_block_control.hpp>
 #include <uhd/rfnoc/mock_block.hpp>
-#include <uhdlib/rfnoc/graph.hpp>
-#include <uhdlib/rfnoc/node_accessor.hpp>
+#include <uhd/rfnoc/mock_nodes.hpp>
+#include <uhd/rfnoc/node_accessor.hpp>
 #include <uhdlib/utils/narrow.hpp>
 #include <boost/test/unit_test.hpp>
 
 using namespace uhd::rfnoc;
+using namespace uhd::rfnoc::test;
 
 // Redeclare this here, since it's only defined outside of UHD_API
 noc_block_base::make_args_t::~make_args_t() = default;
@@ -322,14 +323,14 @@ BOOST_FIXTURE_TEST_CASE(fosphor_test_graph, fosphor_block_fixture)
 {
     detail::graph_t graph{};
     detail::graph_t::graph_edge_t edge_port0_info, edge_port1_info;
-    edge_port0_info.src_port                    = 0;
-    edge_port0_info.dst_port                    = 0;
-    edge_port0_info.property_propagation_active = true;
-    edge_port0_info.edge                        = detail::graph_t::graph_edge_t::DYNAMIC;
-    edge_port1_info.src_port                    = 1;
-    edge_port1_info.dst_port                    = 1;
-    edge_port1_info.property_propagation_active = true;
-    edge_port1_info.edge                        = detail::graph_t::graph_edge_t::DYNAMIC;
+    edge_port0_info.src_port        = 0;
+    edge_port0_info.dst_port        = 0;
+    edge_port0_info.is_forward_edge = true;
+    edge_port0_info.edge            = detail::graph_t::graph_edge_t::DYNAMIC;
+    edge_port1_info.src_port        = 1;
+    edge_port1_info.dst_port        = 1;
+    edge_port1_info.is_forward_edge = true;
+    edge_port1_info.edge            = detail::graph_t::graph_edge_t::DYNAMIC;
 
     mock_radio_node_t mock_radio_block{0};
     mock_ddc_node_t mock_ddc_block{};

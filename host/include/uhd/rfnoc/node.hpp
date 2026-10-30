@@ -34,8 +34,9 @@ namespace uhd { namespace rfnoc {
 class UHD_API node_t
 {
 public:
-    using resolver_fn_t      = std::function<void(void)>;
-    using resolve_callback_t = std::function<void(void)>;
+    using resolver_fn_t          = std::function<void(void)>;
+    using resolve_callback_t     = std::function<void(void)>;
+    using graph_mutex_callback_t = std::function<std::recursive_mutex&(void)>;
     using action_handler_t =
         std::function<void(const res_source_info&, action_info::sptr)>;
     using forwarding_map_t =
@@ -216,7 +217,7 @@ protected:
     /******************************************
      * Internal Registration Functions
      ******************************************/
-    using prop_ptrs_t = std::unordered_set<property_base_t*>;
+    using prop_ptrs_t = std::vector<property_base_t*>;
 
     /*! Register a property for this block
      *
@@ -228,6 +229,8 @@ protected:
      * might need some time to settle on the default value. The access mode will
      * either be reset after the constructor is finished, or the next time
      * properties are resolved.
+     *
+     * For more information, see \ref props_define.
      *
      * \param prop A reference to the property
      * \param clean_callback A callback that gets executed whenever this property
@@ -265,6 +268,8 @@ protected:
      *   (which is considered advanced usage), then the block needs to serialize
      *   access to this function itself.
      *
+     * For more information, see \ref props_resolvers.
+     *
      * \param inputs The properties that will cause this resolver to run
      * \param outputs The properties that this resolver will write to
      * \param resolver_fn The resolver function
@@ -290,6 +295,8 @@ protected:
      * Typically, this function should only ever be called from within the
      * constructor.
      *
+     * See also \ref props_unknown.
+     *
      * \param policy The policy that is applied (see also forwarding_policy_t).
      * \param prop_id The property ID that this forwarding policy is applied to.
      *                If \p prop_id is not given, it will apply to all properties,
@@ -314,6 +321,8 @@ protected:
      * The following conditions will generate exceptions at property
      * propagation time:
      *   - Any value in the destination vector represents a non-existent port
+     *
+     * See also \ref props_unknown.
      *
      * \param map The map describing how properties should be propagated
      */
@@ -493,7 +502,7 @@ private:
         for (const auto& type_prop_pair : _props) {
             for (const auto& prop : type_prop_pair.second) {
                 if (predicate(prop)) {
-                    filtered_props.insert(prop);
+                    filtered_props.push_back(prop);
                 }
             }
         }
@@ -577,6 +586,22 @@ private:
         _resolve_all_cb = _default_resolve_all_cb;
     }
 
+    /*! Sets a callback that the node can call to the mutex to the graph it
+     * is connected to. Used for setting properties and propagation.
+     */
+    void set_graph_mutex_callback(graph_mutex_callback_t&& mutex)
+    {
+        _graph_mutex_cb = mutex;
+    }
+
+    /*! Clears the graph mutex callback. Called when node is disconnected
+     * from the graph.
+     */
+    void clear_graph_mutex_callback()
+    {
+        _graph_mutex_cb = NULL;
+    }
+
     /*! Forward the value of an edge property into this node
      *
      * Note that \p incoming_prop is a reference to the neighbouring node's
@@ -641,6 +666,11 @@ private:
     //! Return true if this node has a port that matches \p port_info
     bool _has_port(const res_source_info& port_info) const;
 
+    //! Implementation for set_property \p id \p prop_data_t \p src_info
+    template <typename prop_data_t>
+    void _set_property(
+        const std::string& id, const prop_data_t& val, const res_source_info& src_info);
+
     /****** Attributes *******************************************************/
     //! Mutex to lock access to the property registry. Note: This is not the
     // global property mutex, this only write-protects access to the property-
@@ -660,6 +690,11 @@ private:
     //! Stores the list of property resolvers
     std::vector<property_resolver_t> _prop_resolvers;
 
+    //! A callback that the graph sets when the node is connected to graph.
+    // This will return a global mutex to the graph. It is required to propagate
+    // properties on multithread applications.
+    graph_mutex_callback_t _graph_mutex_cb;
+
     //! A callback that can be called to notify the graph manager that something
     // has changed, and that a property resolution needs to be performed.
     resolve_callback_t _resolve_all_cb;
@@ -670,6 +705,7 @@ private:
         resolve_props();
         clean_props();
     };
+
 
     //! This is permanent storage for all properties that don't get stored
     // explicitly.

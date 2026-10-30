@@ -8,17 +8,20 @@
 #pragma once
 
 #include <uhd/config.hpp>
+#include <uhd/rfnoc/actions.hpp>
 #include <uhd/types/device_addr.hpp>
-#include <uhd/types/metadata.hpp>
 #include <uhd/types/ref_vector.hpp>
 #include <uhd/types/stream_cmd.hpp>
 #include <uhd/utils/noncopyable.hpp>
-#include <boost/utility.hpp>
+#include <cstddef>
 #include <memory>
 #include <string>
 #include <vector>
 
 namespace uhd {
+struct async_metadata_t;
+struct rx_metadata_t;
+struct tx_metadata_t;
 
 /*!
  * A struct of parameters to construct a streamer.
@@ -43,17 +46,6 @@ namespace uhd {
  *
  * \b Note: Not all combinations of CPU and OTW format have conversion support.
  * You may however write and register your own conversion routines.
- *
- * If you are creating stream args to connect to an RFNoC block, then you might
- * want to specify block ID and port, too:
- * \code{.cpp}
- * stream_args.args["block_id0"] = "0/Radio_0";
- * stream_args.args["block_id1"] = "0/Radio_1";
- * stream_args.args["block_id2"] = "0/Radio_1"; // Chan 1 and 2 go to the same radio
- * stream_args.args["block_port0"] = "0";
- * stream_args.args["block_port1"] = "0";
- * stream_args.args["block_port2"] = "1";
- * \endcode
  */
 struct UHD_API stream_args_t
 {
@@ -139,24 +131,32 @@ struct UHD_API stream_args_t
      */
     device_addr_t args;
 
-    /*!
-     * The channels is a list of channel numbers.
+    /*! List of channel numbers (only used by non-RFNoC devices)
+     *
+     * Note: For RFNoC devices, this value is not used. To create a streamer
+     * with multiple channels, the uhd::rfnoc::rfnoc_graph::create_tx_streamer()
+     * and uhd::rfnoc::rfnoc_graph::create_rx_streamer() API calls have a
+     * \p num_ports argument.
+     *
+     * For non-RFNoC devices (i.e., USRP1, B100, B200, N200), this argument
+     * defines how streamer channels map to the front-end selection (see also
+     * \ref config_subdev).
+     *
+     * A very simple example is a B210 with a subdev spec of `A:A A:B`. This
+     * means the device has two channels available.
+     *
+     * Setting `stream_args.channels = {0, 1}` therefore configures MIMO
+     * streaming from both channels. By switching the channel indexes,
+     * `stream_args.channels = {1, 0}`, the channels are switched and the first
+     * channel of the USRP is mapped to the second channel in the application.
+     *
+     * If only a single channel is used for streaming, e.g.,
+     * `stream_args.channels = {1}` would only select a single channel (in this
+     * case, the second one). When streaming a single channel from the B-side
+     * radio of a USRP, this is a more versatile solution than setting the
+     * subdev spec globally to "A:B".
+     *
      * Leave this blank to default to channel 0 (single-channel application).
-     * Set channels for a multi-channel application.
-     * Channel mapping depends on the front-end selection (see also \ref config_subdev).
-     *
-     * A very simple example is an X300 with two daughterboards and a subdev spec
-     * of `A:0 B:0`. This means the device has two channels available.
-     *
-     * Setting `stream_args.channels = (0, 1)` therefore configures MIMO streaming
-     * from both channels. By switching the channel indexes, `stream_args.channels = (1,
-     * 0)`, the channels are switched and the first channel of the USRP is mapped to the
-     * second channel in the application.
-     *
-     * If only a single channel is used for streaming, `stream_args.channels = (1,)` would
-     * only select a single channel (in this case, the second one). When streaming
-     * a single channel from the B-side radio of a USRP, this is a more versatile solution
-     * than setting the subdev globally to "B:0".
      */
     std::vector<size_t> channels;
 };
@@ -212,9 +212,76 @@ public:
      * different sources, then those may be called from different threads
      * simultaneously.
      *
+     * \section stream_rx_error_handling Error Handling
+     *
+     * \p metadata is a value that is set inside this function (effectively, a
+     * return value), and should be checked
+     * for potential error codes (see rx_metadata_t::error_code_t).
+     *
+     * The most common error code when something goes wrong is an overrun (also
+     * referred to as overflow: error_code_t::ERROR_CODE_OVERFLOW). This error
+     * code means that the device produced data faster than the application
+     * could read, and various buffers filled up leaving no more space for the
+     * device to write data to. Note that an overrun on the device will not
+     * immediately show up when calling recv(). Depending on the device
+     * implementation, there may be many more valid samples available before the
+     * device had to stop writing samples to the FIFO. Only when all valid
+     * samples are returned to the call site will the error code be set to
+     * "overrun". When this happens, all valid samples have been returned to
+     * application where recv() was called.
+     * If the device is streaming continuously, it will reset itself when the
+     * FIFO is cleared, and recv() can be called again to retrieve new, valid data.
+     *
+     * \section stream_rx_timeouts Timeouts
+     *
+     * The recv() call has a timeout parameter. This parameter is used to limit
+     * the time the call will block. If no data is available within the timeout
+     * period, the call will return with an error code of
+     * error_code_t::ERROR_CODE_TIMEOUT. This is not necessarily an error
+     * condition, but can occur naturally, for example if the upstream source
+     * produces data in a bursty fashion.
+     *
+     * An important fact about the timeout parameter is that it is not a total
+     * timeout value, but is applied to every single call within recv() that
+     * uses a timeout. This means that the total time recv() can block can be
+     * significantly larger than the timeout parameter passed to recv().
+     *
+     * When the timeout is set to zero, recv() will attempt to return as fast
+     * as possible, to minimize latency. This is useful when the application
+     * polls for data in a busy loop. However, note that in this case, it is
+     * possible that the call will return with an error code of timeout, even
+     * though a different error condition occurred, but has not been fully
+     * processed. It is therefore not sufficient to call recv() with a timeout
+     * of zero to check for any outstanding error conditions.
+     *
+     * \section stream_rx_nsamps_zero Calling recv() with nsamps_per_buff = 0
+     *
+     * It is not forbidden to call recv() with nsamps_per_buff = 0, and this
+     * can be useful to retrieve metadata only. In this case, the call will
+     * still apply the timeout value internally (which means the recv() call
+     * will wait at least for the timeout value for any incoming data, even
+     * though it won't be processed). However, the call will never return an
+     * error code of ERROR_CODE_TIMEOUT, as no data is expected to be processed.
+     *
+     * The following code snippet demonstrates how to call recv() with a zero
+     * number of samples to retrieve metadata only:
+     * \code{.cpp}
+     * int num_samps_rcvd = rx_streamer->recv(
+     *     buffs, num_samps_expected, metadata, timeout);
+     * if (num_samps_rcvd < num_samps_expected &&
+     *     metadata.error_code != error_code_t::ERROR_CODE_NONE &&
+     *     metadata.error_code != error_code_t::ERROR_CODE_TIMEOUT) {
+     *     // If we reach this point, we know that an error occurred, but we
+     *     // don't know what it was.
+     *     rx_streamer->recv(buffs, 0, metadata, timeout);
+     *     // Now meta_data.error_code will contain the actual error code,
+     *     // if it was received within timeout.
+     * }
+     * \endcode
+     *
      * \param buffs a vector of writable memory to fill with samples
      * \param nsamps_per_buff the size of each buffer in number of samples
-     * \param metadata data to fill describing the buffer
+     * \param[out] metadata data to fill describing the buffer
      * \param timeout the timeout in seconds to wait for a packet
      * \param one_packet return after the first packet is received
      * \return the number of samples received or 0 on error
@@ -237,6 +304,14 @@ public:
      * \param stream_cmd the stream command to issue
      */
     virtual void issue_stream_cmd(const stream_cmd_t& stream_cmd) = 0;
+
+    /*!
+     * Post an action to the input edge of the Streamer.
+     * \param action shared pointer to the corresponding action_info request
+     * \param port the port to which to post the action
+     */
+    virtual void post_input_action(
+        const std::shared_ptr<uhd::rfnoc::action_info>& action, const size_t port) = 0;
 };
 
 /*!
@@ -301,6 +376,14 @@ public:
      */
     virtual bool recv_async_msg(
         async_metadata_t& async_metadata, double timeout = 0.1) = 0;
+
+    /*!
+     * Post an action to the output edge of the Streamer.
+     * \param action shared pointer to the corresponding action_info request
+     * \param port the port to which to post the action
+     */
+    virtual void post_output_action(
+        const std::shared_ptr<uhd::rfnoc::action_info>& action, const size_t port) = 0;
 };
 
 } // namespace uhd

@@ -28,7 +28,7 @@ macro(ADD_DEVTEST pattern filter devtype)
         "--devtest-pattern" "${pattern}"
         "--args" "$$EXTRA_DEV_ARGS,type=${filter}"
         "--build-type" "${CMAKE_BUILD_TYPE}"
-        "--build-dir" "${CMAKE_BINARY_DIR}"
+        "--build-dir" "${UHD_BINARY_DIR}"
         "--python-interp" "${RUNTIME_PYTHON_EXECUTABLE}"
         COMMENT "Running device test on all connected ${devtype} devices:"
         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
@@ -51,7 +51,8 @@ if(ENABLE_E320)
     ADD_DEVTEST("e320" "e3xx" "E32x")
 endif(ENABLE_E320)
 if(ENABLE_X400)
-    ADD_DEVTEST("x4x0" "x4xx" "X4x0")
+    ADD_DEVTEST("x410" "x4xx,product=x410" "X410")
+    ADD_DEVTEST("x440" "x4xx,product=x440" "X440")
 endif(ENABLE_X400)
 # Formatting
 message(STATUS "")

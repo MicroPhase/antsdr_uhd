@@ -8,7 +8,8 @@
 #pragma once
 
 #include <uhd/config.hpp>
-#include <stdint.h>
+#include <cstddef>
+#include <cstdint>
 #include <memory>
 #include <string>
 #include <vector>
@@ -104,6 +105,13 @@ struct UHD_API spi_config_t
      * \param edge the default edge for mosi and miso
      */
     spi_config_t(edge_t edge = EDGE_RISE);
+
+    /*!
+     * Create a new spi config with custom divider.
+     * \param edge the default edge for mosi and miso
+     * \param divider the divider setting to use
+     */
+    spi_config_t(edge_t edge, size_t divider);
 };
 
 /*!

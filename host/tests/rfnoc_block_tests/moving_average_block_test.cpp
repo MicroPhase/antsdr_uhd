@@ -4,19 +4,20 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 //
 
-#include "../rfnoc_graph_mock_nodes.hpp"
 #include <uhd/rfnoc/actions.hpp>
 #include <uhd/rfnoc/defaults.hpp>
+#include <uhd/rfnoc/detail/graph.hpp>
 #include <uhd/rfnoc/mock_block.hpp>
+#include <uhd/rfnoc/mock_nodes.hpp>
 #include <uhd/rfnoc/moving_average_block_control.hpp>
+#include <uhd/rfnoc/node_accessor.hpp>
 #include <uhd/rfnoc/null_block_control.hpp>
-#include <uhdlib/rfnoc/graph.hpp>
-#include <uhdlib/rfnoc/node_accessor.hpp>
 #include <uhdlib/utils/narrow.hpp>
 #include <boost/test/unit_test.hpp>
 #include <iostream>
 
 using namespace uhd::rfnoc;
+using namespace uhd::rfnoc::test;
 
 // Redeclare this here, since it's only defined outside of UHD_API
 noc_block_base::make_args_t::~make_args_t() = default;
@@ -48,10 +49,10 @@ BOOST_AUTO_TEST_CASE(test_moving_average_block)
     // Now plop it in a graph
     detail::graph_t graph{};
     detail::graph_t::graph_edge_t edge_info;
-    edge_info.src_port                    = 0;
-    edge_info.dst_port                    = 0;
-    edge_info.property_propagation_active = true;
-    edge_info.edge                        = detail::graph_t::graph_edge_t::DYNAMIC;
+    edge_info.src_port        = 0;
+    edge_info.dst_port        = 0;
+    edge_info.is_forward_edge = true;
+    edge_info.edge            = detail::graph_t::graph_edge_t::DYNAMIC;
 
     mock_terminator_t mock_source_term(1);
     mock_terminator_t mock_sink_term(1);

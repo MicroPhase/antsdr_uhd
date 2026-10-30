@@ -11,23 +11,21 @@
 #include <uhd/transport/vrt_if_packet.hpp>
 #include <uhd/utils/log.hpp>
 #include <uhd/utils/safe_call.hpp>
-#include <boost/asio.hpp> //htonl
-#include <boost/format.hpp>
-#include <boost/thread/mutex.hpp>
-#include <boost/thread/thread.hpp>
+#include <uhdlib/asio.hpp> //htonl
+#include <mutex>
 
 using namespace uhd;
 using namespace uhd::transport;
 
 static const size_t POKE32_CMD      = (1 << 8);
 static const size_t PEEK32_CMD      = 0;
-static const double ACK_TIMEOUT = 0.5;
+static const double ACK_TIMEOUT     = 0.5;
 static const double MASSIVE_TIMEOUT = 10.0; // for when we wait on a timed command
-static const uint32_t MAX_SEQS_OUT = 63;
+static const uint32_t MAX_SEQS_OUT  = 63;
 
-#define SPI_DIV SR_SPI_CORE + 0
-#define SPI_CTRL SR_SPI_CORE + 1
-#define SPI_DATA SR_SPI_CORE + 2
+#define SPI_DIV      SR_SPI_CORE + 0
+#define SPI_CTRL     SR_SPI_CORE + 1
+#define SPI_DATA     SR_SPI_CORE + 2
 #define SPI_READBACK 0
 // spi clock rate = master_clock/(div+1)/2 (10MHz in this case)
 #define SPI_DIVIDER 4
@@ -49,8 +47,7 @@ public:
     {
         _timeout = ACK_TIMEOUT; // reset timeout to something small
         UHD_SAFE_CALL(
-            this->peek32(0); // dummy peek with the purpose of ack'ing all packets
-        )
+            this->peek32(0)); // dummy peek with the purpose of ack'ing all packets
     }
 
     /*******************************************************************
@@ -58,7 +55,7 @@ public:
      ******************************************************************/
     void poke32(const wb_addr_type addr, const uint32_t data) override
     {
-        boost::mutex::scoped_lock lock(_mutex);
+        std::lock_guard<std::mutex> lock(_mutex);
 
         this->send_pkt((addr - SETTING_REGS_BASE) / 4, data, POKE32_CMD);
 
@@ -67,7 +64,7 @@ public:
 
     uint32_t peek32(const wb_addr_type addr) override
     {
-        boost::mutex::scoped_lock lock(_mutex);
+        std::lock_guard<std::mutex> lock(_mutex);
 
         this->send_pkt((addr - READBACK_BASE) / 4, 0, PEEK32_CMD);
 
@@ -92,7 +89,7 @@ public:
      ******************************************************************/
     void init_spi(void)
     {
-        boost::mutex::scoped_lock lock(_mutex);
+        std::lock_guard<std::mutex> lock(_mutex);
 
         this->send_pkt(SPI_DIV, SPI_DIVIDER, POKE32_CMD);
         this->wait_for_ack(_seq_out - MAX_SEQS_OUT);
@@ -106,7 +103,7 @@ public:
         size_t num_bits,
         bool readback) override
     {
-        boost::mutex::scoped_lock lock(_mutex);
+        std::lock_guard<std::mutex> lock(_mutex);
 
         // load control word
         uint32_t ctrl_word = 0;
@@ -145,7 +142,7 @@ public:
      ******************************************************************/
     void set_time(const uhd::time_spec_t& time) override
     {
-        boost::mutex::scoped_lock lock(_mutex);
+        std::lock_guard<std::mutex> lock(_mutex);
         _time     = time;
         _use_time = _time != uhd::time_spec_t(0.0);
         if (_use_time)
@@ -154,13 +151,13 @@ public:
 
     uhd::time_spec_t get_time() override
     {
-        boost::mutex::scoped_lock lock(_mutex);
+        std::lock_guard<std::mutex> lock(_mutex);
         return _time;
     }
 
     void set_tick_rate(const double rate) override
     {
-        boost::mutex::scoped_lock lock(_mutex);
+        std::lock_guard<std::mutex> lock(_mutex);
         _tick_rate = rate;
     }
 
@@ -234,7 +231,7 @@ private:
     }
 
     zero_copy_if::sptr _xport;
-    boost::mutex _mutex;
+    std::mutex _mutex;
     uint16_t _seq_out;
     uint16_t _seq_ack;
     uhd::time_spec_t _time;

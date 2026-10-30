@@ -5,9 +5,9 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 //
 
+#include <uhd/experts/expert_container.hpp>
+#include <uhd/experts/expert_factory.hpp>
 #include <uhd/property_tree.hpp>
-#include <uhdlib/experts/expert_container.hpp>
-#include <uhdlib/experts/expert_factory.hpp>
 #include <boost/format.hpp>
 #include <boost/test/unit_test.hpp>
 #include <fstream>
@@ -267,4 +267,10 @@ BOOST_AUTO_TEST_CASE(test_experts)
     BOOST_CHECK(!nodeC.is_dirty());
     container->resolve_to("Consume_G");
     VALIDATE_ALL_DEPENDENCIES
+
+    BOOST_CHECK(!nodeA.is_dirty());
+    nodeA.force_dirty();
+    BOOST_CHECK(nodeA.is_dirty());
+    nodeA.mark_clean();
+    BOOST_CHECK(!nodeA.is_dirty());
 }

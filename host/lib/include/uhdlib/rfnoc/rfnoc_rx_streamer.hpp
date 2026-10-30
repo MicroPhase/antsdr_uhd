@@ -68,6 +68,14 @@ public:
      */
     void issue_stream_cmd(const stream_cmd_t& stream_cmd) override;
 
+    /*! Implementation of a generic action request
+     *
+     * \param action shared pointer to the corresponding action_info request
+     * \param port the port to which to post action
+     */
+    void post_input_action(const std::shared_ptr<uhd::rfnoc::action_info>& action,
+        const size_t port) override;
+
     /*! Returns stream args provided at creation
      *
      * \return stream args provided when streamer is created
@@ -110,6 +118,7 @@ private:
     std::vector<property_t<double>> _tick_rate_in;
     std::vector<property_t<std::string>> _type_in;
     std::vector<property_t<size_t>> _mtu_in;
+    std::vector<property_t<size_t>> _atomic_item_size_in;
 
     // Streamer unique ID
     const std::string _unique_id;
@@ -120,7 +129,16 @@ private:
     // Callback function to disconnect
     const disconnect_fn_t _disconnect_cb;
 
+    //! True if we're in overrun handling mode. In overrun handling mode, we are
+    // not doing regular streaming, but we are trying to get the streaming back
+    // up and running after a previous overrun. This flag helps us to catch
+    // duplicate overrun messages from upstream blocks (so we don't recursively
+    // go into overrun handling).
+    // For more information on overrun handling, see the documentation for
+    // uhd::rfnoc::radio_control.
     std::atomic<bool> _overrun_handling_mode{false};
+    //! True if the last call to issue_stream_cmd() contained a 'stop' command.
+    std::atomic<bool> _last_stream_cmd_stop{false};
     size_t _overrun_channel = 0;
 };
 

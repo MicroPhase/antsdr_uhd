@@ -8,18 +8,7 @@
 #pragma once
 
 #include <uhd/config.hpp>
-#include <uhd/exception.hpp>
-#include <stdint.h>
-#include <boost/numeric/conversion/bounds.hpp>
 #include <cmath>
-#if BOOST_VERSION >= 106700
-#    include <boost/integer/common_factor.hpp>
-// "bmint" for "boost math integer"
-namespace _bmint = boost::integer;
-#else
-#    include <boost/math/common_factor.hpp>
-namespace _bmint = boost::math;
-#endif
 
 
 namespace uhd {
@@ -50,6 +39,16 @@ static const double PI = 3.14159265358979323846;
  */
 static const float SINGLE_PRECISION_EPSILON  = 1.19e-7f;
 static const double DOUBLE_PRECISION_EPSILON = 2.22e-16;
+
+//! Epsilon value for when using fp_compare_epsilon to compare frequencies
+//
+// Note that this is a UHD/USRP-specific constant. In UHD, frequencies are on
+// the order of 1e9 (GHz) or below. We will declare frequencies as equal if they
+// are within a millihertz.  For the purpose of
+// comparing frequencies, we "lose" 9 decimal places for the integer
+// component of the frequency, so we choose this epsilon value for floating
+// point comparison of frequencies.
+static constexpr double FREQ_COMPARE_EPSILON = 1e-12;
 
 namespace fp_compare {
 
@@ -85,10 +84,10 @@ public:
  * There are obviously a lot of strategies for defining floating point
  * equality, and in the end it all comes down to the domain at hand. UHD's
  * floating-point-with-epsilon comparison algorithm is based on the method
- * presented in Knuth's "The Art of Computer Science" called "very close
+ * presented in Knuth's "The Art of Computer Science" called "close enough
  * with tolerance epsilon".
  *
- *      [(|u - v| / |u|) <= e] && [(|u - v| / |v|) <= e]
+ *      [(|u - v| / |u|) <= e] || [(|u - v| / |v|) <= e]
  *
  * UHD's modification to this algorithm is using the denominator's epsilon
  * value (since each float_t object has its own epsilon) for each
@@ -141,6 +140,22 @@ template <typename float_t>
 UHD_INLINE bool operator>(double lhs, fp_compare_epsilon<float_t> rhs);
 template <typename float_t>
 UHD_INLINE bool operator>=(double lhs, fp_compare_epsilon<float_t> rhs);
+
+//! An alias for fp_compare_epsilon, but with defaults for frequencies
+class freq_compare_epsilon : public fp_compare_epsilon<double>
+{
+public:
+    UHD_INLINE freq_compare_epsilon(double value)
+        : fp_compare_epsilon<double>(value, FREQ_COMPARE_EPSILON)
+    {
+    }
+
+    UHD_INLINE freq_compare_epsilon(const freq_compare_epsilon& copy)
+        : fp_compare_epsilon<double>(copy)
+    {
+    }
+};
+
 
 } // namespace fp_compare
 
@@ -247,20 +262,37 @@ inline double lin_to_dB(const double val)
 }
 
 
-//! Portable version of lcm() across Boost versions
-template <typename IntegerType>
-inline IntegerType lcm(IntegerType x, IntegerType y)
+//! Returns the sign of x
+//
+// Note: This is equivalent to the Boost.Math version, but without the
+// dependency.
+//
+// Returns +1 for positive arguments, -1 for negative arguments, and 0 if x is
+// zero.
+template <typename T>
+inline constexpr int sign(T x)
 {
-    // Note: _bmint is defined conditionally at the top of the file
-    return _bmint::lcm<IntegerType>(x, y);
+    // Note: If T is unsigned, then this will compile with a warning. Should
+    // we need that, expand the template logic.
+    return (T(0) < x) - (x < T(0));
 }
 
-//! Portable version of gcd() across Boost versions
-template <typename IntegerType>
-inline IntegerType gcd(IntegerType x, IntegerType y)
+//! Return a wrapped frequency that is the equivalent frequency in the first
+// Nyquist zone.
+//
+// Examples:
+// - Just above the sampling rate:
+//   wrap_frequency(250e6, 200e6) == 50e6
+// - Just outside the Nyquist zone:
+//   wrap_frequency(120e6, 200e6) == -80e6
+// - Also works for negative frequencies:
+//   wrap_frequency(-250e6, 200e6) == -50e6
+inline double wrap_frequency(const double requested_freq, const double rate)
 {
-    // Note: _bmint is defined conditionally at the top of the file
-    return _bmint::gcd<IntegerType>(x, y);
+    double freq = std::fmod(requested_freq, rate);
+    if (std::abs(freq) > rate / 2.0)
+        freq -= uhd::math::sign(freq) * rate;
+    return freq;
 }
 
 } // namespace math

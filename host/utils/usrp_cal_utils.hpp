@@ -76,6 +76,7 @@ static inline void set_optimum_defaults(uhd::usrp::multi_usrp::sptr usrp)
         and tx_name.find("CBX") == std::string::npos
         and tx_name.find("RFX") == std::string::npos
         and tx_name.find("UBX") == std::string::npos
+        and tx_name.find("OBX") == std::string::npos
         and tx_name.find("Rhodium") == std::string::npos) {
         throw std::runtime_error(
             std::string("self-calibration is not supported for this TX dboard :")
@@ -89,6 +90,7 @@ static inline void set_optimum_defaults(uhd::usrp::multi_usrp::sptr usrp)
         and rx_name.find("CBX") == std::string::npos
         and rx_name.find("RFX") == std::string::npos
         and rx_name.find("UBX") == std::string::npos
+        and rx_name.find("OBX") == std::string::npos
         and rx_name.find("Rhodium") == std::string::npos) {
         throw std::runtime_error(
             std::string("self-calibration is not supported for this RX dboard :")
@@ -102,9 +104,9 @@ static inline void set_optimum_defaults(uhd::usrp::multi_usrp::sptr usrp)
  **********************************************************************/
 static std::string get_serial(uhd::usrp::multi_usrp::sptr usrp, const std::string& tx_rx)
 {
-    const size_t chan = 0;
-    auto usrp_info    = (tx_rx == "tx") ? usrp->get_usrp_tx_info(chan)
-                                     : usrp->get_usrp_rx_info(chan);
+    const size_t chan            = 0;
+    auto usrp_info               = (tx_rx == "tx") ? usrp->get_usrp_tx_info(chan)
+                                                   : usrp->get_usrp_rx_info(chan);
     const std::string serial_key = tx_rx + "_serial";
     if (!usrp_info.has_key(serial_key)) {
         throw uhd::runtime_error("Cannot determine daughterboard serial!");
@@ -263,15 +265,15 @@ static uhd::usrp::multi_usrp::sptr setup_usrp_for_cal(
  **********************************************************************/
 UHD_INLINE void set_optimal_rx_gain(uhd::usrp::multi_usrp::sptr usrp,
     uhd::rx_streamer::sptr rx_stream,
-    double wave_freq = 0.0)
+    double wave_freq = 0.0,
+    double gain_step = 3.0)
 {
-    const double gain_step                  = 3.0;
-    const double gain_compression_threshold = gain_step * 0.5;
-    const double actual_rx_rate             = usrp->get_rx_rate();
-    const double actual_tx_freq             = usrp->get_tx_freq();
-    const double actual_rx_freq             = usrp->get_rx_freq();
-    const double bb_tone_freq               = actual_tx_freq - actual_rx_freq + wave_freq;
-    const size_t nsamps = size_t(actual_rx_rate / default_fft_bin_size);
+    const double gain_step_threshold = gain_step * 0.5;
+    const double actual_rx_rate      = usrp->get_rx_rate();
+    const double actual_tx_freq      = usrp->get_tx_freq();
+    const double actual_rx_freq      = usrp->get_rx_freq();
+    const double bb_tone_freq        = actual_tx_freq - actual_rx_freq + wave_freq;
+    const size_t nsamps              = size_t(actual_rx_rate / default_fft_bin_size);
 
     std::vector<samp_type> buff(nsamps);
     uhd::gain_range_t rx_gain_range = usrp->get_rx_gain_range();
@@ -290,12 +292,34 @@ UHD_INLINE void set_optimal_rx_gain(uhd::usrp::multi_usrp::sptr usrp,
     // this by looking for the gain setting where the increase
     // in the tone is less than the gain step by more than the
     // gain compression threshold (curr - prev < gain - threshold).
+    // This routine starts searching at the bottom of the gain range
+    // rather than the top in order to minimize the chances of
+    // exposing frontend components to a dangerous amount of power
+    // from the incoming signal.
 
     // Initialize prev_dbrms value
     usrp->set_rx_gain(rx_gain);
     capture_samples(usrp, rx_stream, buff, nsamps);
     prev_dbrms = compute_tone_dbrms(buff, bb_tone_freq / actual_rx_rate);
     rx_gain += gain_step;
+
+    // First, get the signal above the noise floor
+    while (rx_gain <= rx_gain_range.stop()) {
+        usrp->set_rx_gain(rx_gain);
+        capture_samples(usrp, rx_stream, buff, nsamps);
+        curr_dbrms = compute_tone_dbrms(buff, bb_tone_freq / actual_rx_rate);
+        delta      = curr_dbrms - prev_dbrms;
+
+        // Check that the signal power is not already high
+        if (curr_dbrms >= 0)
+            break;
+        // Check that the signal power has increased as the gain increases
+        if (delta >= gain_step - gain_step_threshold)
+            break;
+
+        prev_dbrms = curr_dbrms;
+        rx_gain += gain_step;
+    }
 
     // Find RX gain where signal begins to clip
     while (rx_gain <= rx_gain_range.stop()) {
@@ -305,7 +329,7 @@ UHD_INLINE void set_optimal_rx_gain(uhd::usrp::multi_usrp::sptr usrp,
         delta      = curr_dbrms - prev_dbrms;
 
         // check if the gain is compressed beyone the threshold
-        if (delta < gain_step - gain_compression_threshold)
+        if (delta < gain_step - gain_step_threshold)
             break; // if so, we are done
 
         prev_dbrms = curr_dbrms;
@@ -332,13 +356,24 @@ static void tx_thread(std::atomic_flag* transmit,
     uhd::usrp::multi_usrp::sptr usrp,
     uhd::tx_streamer::sptr tx_stream,
     const double tx_wave_freq,
-    const double tx_wave_ampl)
+    const double tx_wave_ampl,
+    const std::optional<double> tx_gain,
+    std::atomic<bool>& transmit_started)
 {
     // increase thread priority for TX to prevent underruns
-    uhd::set_thread_priority();
+    uhd::set_thread_priority_safe();
 
-    // set max TX gain
-    usrp->set_tx_gain(usrp->get_tx_gain_range().stop());
+    constexpr size_t chan = 0;
+    const auto tx_info    = usrp->get_usrp_tx_info(chan);
+
+    if (tx_gain.has_value()) {
+        usrp->set_tx_gain(tx_gain.value());
+    } else if (tx_info.has_key("tx_default_cal_gain")) {
+        usrp->set_tx_gain(std::stod(tx_info["tx_default_cal_gain"]));
+    } else {
+        // set max TX gain
+        usrp->set_tx_gain(usrp->get_tx_gain_range().stop());
+    }
 
     // setup variables
     uhd::tx_metadata_t md;
@@ -376,6 +411,7 @@ static void tx_thread(std::atomic_flag* transmit,
     while (transmit->test_and_set()) {
         // send calls are aligned to the frame size for optimal performance
         tx_stream->send(&buff[index], frame_size, md);
+        transmit_started.store(true);
 
         // increment index
         index += frame_size;
@@ -401,12 +437,12 @@ bool has_tx_error(uhd::tx_streamer::sptr tx_stream)
 
     return async_md.event_code
            & (0
-                 // Any of these errors are considered a problematic TX error:
-                 | uhd::async_metadata_t::EVENT_CODE_UNDERFLOW
-                 | uhd::async_metadata_t::EVENT_CODE_SEQ_ERROR
-                 | uhd::async_metadata_t::EVENT_CODE_TIME_ERROR
-                 | uhd::async_metadata_t::EVENT_CODE_UNDERFLOW_IN_PACKET
-                 | uhd::async_metadata_t::EVENT_CODE_SEQ_ERROR_IN_BURST);
+               // Any of these errors are considered a problematic TX error:
+               | uhd::async_metadata_t::EVENT_CODE_UNDERFLOW
+               | uhd::async_metadata_t::EVENT_CODE_SEQ_ERROR
+               | uhd::async_metadata_t::EVENT_CODE_TIME_ERROR
+               | uhd::async_metadata_t::EVENT_CODE_UNDERFLOW_IN_PACKET
+               | uhd::async_metadata_t::EVENT_CODE_SEQ_ERROR_IN_BURST);
 }
 
 void wait_for_lo_lock(uhd::usrp::multi_usrp::sptr usrp)

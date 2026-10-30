@@ -264,10 +264,10 @@ public:
         if_packet_info.eob = metadata.end_of_burst;
         size_t nsamps_sent = total_num_samps_sent
                              + send_one_packet(buffs,
-                                   final_length,
-                                   if_packet_info,
-                                   timeout,
-                                   total_num_samps_sent * _bytes_per_cpu_item);
+                                 final_length,
+                                 if_packet_info,
+                                 timeout,
+                                 total_num_samps_sent * _bytes_per_cpu_item);
         return nsamps_sent;
     }
 
@@ -337,8 +337,7 @@ private:
         return nsamps_per_buff;
     }
 
-    /*! Run the conversion from the internal buffers to the user's input
-     *  buffer.
+    /*! Run the conversion from the user's buffers to the internal buffer.
      *
      * - Calls the converter
      * - Releases internal data buffers
@@ -418,6 +417,12 @@ public:
         uhd::async_metadata_t& async_metadata, double timeout = 0.1) override
     {
         return send_packet_handler::recv_async_msg(async_metadata, timeout);
+    }
+    // Post an action to the output edge
+    void post_output_action(
+        const std::shared_ptr<uhd::rfnoc::action_info>&, const size_t) override
+    {
+        throw uhd::not_implemented_error("post_output_action is not implemented here!");
     }
 
 private:

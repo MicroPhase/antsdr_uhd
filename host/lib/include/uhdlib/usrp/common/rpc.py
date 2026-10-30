@@ -67,6 +67,9 @@ IFACES = [
         fn_from_string("std::map<std::string, std::string> get_mb_eeprom()"),
         fn_from_string("std::vector<std::string> get_gpio_src(const std::string& bank)"),
         fn_from_string("void set_gpio_src(const std::string& bank, const std::vector<std::string>& src)"),
+        Function("std::map<std::string, std::string>", "synchronize", [("const std::map<std::string, std::string>&", "sync_data"), ("bool", "finalize")]),
+        Function("std::map<std::string, std::string>", "aggregate_sync_data", [("const std::list<std::map<std::string, std::string>>&", "collated_sync_data")]),
+        fn_from_string("std::vector<std::map<std::string, std::string>> pop_host_tasks(const std::string& task)"),
 
         # ref_clk_calibration
         fn_from_string("void set_ref_clk_tuning_word(uint32_t tuning_word)"),
@@ -75,25 +78,47 @@ IFACES = [
     ]),
     Interface("x400_rpc", [
         fn_from_string("std::vector<std::map<std::string, std::string>> get_dboard_info()", no_claim=True),
+        fn_from_string("void set_calibration_mode(size_t tile_id, size_t block_id, std::string mode)"),
         fn_from_string("void set_cal_frozen(bool state, size_t block_count, size_t chan)"),
         fn_from_string("std::vector<int> get_cal_frozen(size_t block_count, size_t chan)"),
         fn_from_string("double rfdc_set_nco_freq(const std::string& trx, size_t block_count, size_t chan, double freq)"),
         fn_from_string("double rfdc_get_nco_freq(const std::string& trx, size_t block_count, size_t chan)"),
-        fn_from_string("double get_master_clock_rate()"),
         fn_from_string("std::map<std::string, std::vector<uint8_t>> get_db_eeprom(size_t db_idx)"),
         fn_from_string("bool get_threshold_status(size_t db_number, size_t chan, size_t threshold_block)"),
-        fn_from_string("void set_dac_mux_enable(size_t motherboard_channel_number, int enable)"),
+        fn_from_string("void set_dac_mux_enable(size_t db_idx, size_t channel, int enable)"),
         fn_from_string("void set_dac_mux_data(size_t i, size_t q)"),
         fn_from_string("double get_spll_freq()"),
         fn_from_string("void setup_threshold(size_t db_number, size_t chan, size_t threshold_block, const std::string& mode, size_t delay, size_t under, size_t over)"),
         fn_from_string("bool is_db_gpio_ifc_present(size_t db_idx)"),
+
+        # Digital I/O functions
+        fn_from_string("void dio_set_voltage_level(const std::string& port, const std::string& level)"),
+        fn_from_string("void dio_set_port_mapping(const std::string& mapping)"),
+        fn_from_string("void dio_set_pin_directions(const std::string& port, uint32_t values)"),
+
+        # GPIO
+        fn_from_string("std::vector<std::string> get_gpio_src(const std::string& bank)"),
+    ]),
+    Interface("dio_rpc", [
+        fn_from_string("std::vector<std::string> dio_get_supported_voltage_levels(const std::string& port)"),
+        fn_from_string("void dio_set_voltage_level(const std::string& port, const std::string& level)"),
+        fn_from_string("std::string dio_get_voltage_level(const std::string& port)"),
+        fn_from_string("void dio_set_port_mapping(const std::string& mapping)"),
+        fn_from_string("void dio_set_pin_directions(const std::string& port, uint32_t values)"),
+        fn_from_string("void dio_set_external_power(const std::string& port, bool enable)"),
+        fn_from_string("std::string dio_get_external_power_state(const std::string& port)"),
     ]),
     Interface("dboard_base_rpc", [
         fn_from_string("std::vector<std::string> get_sensors(const std::string& trx)"),
         fn_from_string("sensor_value_t::sensor_map_t get_sensor(const std::string& trx, const std::string& sensor, size_t chan)"),
+        fn_from_string("double get_master_clock_rate()")
     ], has_rpcprefix=True),
     Interface("zbx_rpc", [
         fn_from_string("double get_dboard_prc_rate()"),
+        fn_from_string("double get_dboard_sample_rate()"),
+        fn_from_string("void enable_iq_swap(bool is_band_inverted, const std::string& trx, size_t chan)"),
+    ], has_rpcprefix=True),
+    Interface("fbx_rpc", [
         fn_from_string("double get_dboard_sample_rate()"),
         fn_from_string("void enable_iq_swap(bool is_band_inverted, const std::string& trx, size_t chan)"),
     ], has_rpcprefix=True),

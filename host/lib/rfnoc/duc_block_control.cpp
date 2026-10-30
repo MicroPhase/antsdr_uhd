@@ -11,10 +11,10 @@
 #include <uhd/rfnoc/property.hpp>
 #include <uhd/rfnoc/registry.hpp>
 #include <uhd/types/ranges.hpp>
+#include <uhd/utils/compat_check.hpp>
 #include <uhd/utils/log.hpp>
 #include <uhd/utils/math.hpp>
 #include <uhdlib/usrp/cores/dsp_core_utils.hpp>
-#include <uhdlib/utils/compat_check.hpp>
 #include <uhdlib/utils/math.hpp>
 #include <cmath>
 #include <set>
@@ -26,6 +26,7 @@ constexpr double DEFAULT_SCALING         = 1.0;
 constexpr int DEFAULT_INTERP             = 1;
 constexpr double DEFAULT_FREQ            = 0.0;
 const uhd::rfnoc::io_type_t DEFAULT_TYPE = uhd::rfnoc::IO_TYPE_SC16;
+constexpr double TX_SIGN                 = -1.0;
 
 //! Space (in bytes) between register banks per channel
 constexpr uint32_t REG_CHAN_OFFSET = 2048;
@@ -72,6 +73,10 @@ public:
                                             << " halfbands and "
                                                "max CIC interpolation "
                                             << _cic_max_interp);
+        // This line is not strictly necessary, as ONE_TO_ONE is the default.
+        // We set it make it explicit how this block works. Output packets have
+        // the same size as the input packet.
+        set_mtu_forwarding_policy(forwarding_policy_t::ONE_TO_ONE);
         // Load list of valid interpolation values
         std::set<size_t> interps{1}; // 1 is always a valid interpolation
         for (size_t hb = 0; hb < _num_halfbands; hb++) {
@@ -99,6 +104,7 @@ public:
             _register_props(chan);
         }
         register_issue_stream_cmd();
+        register_issue_tune_request();
     }
 
     double set_freq(const double freq,
@@ -123,10 +129,9 @@ public:
 
     uhd::freq_range_t get_frequency_range(const size_t chan) const override
     {
-        const double input_rate =
-            _samp_rate_in.at(chan).is_valid() ? _samp_rate_in.at(chan).get() : 1.0;
+        const double output_rate = get_output_rate(chan);
         // TODO add steps
-        return uhd::freq_range_t(-input_rate / 2, input_rate / 2);
+        return uhd::freq_range_t(-output_rate / 2, output_rate / 2);
     }
 
     double get_input_rate(const size_t chan) const override
@@ -241,7 +246,7 @@ private:
          * Add resolvers
          *********************************************************************/
         // Resolver for _interp: this gets executed when the user directly
-        // modifies interp. the desired behaviour is to coerce it first, then
+        // modifies 'interp'. The desired behaviour is to coerce it first, then
         // keep the output rate constant, and re-calculate the input rate.
         add_property_resolver({interp, scaling_in},
             {interp, samp_rate_out, samp_rate_in, scaling_in},
@@ -391,10 +396,9 @@ private:
                 }
             });
         // Resolvers for type: These are constants
-        add_property_resolver({type_in}, {type_in}, [& type_in = *type_in]() {
-            type_in.set(IO_TYPE_SC16);
-        });
-        add_property_resolver({type_out}, {type_out}, [& type_out = *type_out]() {
+        add_property_resolver(
+            {type_in}, {type_in}, [&type_in = *type_in]() { type_in.set(IO_TYPE_SC16); });
+        add_property_resolver({type_out}, {type_out}, [&type_out = *type_out]() {
             type_out.set(IO_TYPE_SC16);
         });
     }
@@ -441,6 +445,121 @@ private:
         post_action(dst_edge, new_action);
     }
 
+    void register_issue_tune_request()
+    {
+        RFNOC_LOG_TRACE("DUC register_isssue_tune_request");
+        register_action_handler(ACTION_KEY_TUNE_REQUEST,
+            [this](const res_source_info& src, action_info::sptr action) {
+                tune_request_action_info::sptr tune_request_action =
+                    std::dynamic_pointer_cast<tune_request_action_info>(action);
+                if (!tune_request_action) {
+                    throw uhd::runtime_error(
+                        "Received tune_request of invalid action type!");
+                }
+                issue_tune_request_action_handler(src, tune_request_action);
+            });
+    }
+
+    void issue_tune_request_action_handler(
+        const res_source_info& src, tune_request_action_info::sptr tune_request_action)
+    {
+        RFNOC_LOG_TRACE("DUC isssue_tune_request_action_handler");
+        res_source_info dst_edge{res_source_info::invert_edge(src.type), src.instance};
+        const size_t chan                = src.instance;
+        uhd::tune_request_t tune_request = tune_request_action->tune_request;
+
+        RFNOC_LOG_TRACE("Received tune_request to "
+                        << src.to_string() << ", id==" << tune_request_action->id);
+
+        uhd::freq_range_t dsp_range    = get_frequency_range(chan);
+        uhd::freq_range_t tune_range   = tune_request_action->overall_freq_range;
+        tune_request_action->dsp_range = dsp_range;
+
+        if (tune_range.empty()) {
+            tune_range = dsp_range;
+        }
+
+        if (src.type == res_source_info::OUTPUT_EDGE) {
+            auto set_dsp_freq = [this, chan](
+                                    double freq) { set_freq(freq, chan, boost::none); };
+
+            double clipped_requested_freq = tune_range.clip(tune_request.target_freq);
+            tune_request_action->tune_result.target_dsp_freq = abs(
+                tune_request_action->tune_result.actual_rf_freq - clipped_requested_freq);
+
+            //------------------------------------------------------------------
+            //-- Set the DSP frequency depending upon the DSP frequency policy.
+            //------------------------------------------------------------------
+            double target_dsp_freq = 0.0;
+            switch (tune_request.dsp_freq_policy) {
+                case uhd::tune_request_t::POLICY_AUTO:
+                    // invert the sign on the dsp freq for transmit (spinning up vs down)
+                    tune_request_action->tune_result.target_dsp_freq *= TX_SIGN;
+
+                    /* If we are using the AUTO tuning policy, then we prevent the
+                     * CORDIC from spinning us outside of the range of the baseband
+                     * filter, regardless of what the user requested. This could happen
+                     * if the user requested a center frequency so far outside of the
+                     * tunable range of the FE that the CORDIC would spin outside the
+                     * filtered baseband. */
+                    target_dsp_freq = tune_request_action->tune_result.target_dsp_freq
+                                      - tune_request_action->tune_result.actual_dsp_freq;
+                    break;
+
+                case uhd::tune_request_t::POLICY_MANUAL:
+                    /* If the user has specified a manual tune policy, we will allow
+                     * tuning outside of the baseband filter, but will still clip the
+                     * target DSP frequency to within the bounds of the CORDIC to
+                     * prevent undefined behavior (likely an overflow). */
+                    target_dsp_freq = dsp_range.clip(tune_request.dsp_freq);
+                    break;
+
+                case uhd::tune_request_t::POLICY_NONE:
+                    break; // does not set
+            }
+            RFNOC_LOG_TRACE(
+                str(boost::format("Target DSP Freq: %.6fMHz") % (target_dsp_freq / 1e6)));
+
+            //------------------------------------------------------------------
+            //-- Tune the DSP
+            //------------------------------------------------------------------
+            if (tune_request.dsp_freq_policy != uhd::tune_request_t::POLICY_NONE) {
+                set_dsp_freq(target_dsp_freq);
+            }
+            const double actual_dsp_freq = get_freq(chan);
+
+            RFNOC_LOG_TRACE(
+                str(boost::format("Actual DSP Freq: %.6fMHz") % (actual_dsp_freq / 1e6)));
+
+            tune_request_action->tune_result.target_dsp_freq = target_dsp_freq;
+            tune_request_action->tune_result.actual_dsp_freq += actual_dsp_freq;
+
+            RFNOC_LOG_TRACE(
+                "Tune_result details DUC : target_rf_frq = "
+                << tune_request_action->tune_result.target_rf_freq
+                << " target dsp freq = "
+                << tune_request_action->tune_result.target_dsp_freq << " clipped rf_freq "
+                << tune_request_action->tune_result.clipped_rf_freq
+                << " actual_rf_freq = " << tune_request_action->tune_result.actual_rf_freq
+                << " actual dsp_freq= "
+                << tune_request_action->tune_result.actual_dsp_freq);
+
+            auto new_action                = tune_request_action_info::make(tune_request);
+            new_action->tune_request       = tune_request_action->tune_request;
+            new_action->tune_result        = tune_request_action->tune_result;
+            new_action->dsp_range          = tune_request_action->dsp_range;
+            new_action->overall_freq_range = tune_request_action->overall_freq_range;
+            post_action(dst_edge, new_action);
+        } else {
+            auto new_action                = tune_request_action_info::make(tune_request);
+            new_action->tune_request       = tune_request_action->tune_request;
+            new_action->tune_result        = tune_request_action->tune_result;
+            new_action->dsp_range          = tune_request_action->dsp_range;
+            new_action->overall_freq_range = tune_request_action->overall_freq_range;
+            post_action(dst_edge, new_action);
+        }
+    }
+
     /**************************************************************************
      * FPGA communication (register IO)
      *************************************************************************/
@@ -470,8 +589,8 @@ private:
         _duc_reg_iface.poke32(SR_N_ADDR, 1, chan);
 
         // Configure time increment in ticks per M output samples
-        _duc_reg_iface.poke32(SR_TIME_INCR_ADDR,
-            uint32_t(get_tick_rate()/get_output_rate(chan)), chan);
+        _duc_reg_iface.poke32(
+            SR_TIME_INCR_ADDR, uint32_t(get_tick_rate() / get_output_rate(chan)), chan);
 
         if (cic_interp > 1 and hb_enable == 0) {
             RFNOC_LOG_WARNING(
@@ -524,12 +643,13 @@ private:
 
     //! Set the DDS frequency shift the signal to \p requested_freq
     double _set_freq(
-        const double requested_freq, const double input_rate, const size_t chan)
+        const double requested_freq, const double dds_rate, const size_t chan)
     {
         double actual_freq;
         int32_t freq_word;
         std::tie(actual_freq, freq_word) =
-            get_freq_and_freq_word(requested_freq, input_rate);
+            get_freq_and_freq_word(requested_freq, dds_rate);
+
         _duc_reg_iface.poke32(
             SR_FREQ_ADDR, uint32_t(freq_word), chan, get_command_time(chan));
         return actual_freq;

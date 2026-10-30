@@ -8,13 +8,14 @@
 #pragma once
 
 #include <uhd/config.hpp>
-#include <boost/current_function.hpp>
-#include <boost/thread/thread.hpp>
+#include <boost/date_time/posix_time/posix_time_types.hpp>
+#include <boost/optional.hpp>
 #include <iomanip>
 #include <iostream>
 #include <ostream>
 #include <sstream>
 #include <string>
+#include <thread>
 
 /*! \file log.hpp
  *
@@ -122,6 +123,12 @@ enum severity_level {
     off     = 6, /**< logging is turned off */
 };
 
+/*! Parses a `severity_level` from a string. If a value could not be parsed,
+ * returns none.
+ */
+boost::optional<uhd::log::severity_level> UHD_API parse_log_level_from_string(
+    const std::string& log_level_str);
+
 /*! Logging info structure
  *
  * Information needed to create a log entry is fully contained in the
@@ -135,7 +142,7 @@ struct UHD_API logging_info
         const std::string& file_,
         const unsigned int& line_,
         const std::string& component_,
-        const boost::thread::id& thread_id_)
+        const std::thread::id& thread_id_)
         : time(time_)
         , verbosity(verbosity_)
         , file(file_)
@@ -150,14 +157,14 @@ struct UHD_API logging_info
     std::string file;
     unsigned int line;
     std::string component;
-    boost::thread::id thread_id;
+    std::thread::id thread_id;
     std::string message;
 };
 
 /*! Set the global log level
  *
  * The global log level gets applied before the specific log level.
- * So, if the global log level is 'info', no logger can can print
+ * So, if the global log level is 'info', no logger can print
  * messages at level 'debug' or below.
  */
 UHD_API void set_log_level(uhd::log::severity_level level);
@@ -187,7 +194,7 @@ UHD_API void set_logger_level(const std::string& logger, uhd::log::severity_leve
 //! \cond
 //! Internal logging macro to be used in other macros
 #define _UHD_LOG_INTERNAL(component, level) \
-    uhd::_log::log(level, __FILE__, __LINE__, component, boost::this_thread::get_id())
+    uhd::_log::log(level, __FILE__, __LINE__, component, std::this_thread::get_id())
 //! \endcond
 
 // macro-style logging (compile-time determined)
@@ -226,6 +233,14 @@ UHD_API void set_logger_level(const std::string& logger, uhd::log::severity_leve
 #    define UHD_LOG_ERROR(component, message)
 #endif
 
+#define UHD_LOG_THROW(exception_type, component, message) \
+    {                                                     \
+        std::ostringstream __ss;                          \
+        __ss << message;                                  \
+        UHD_LOG_ERROR(component, __ss.str());             \
+        throw exception_type(__ss.str());                 \
+    }
+
 #if UHD_LOG_MIN_LEVEL < 6
 #    define UHD_LOG_FATAL(component, message) \
         _UHD_LOG_INTERNAL(component, uhd::log::fatal) << message;
@@ -233,12 +248,12 @@ UHD_API void set_logger_level(const std::string& logger, uhd::log::severity_leve
 #    define UHD_LOG_FATAL(component, message)
 #endif
 
-#define RFNOC_LOG_TRACE(message) UHD_LOG_TRACE(this->get_unique_id(), message)
-#define RFNOC_LOG_DEBUG(message) UHD_LOG_DEBUG(this->get_unique_id(), message)
-#define RFNOC_LOG_INFO(message) UHD_LOG_INFO(this->get_unique_id(), message)
+#define RFNOC_LOG_TRACE(message)   UHD_LOG_TRACE(this->get_unique_id(), message)
+#define RFNOC_LOG_DEBUG(message)   UHD_LOG_DEBUG(this->get_unique_id(), message)
+#define RFNOC_LOG_INFO(message)    UHD_LOG_INFO(this->get_unique_id(), message)
 #define RFNOC_LOG_WARNING(message) UHD_LOG_WARNING(this->get_unique_id(), message)
-#define RFNOC_LOG_ERROR(message) UHD_LOG_ERROR(this->get_unique_id(), message)
-#define RFNOC_LOG_FATAL(message) UHD_LOG_FATAL(this->get_unique_id(), message)
+#define RFNOC_LOG_ERROR(message)   UHD_LOG_ERROR(this->get_unique_id(), message)
+#define RFNOC_LOG_FATAL(message)   UHD_LOG_FATAL(this->get_unique_id(), message)
 
 #ifndef UHD_LOG_FASTPATH_DISABLE
 //! Extra-fast logging macro for when speed matters.
@@ -251,19 +266,19 @@ UHD_API void set_logger_level(const std::string& logger, uhd::log::severity_leve
 #endif
 
 // iostream-style logging
-#define UHD_LOGGER_TRACE(component) _UHD_LOG_INTERNAL(component, uhd::log::trace)
-#define UHD_LOGGER_DEBUG(component) _UHD_LOG_INTERNAL(component, uhd::log::debug)
-#define UHD_LOGGER_INFO(component) _UHD_LOG_INTERNAL(component, uhd::log::info)
+#define UHD_LOGGER_TRACE(component)   _UHD_LOG_INTERNAL(component, uhd::log::trace)
+#define UHD_LOGGER_DEBUG(component)   _UHD_LOG_INTERNAL(component, uhd::log::debug)
+#define UHD_LOGGER_INFO(component)    _UHD_LOG_INTERNAL(component, uhd::log::info)
 #define UHD_LOGGER_WARNING(component) _UHD_LOG_INTERNAL(component, uhd::log::warning)
-#define UHD_LOGGER_ERROR(component) _UHD_LOG_INTERNAL(component, uhd::log::error)
-#define UHD_LOGGER_FATAL(component) _UHD_LOG_INTERNAL(component, uhd::log::fatal)
+#define UHD_LOGGER_ERROR(component)   _UHD_LOG_INTERNAL(component, uhd::log::error)
+#define UHD_LOGGER_FATAL(component)   _UHD_LOG_INTERNAL(component, uhd::log::fatal)
 
 
 #if defined(__GNUG__)
 //! Helpful debug tool to print site info
 #    define UHD_HERE()            \
         UHD_LOGGER_DEBUG("DEBUG") \
-            << __FILE__ << ":" << __LINE__ << " (" << __PRETTY_FUNCTION__ << ")";
+            << __FILE__ << ":" << __LINE__ << " (" << UHD_PRETTY_FUNCTION << ")";
 #else
 //! Helpful debug tool to print site info
 #    define UHD_HERE() UHD_LOGGER_DEBUG("DEBUG") << __FILE__ << ":" << __LINE__;
@@ -292,7 +307,7 @@ public:
         const std::string& file,
         const unsigned int line,
         const std::string& component,
-        const boost::thread::id thread_id);
+        const std::thread::id thread_id);
 
     ~log(void);
 

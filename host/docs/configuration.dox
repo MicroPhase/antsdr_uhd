@@ -16,9 +16,10 @@ one of these, it will connect to it and pass the `master_clock_rate=16e6` option
 to the device initialization (in this case, it will set the master clock rate
 to 16 MHz as described on \ref b200_mcr).
 
-The following table lists the configuration options you can pass as device
+The following table lists common configuration options you can pass as device
 arguments. Also check out the individual device manuals for more information
-and possible more options.
+and possible more options, as individual devices may have more specialized
+options available not listed here.
 
  Key                 | Description                                                                  | Supported Devices | Example Value
 ---------------------|------------------------------------------------------------------------------|-------------------|---------------------
@@ -26,7 +27,7 @@ and possible more options.
  fpga                | Provide alternative FPGA bitfile                                             | All USB Devices, X3x0 (PCIe only), E310, E1x0 | fpga=/path/to/bitfile.bit
  fw                  | Provide alternative firmware                                                 | All USB Devices, X3x0 | fw=/path/to/fw.bin
  ignore-cal-file     | Ignores existing device calibration files                                    | All Devices with cal-file support| See \ref ignore_cal_file
- master_clock_rate   | Master Clock Rate in Hz                                                      | X3x0, B2x0, B1x0, E3xx, E1x0, N3xx | master_clock_rate=16e6
+ master_clock_rate   | Master Clock Rate in Hz                                                      | X3x0, X4x0, B2x0, B1x0, E3xx, E1x0, N3xx | master_clock_rate=16e6
  dboard_clock_rate   | Daughterboard clock rate in Hz                                               | X3x0               | dboard_clock_rate=50e6
  system_ref_rate     | Frequency of external reference                                              | X3x0               | system_ref_rate=11.52e6
  mcr                 | Override master clock rate settings (see \ref usrp1_hw_extclk)               | USRP1              | mcr=52e6
@@ -35,7 +36,8 @@ and possible more options.
  self_cal_adc_delay  | Run ADC transfer delay self-calibration.                                     | X3x0               | self_cal_adc_delay=1
  ext_adc_self_test   | Run an extended ADC self test (more than the usual)                          | X3x0               | ext_adc_self_test=1
  recover_mb_eeprom   | Disable version checks. Can damage hardware. Only recommended for recovering devices with corrupted EEPROMs. | X3x0 | recover_mb_eeprom=1
- skip_dram           | Ignore DRAM FIFO block. Connect TX streamers straight into DUC or radio.     | X3x0, N3xx         | skip_dram=1
+ serialize_init      | Force serial initialization of motherboards (default is parallel)            | X3x0, all MPM devices | serialize_init=1
+ force_reinit        | Force reinitialization of device                                             | N3x0, X4x0         | force_reinit=1
 
 In addition, many of the streaming-related options can be set per-device at configuration time.
 See \ref config_stream_args and \ref page_transport for more details.
@@ -144,7 +146,19 @@ String | Corresponding C++ type    | Notes
 
 The over-the-wire (OTW) data format is a string that describes the format of
 the sample data as it is carried across the transport to and from the RFNoC
-stream endpoint associated with the stream. The following over-the-wire
+stream endpoint associated with the stream. 
+
+The table below shows which OTW formats are supported by each device.
+String | Supporting Devices                        | 
+-------|-------------------------------------------|
+`fc32` | `B2xx`                                    |
+`sc16` | `B2xx, N2xx, N3xx, E3xx, X3xx, X4xx`      |
+`sc12` | `B2xx`                                    |
+`sc8`  | `B2xx, N2xx`                              |
+
+Note that the in-tree RFNoC blocks that are provided with UHD only support sc16 for complex-valued data.
+
+The following over-the-wire
 formats are supported. In the following, data carried over the wire for each
 format is denoted by the data type (`i8`, `i16`, etc.), which part of the
 sample is represented (`I` for in-phase portion, `Q` for quadrature portion,
@@ -155,14 +169,10 @@ or `R` for a real value), and the sample index in square brackets.
 - `sc8`
 <table><tr><td> `i8 Q[n+1]` </td><td> `i8 I[n+1]` </td><td> `i8 Q[n]` </td><td> `i8 I[n]` </td><td> `i8 Q[n+3]` </td><td> `i8 I[n+3]` </td><td> `i8 Q[n+2]` </td><td> `i8 I[n+2]` </td><td> ... </td></tr></table>
 - `sc12`
-(only supported by some devices)
 - `s16`
 <table><tr><td> `i16 R[n+1]` </td><td> `i16 R[n]` </td><td> `i16 R[n+3]` </td><td> `i16 R[n+2]` </td><td> ... </td></tr></table>
 - `s8`
 <table><tr><td> `i8 R[n+3]` </td><td> `i8 R[n+2]` </td><td> `i8 R[n+1]` </td><td> `i8 R[n]` </td><td> `i8 R[n+7]` </td><td> `i8 R[n+6]` </td><td> ... </td></tr></table>
-
-Note that the in-tree RFNoC blocks that are provided with UHD only support
-`sc16` for complex-valued data.
 
 As UHD will convert samples between the CPU and over-the-wire data formats
 automatically, setting the OTW format should, in theory, be transparent to
@@ -212,7 +222,27 @@ The following parameters are supported:
 - `noclear` (applies to B100 and N2xx only)
 - `port` and `addr` (N2xx only) These settings specify an alternate receiver
   streamer destination.
-
+- `streamer` Specify the type of streamer to use.  "replay_buffered" (applies
+  to RFNoC enabled devices with a Replay block in the FPGA image) Adds data
+  buffering in DRAM using the Replay block for TX streamers when using the
+  multi_usrp API.
+- `throttle` Specify the throttle of the streamer in order to limit its rate.
+  This is for RFNoC-compatible devices starting in UHD 4.5. It is set as a
+  ratio in the range (0, 1] or a percentage in the range (0%, 100%]. For
+  example, use `100%` or `1.0` for maximum rate, and `50%` or `0.5` for half
+  the maximum rate. Note that other factors may affect the actual rate, such
+  as the rate of the source or the speed supported by the transport.
+- `transmit_policy` Specify transmit policy of TX streamer (RFNoC devices
+  only). When set to `stop_on_seq_error` the TX streamer requires an FPGA
+  image that supports this mode. If supported, the FPGA will be instructed
+  to stop processing sample if a sequence error is detected. The send call
+  of the TX streamer will exit ASAP an return the so far transmitted samples.
+  This might be more then the downstream blocks have processed. Before restart
+  the transmission it is up to the user logic to decide which samples might
+  need to be resend. The TX streamer send call will automatically reset
+  the FPGA state to reenable transmission. Note this mode is only useful
+  for non time critical transmission (e.g. sending samples to the replay
+  block).
 \subsubsection config_stream_args_transport Transport-related Stream Arguments
 
 The following arguments that alter the behavior of the underlying transport
@@ -268,7 +298,7 @@ The following key/value pairs are understood:
 
  Key                 | Description                                                                  | Supported Devices | Example Value
 ---------------------|------------------------------------------------------------------------------|-------------------|---------------------
- enable_gps          | Enable/disable power to the GPSDO.                                           | N3xx, E320        | enable_gps=0
+ enable_gps          | Enable/disable power to the GPSDO (can be overridden by UHD on E320).        | N3xx, E320        | enable_gps=0
  enable_fp_gpio      | Enable/disable power to the front-panel GPIOs.                               | N3xx, E320        | enable_fp_gpio=0
  skip_boot_init      | Don't init the device during MPM boot, but on the first UHD run.             | N3xx              | skip_boot_init=1
  clock_source        | Default clock source for this device (can be overridden by UHD).             | N3xx, E320, E31x  | clock_source=external

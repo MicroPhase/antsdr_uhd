@@ -70,7 +70,7 @@ in integer-N mode.
 When using hand-crafted tune requests, it is necessary to observe sampling
 theory. If the LO offset of a tune request exceeds the sampling rate, the
 actual DSP frequency will wrap around. For example, if a B210 is used at a
-master clock rate of 20 MHz, and the LO frequency is set to 100 MHz, the digital
+master clock rate of 20 MHz, and the RF frequency is set to 100 MHz, the digital
 tuning range is 90 MHz to 110 MHz. Now, if an LO offset of 12 MHz is selected,
 it will wrap and become an LO offset of -8 MHz, and the final frequency will
 become 92 MHz. However, if there is no anti-aliasing filter enabled, there will
@@ -114,6 +114,28 @@ second).
     }
     usrp->issue_stream_command(...);
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+\subsection general_tuning_multiplechannels Tuning multiple channels using a shared LO
+For devices like N300/N310 which share only one LO per daughter board (DB), per TX/RX, 
+respectively, which supports two channels it is recommended to use the LO offset parameter 
+of the uhd::tune_request_t object. <br>
+Subsequent example shows a configuration of two Tx channels where channel 0 is set to a 
+frequency of 806 MHz and channel 1 to a frequency of 796 MHz. For channel 0 the LO is 
+shifted by an offset of -5 MHz and for channel 1 the LO is shifted by an offset of +5 MHz, 
+which leads to a common LO frequency of 801 MHz. This allows the signal chain to process 
+the two streams at different frequencies using the same LO frequency. 
+(Depending on the device type, same can be done also for the Rx path)
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~{.cpp}
+// Channel 0 configuration
+uhd::tune_request_t tune_request_ch0(806e6, -5e6);
+usrp->set_tx_freq(tune_request_ch0, 0);
+// Channel 1 configuration
+uhd::tune_request_t tune_request_ch1(796e6, 5e6);
+usrp->set_tx_freq(tune_request_ch1, 1);
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+Note: If not specifying the LO offset in this particular scenario the Tx frequency of 
+channel 0 will be re-tuned to the same Tx frequency of channel 1. This can be verified by using
+the uhd::usrp::multi_usrp::get_tx_freq() Multi USRP API call.
 
 \section general_sampleratenotes Sample rate notes
 
@@ -188,6 +210,18 @@ When transmitting, the device consumes samples at a constant rate.
 Underflow occurs when the host does not produce data fast enough. When
 UHD software detects the underflow, it prints a "U" to stdout, and
 pushes a message packet into the async message stream.
+
+Some underruns may be mitigated by buffering data in DRAM using the Replay
+block.  The Replay block is only available in devices that support RFNoC.  Some
+RFNoC devices include the Replay block in the default FPGA image.  Use the
+'uhd_usrp_probe' utility and look for the "RFNoC blocks on this device:"
+section of the output to check if the Replay block is present.  If using
+the multi_usrp API, simply add the stream argument "streamer=replay_buffered"
+to enable the buffering.  This buffering adds latency and will likely not work
+at the highest streaming rates.  A limited number of buffers can be stored
+in the Replay block, so larger buffers supplied to the tx_streamer::send()
+call will produce the best results.  Buffers that are too small will result
+in gaps in the transmitted signal.
 
 <b>Note:</b> "O" and "U" message are generally harmless, and just mean the host
 machine can't keep up with the requested rates.

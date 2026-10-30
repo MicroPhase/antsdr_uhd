@@ -9,7 +9,7 @@
 # Template for raw text data describing registers
 # name addr[bit range inclusive] default optional enums
 ########################################################################
-REGS_TMPL="""\
+REGS_TMPL = """\
 ########################################################################
 ## address 0
 ########################################################################
@@ -19,7 +19,7 @@ muxout_sel              0[2]        1       readback, lock_detect
 fcal_enable             0[3]        1
 acal_enable             0[4]        1
 fcal_lpfd_adj           0[5:6]      0       unused, 20mhz, 10mhz, 5mhz
-fcal_hpfd_adf           0[7:8]      0       unused, 100mhz, 150mhz, 200mhz
+fcal_hpfd_adj           0[7:8]      0       unused, 100mhz, 150mhz, 200mhz
 reg0_reserved0          0[9:12]     0x1
 ld_enable               0[13]       1
 reg0_reserved1          0[14:15]    0x0
@@ -78,7 +78,7 @@ reg12_reserved0         12[12:15]   0x7
 ## address 13
 ########################################################################
 reg13_reserved0         13[0:7]     0x0
-pdf_ctl                 13[8:9]     0       dual_pdf=0, single_pfd=3
+pfd_ctl                 13[8:9]     0       dual_pfd=0, single_pfd=3
 reg13_reserved1         13[10:13]   0x0
 cp_enable               13[14]      1
 reg13_reserved2         13[15]      0x0
@@ -271,7 +271,7 @@ reg64_reserved1         64[10:15]   0x0
 ########################################################################
 # Template for methods in the body of the struct
 ########################################################################
-BODY_TMPL="""\
+BODY_TMPL = """\
 enum addr_t{
     ADDR_R0 = 0,
     ADDR_R1 = 1,
@@ -343,9 +343,11 @@ std::set<size_t> get_all_addrs()
 }
 """
 
-if __name__ == '__main__':
-    import common; common.generate(
-        name='lmx2592_regs',
+if __name__ == "__main__":
+    import common
+
+    common.generate(
+        name="lmx2592_regs",
         regs_tmpl=REGS_TMPL,
         body_tmpl=BODY_TMPL,
         file=__file__,

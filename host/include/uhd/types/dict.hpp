@@ -8,8 +8,10 @@
 #pragma once
 
 #include <uhd/config.hpp>
+#include <cstddef>
 #include <list>
 #include <map>
+#include <utility>
 #include <vector>
 
 namespace uhd {
@@ -18,7 +20,7 @@ namespace uhd {
  * A templated dictionary class with a python-like interface.
  */
 template <typename Key, typename Val>
-class dict
+class UHD_API_HEADER dict
 {
 public:
     /*!

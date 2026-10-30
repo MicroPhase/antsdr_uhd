@@ -11,17 +11,18 @@
 #include <uhd/rfnoc/property.hpp>
 #include <uhd/rfnoc/registry.hpp>
 #include <uhd/rfnoc/replay_block_control.hpp>
+#include <uhd/transport/bounded_buffer.hpp>
 #include <uhd/types/stream_cmd.hpp>
-#include <uhd/utils/math.hpp>
-#include <uhdlib/utils/compat_check.hpp>
+#include <uhd/utils/compat_check.hpp>
 #include <uhdlib/utils/narrow.hpp>
+#include <numeric>
 #include <string>
 
 using namespace uhd::rfnoc;
 
 // Block compatability version
-const uint16_t replay_block_control::MINOR_COMPAT = 0;
 const uint16_t replay_block_control::MAJOR_COMPAT = 1;
+const uint16_t replay_block_control::MINOR_COMPAT = 2;
 
 // NoC block address space
 const uint32_t replay_block_control::REPLAY_ADDR_W = 8;
@@ -49,6 +50,11 @@ const uint32_t replay_block_control::REG_PLAY_CMD_TIME_HI_ADDR      = 0x44;
 const uint32_t replay_block_control::REG_PLAY_CMD_ADDR              = 0x48;
 const uint32_t replay_block_control::REG_PLAY_WORDS_PER_PKT_ADDR    = 0x4C;
 const uint32_t replay_block_control::REG_PLAY_ITEM_SIZE_ADDR        = 0x50;
+const uint32_t replay_block_control::REG_REC_POS_LO_ADDR            = 0x54;
+const uint32_t replay_block_control::REG_REC_POS_HI_ADDR            = 0x58;
+const uint32_t replay_block_control::REG_PLAY_POS_LO_ADDR           = 0x5C;
+const uint32_t replay_block_control::REG_PLAY_POS_HI_ADDR           = 0x60;
+const uint32_t replay_block_control::REG_PLAY_CMD_FIFO_SPACE_ADDR   = 0x64;
 
 // Stream commands
 const uint32_t replay_block_control::PLAY_CMD_STOP       = 0;
@@ -56,16 +62,25 @@ const uint32_t replay_block_control::PLAY_CMD_FINITE     = 1;
 const uint32_t replay_block_control::PLAY_CMD_CONTINUOUS = 2;
 
 // Mask bits
-constexpr uint32_t PLAY_COMMAND_TIMED_BIT  = 31;
-constexpr uint32_t PLAY_COMMAND_TIMED_MASK = uint32_t(1) << PLAY_COMMAND_TIMED_BIT;
-constexpr uint32_t PLAY_COMMAND_MASK       = 3;
+constexpr uint32_t PLAY_COMMAND_TIMED_BIT   = 31;
+constexpr uint32_t PLAY_COMMAND_TIMED_MASK  = uint32_t(1) << PLAY_COMMAND_TIMED_BIT;
+constexpr uint32_t PLAY_COMMAND_NO_EOB_BIT  = 30;
+constexpr uint32_t PLAY_COMMAND_NO_EOB_MASK = uint32_t(1) << PLAY_COMMAND_NO_EOB_BIT;
+constexpr uint32_t PLAY_COMMAND_MASK        = 3;
 
 // User property names
 const char* const PROP_KEY_RECORD_OFFSET = "record_offset";
 const char* const PROP_KEY_RECORD_SIZE   = "record_size";
 const char* const PROP_KEY_PLAY_OFFSET   = "play_offset";
 const char* const PROP_KEY_PLAY_SIZE     = "play_size";
-const char* const PROP_KEY_PKT_SIZE      = "packet_size";
+const char* const PROP_KEY_PYLD_SIZE     = "payload_size";
+
+// Depth of the async message queues
+constexpr size_t ASYNC_MSG_QUEUE_SIZE = 128;
+
+// Default byte multiple to round the payload size down to. This is
+// conservatively set to to ensure compatibility with most blocks by default.
+constexpr uint32_t DEFAULT_MULT = 64;
 
 class replay_block_control_impl : public replay_block_control
 {
@@ -77,9 +92,15 @@ public:
         _fpga_compat(_replay_reg_iface.peek32(REG_COMPAT_ADDR)),
         _word_size(
             uint16_t((_replay_reg_iface.peek32(REG_MEM_SIZE_ADDR) >> 16) & 0xFFFF) / 8),
-        _mem_size(uint64_t(1ULL << (_replay_reg_iface.peek32(REG_MEM_SIZE_ADDR) & 0xFFFF)))
+        _mem_size(
+            uint64_t(1ULL << (_replay_reg_iface.peek32(REG_MEM_SIZE_ADDR) & 0xFFFF))),
+        _cmd_fifo_spaces(_num_output_ports)
     {
-        UHD_ASSERT_THROW(get_num_input_ports() == get_num_output_ports());
+        if (get_num_input_ports() != get_num_output_ports()) {
+            throw uhd::assertion_error(
+                "Replay block has invalid hardware configuration! Number of input ports "
+                "does not match number of output ports.");
+        }
         uhd::assert_fpga_compat(MAJOR_COMPAT,
             MINOR_COMPAT,
             _fpga_compat,
@@ -87,11 +108,75 @@ public:
             get_unique_id(),
             false /* Let it slide if minors mismatch */
         );
+        RFNOC_LOG_TRACE(
+            "Initializing replay block with num ports=" << get_num_input_ports());
+        // Properties and actions can't propagate through this block, as we
+        // treat source and sink of this block like the radio (they terminate
+        // the graph).
+        set_prop_forwarding_policy(forwarding_policy_t::DROP);
+        set_action_forwarding_policy(forwarding_policy_t::DROP);
+        // Same for MTU
+        set_mtu_forwarding_policy(forwarding_policy_t::DROP);
+        // Register action handler
+        register_action_handler(ACTION_KEY_STREAM_CMD,
+            [this](const res_source_info& src, action_info::sptr action) {
+                stream_cmd_action_info::sptr stream_cmd_action =
+                    std::dynamic_pointer_cast<stream_cmd_action_info>(action);
+                if (!stream_cmd_action) {
+                    RFNOC_LOG_WARNING("Received invalid stream command action!");
+                    return;
+                }
+                RFNOC_LOG_TRACE("Received stream command: "
+                                << stream_cmd_action->stream_cmd.stream_mode << " to "
+                                << src.to_string());
+                if (src.type != res_source_info::OUTPUT_EDGE) {
+                    RFNOC_LOG_WARNING(
+                        "Received stream command, but not to output port! Ignoring.");
+                    return;
+                }
+                const size_t port = src.instance;
+                if (port >= get_num_output_ports()) {
+                    RFNOC_LOG_WARNING("Received stream command to invalid output port!");
+                    return;
+                }
+                issue_stream_cmd(stream_cmd_action->stream_cmd, port);
+            });
+        register_action_handler(ACTION_KEY_RX_EVENT,
+            [this](const res_source_info& src, action_info::sptr action) {
+                rx_event_action_info::sptr rx_event_action =
+                    std::dynamic_pointer_cast<rx_event_action_info>(action);
+                if (!rx_event_action) {
+                    RFNOC_LOG_WARNING("Received invalid RX event action!");
+                    return;
+                }
+                _handle_rx_event_action(src, rx_event_action);
+            });
+        register_action_handler(ACTION_KEY_TX_EVENT,
+            [this](const res_source_info& src, action_info::sptr action) {
+                tx_event_action_info::sptr tx_event_action =
+                    std::dynamic_pointer_cast<tx_event_action_info>(action);
+                if (!tx_event_action) {
+                    RFNOC_LOG_WARNING("Received invalid TX event action!");
+                    return;
+                }
+                _handle_tx_event_action(src, tx_event_action);
+            });
+        register_action_handler(ACTION_KEY_TUNE_REQUEST,
+            [this](const res_source_info& src, action_info::sptr action) {
+                tune_request_action_info::sptr tune_request_action =
+                    std::dynamic_pointer_cast<tune_request_action_info>(action);
+                if (!tune_request_action) {
+                    RFNOC_LOG_WARNING("Received invalid tune request action!");
+                    return;
+                }
+                RFNOC_LOG_DEBUG("Received tune request on " << src.to_string());
+            });
 
         // Initialize record properties
         _record_type.reserve(_num_input_ports);
         _record_offset.reserve(_num_input_ports);
         _record_size.reserve(_num_input_ports);
+        _atomic_item_size_in.reserve(_num_input_ports);
         for (size_t port = 0; port < _num_input_ports; port++) {
             _register_input_props(port);
             _replay_reg_iface.poke64(
@@ -100,11 +185,13 @@ public:
                 REG_REC_BUFFER_SIZE_LO_ADDR, _record_size.at(port).get(), port);
         }
 
+
         // Initialize playback properties
         _play_type.reserve(_num_output_ports);
         _play_offset.reserve(_num_output_ports);
         _play_size.reserve(_num_output_ports);
-        _packet_size.reserve(_num_output_ports);
+        _payload_size.reserve(_num_output_ports);
+        _atomic_item_size_out.reserve(_num_output_ports);
         for (size_t port = 0; port < _num_output_ports; port++) {
             _register_output_props(port);
             _replay_reg_iface.poke32(REG_PLAY_ITEM_SIZE_ADDR,
@@ -115,8 +202,13 @@ public:
             _replay_reg_iface.poke64(
                 REG_PLAY_BUFFER_SIZE_LO_ADDR, _play_size.at(port).get(), port);
             _replay_reg_iface.poke32(REG_PLAY_WORDS_PER_PKT_ADDR,
-                (_packet_size.at(port).get() - CHDR_MAX_LEN_HDR) / _word_size,
+                (_payload_size.at(port).get()) / _word_size,
                 port);
+            // The register to get the command FIFO space was added in v1.1
+            if (_fpga_compat >= 0x00010001) {
+                _cmd_fifo_spaces[port] =
+                    _replay_reg_iface.peek32(REG_PLAY_CMD_FIFO_SPACE_ADDR, port);
+            }
         }
     }
 
@@ -147,11 +239,27 @@ public:
         const uhd::time_spec_t time_spec,
         const bool repeat) override
     {
+        play(offset,
+            size,
+            port,
+            time_spec,
+            static_cast<size_t>(repeat ? PLAY_CONTINUOUS : 1));
+    }
+
+    void play(const uint64_t offset,
+        const uint64_t size,
+        const size_t port,
+        const uhd::time_spec_t time_spec,
+        const size_t iterations) override
+    {
         config_play(offset, size, port);
         uhd::stream_cmd_t play_cmd =
-            repeat ? uhd::stream_cmd_t(uhd::stream_cmd_t::STREAM_MODE_START_CONTINUOUS)
-                   : uhd::stream_cmd_t(uhd::stream_cmd_t::STREAM_MODE_NUM_SAMPS_AND_DONE);
-        play_cmd.num_samps  = size / get_play_item_size(port);
+            iterations == PLAY_CONTINUOUS
+                ? uhd::stream_cmd_t(uhd::stream_cmd_t::STREAM_MODE_START_CONTINUOUS)
+                : uhd::stream_cmd_t(uhd::stream_cmd_t::STREAM_MODE_NUM_SAMPS_AND_DONE);
+        play_cmd.num_samps  = iterations == PLAY_CONTINUOUS
+                                  ? 0
+                                  : iterations * size / get_play_item_size(port);
         play_cmd.time_spec  = time_spec;
         play_cmd.stream_now = (time_spec == 0.0);
         issue_stream_cmd(play_cmd, port);
@@ -192,6 +300,17 @@ public:
         return _replay_reg_iface.peek64(REG_REC_FULLNESS_LO_ADDR, port);
     }
 
+    uint64_t get_record_position(const size_t port) override
+    {
+        if (_fpga_compat < 0x00010001) {
+            throw uhd::not_implemented_error(
+                "Replay block version 1.1 or "
+                "greater required to get record position.  "
+                "Update the FPGA image to get this feature.");
+        }
+        return _replay_reg_iface.peek64(REG_REC_POS_LO_ADDR, port);
+    }
+
     io_type_t get_record_type(const size_t port) const override
     {
         return _record_type.at(port).get();
@@ -200,6 +319,12 @@ public:
     size_t get_record_item_size(const size_t port) const override
     {
         return uhd::convert::get_bytes_per_item(get_record_type(port));
+    }
+
+    bool get_record_async_metadata(
+        uhd::rx_metadata_t& metadata, const double timeout = 0.0) override
+    {
+        return _record_msg_queue.pop_with_timed_wait(metadata, timeout);
     }
 
     /**************************************************************************
@@ -215,15 +340,24 @@ public:
         return _play_size.at(port).get();
     }
 
+    uint64_t get_play_position(const size_t port) override
+    {
+        if (_fpga_compat < 0x00010001) {
+            throw uhd::not_implemented_error(
+                "Replay block version 1.1 or greater required to get play position.  "
+                "Update the FPGA image to get this feature.");
+        }
+        return _replay_reg_iface.peek64(REG_PLAY_POS_LO_ADDR, port);
+    }
+
     uint32_t get_max_items_per_packet(const size_t port) const override
     {
-        return (_packet_size.at(port).get() - CHDR_MAX_LEN_HDR)
-               / get_play_item_size(port);
+        return _payload_size.at(port).get() / get_play_item_size(port);
     }
 
     uint32_t get_max_packet_size(const size_t port) const override
     {
-        return _packet_size.at(port).get();
+        return _payload_size.at(port).get() + get_chdr_hdr_len();
     }
 
     io_type_t get_play_type(const size_t port) const override
@@ -234,6 +368,12 @@ public:
     size_t get_play_item_size(const size_t port) const override
     {
         return uhd::convert::get_bytes_per_item(get_play_type(port));
+    }
+
+    bool get_play_async_metadata(
+        uhd::async_metadata_t& metadata, const double timeout) override
+    {
+        return _playback_msg_queue.pop_with_timed_wait(metadata, timeout);
     }
 
     /**************************************************************************
@@ -265,12 +405,15 @@ public:
 
     void set_max_items_per_packet(const uint32_t ipp, const size_t port) override
     {
-        set_max_packet_size(CHDR_MAX_LEN_HDR + ipp * get_play_item_size(port), port);
+        const uint32_t item_size = get_play_item_size(port);
+        set_property<uint32_t>(
+            PROP_KEY_PYLD_SIZE, ipp * item_size, {res_source_info::USER, port});
     }
 
     void set_max_packet_size(const uint32_t size, const size_t port) override
     {
-        set_property<uint32_t>(PROP_KEY_PKT_SIZE, size, {res_source_info::USER, port});
+        set_property<uint32_t>(
+            PROP_KEY_PYLD_SIZE, size - get_chdr_hdr_len(), {res_source_info::USER, port});
     }
 
     void issue_stream_cmd(const uhd::stream_cmd_t& stream_cmd, const size_t port) override
@@ -296,6 +439,18 @@ public:
             }
         }();
 
+        // The register to get the command FIFO space was added in v1.1
+        if (_fpga_compat >= 0x00010001) {
+            // Make sure the command queue has space.  Allow stop commands to pass.
+            if (play_cmd != PLAY_CMD_STOP and _cmd_fifo_spaces[port] == 0) {
+                _cmd_fifo_spaces[port] =
+                    _replay_reg_iface.peek32(REG_PLAY_CMD_FIFO_SPACE_ADDR, port);
+                if (_cmd_fifo_spaces[port] == 0) {
+                    throw uhd::op_failed("[Replay] Play command queue is full");
+                }
+            }
+        }
+
         // Calculate the number of words to transfer in NUM_SAMPS mode
         if (play_cmd == PLAY_CMD_FINITE) {
             uint64_t num_words =
@@ -305,6 +460,10 @@ public:
 
         // Set the time for the command
         const uint32_t timed_flag = (stream_cmd.stream_now) ? 0 : PLAY_COMMAND_TIMED_MASK;
+        const uint32_t no_eob_flag =
+            (stream_cmd.stream_mode == uhd::stream_cmd_t::STREAM_MODE_NUM_SAMPS_AND_MORE)
+                ? PLAY_COMMAND_NO_EOB_MASK
+                : 0;
         if (!stream_cmd.stream_now) {
             const double tick_rate = get_tick_rate();
             UHD_LOG_DEBUG("REPLAY",
@@ -314,8 +473,39 @@ public:
         }
 
         // Issue the stream command
-        uint32_t command_word = (play_cmd & PLAY_COMMAND_MASK) | timed_flag;
+        uint32_t command_word = (play_cmd & PLAY_COMMAND_MASK) | timed_flag | no_eob_flag;
         _replay_reg_iface.poke32(REG_PLAY_CMD_ADDR, command_word, port);
+
+        // The register to get the command FIFO space was added in v1.1
+        if (_fpga_compat >= 0x00010001) {
+            if (play_cmd == PLAY_CMD_STOP) {
+                // The stop command will clear the FIFO, so reset the space value
+                _cmd_fifo_spaces[port] =
+                    _replay_reg_iface.peek32(REG_PLAY_CMD_FIFO_SPACE_ADDR, port);
+            } else {
+                _cmd_fifo_spaces[port]--;
+            }
+        }
+    }
+
+    void post_input_action(const std::shared_ptr<uhd::rfnoc::action_info>& action,
+        const size_t port) override
+    {
+        if (port > get_num_input_ports()) {
+            throw uhd::runtime_error("Invalid port. Please provide a valid port");
+        }
+        const uhd::rfnoc::res_source_info info(res_source_info::INPUT_EDGE, port);
+        post_action(info, action);
+    }
+
+    void post_output_action(const std::shared_ptr<uhd::rfnoc::action_info>& action,
+        const size_t port) override
+    {
+        if (port > get_num_output_ports()) {
+            throw uhd::runtime_error("Invalid port. Please provide a valid port");
+        }
+        const uhd::rfnoc::res_source_info info(res_source_info::OUTPUT_EDGE, port);
+        post_action(info, action);
     }
 
 protected:
@@ -337,14 +527,18 @@ private:
             PROP_KEY_RECORD_OFFSET, record_offset, {res_source_info::USER, port}));
         _record_size.push_back(property_t<uint64_t>(
             PROP_KEY_RECORD_SIZE, record_size, {res_source_info::USER, port}));
+        _atomic_item_size_in.push_back(property_t<size_t>(
+            PROP_KEY_ATOMIC_ITEM_SIZE, _word_size, {res_source_info::INPUT_EDGE, port}));
         UHD_ASSERT_THROW(_record_type.size() == port + 1);
         UHD_ASSERT_THROW(_record_offset.size() == port + 1);
         UHD_ASSERT_THROW(_record_size.size() == port + 1);
+        UHD_ASSERT_THROW(_atomic_item_size_in.size() == port + 1);
 
         // Register user properties
         register_property(&_record_type.at(port));
         register_property(&_record_offset.at(port));
         register_property(&_record_size.at(port));
+        register_property(&_atomic_item_size_in.at(port));
 
         // Add property resolvers
         add_property_resolver({&_record_offset.at(port)}, {}, [this, port]() {
@@ -353,6 +547,18 @@ private:
         add_property_resolver({&_record_size.at(port)},
             {&_record_size.at(port)},
             [this, port]() { _set_record_size(_record_size.at(port).get(), port); });
+        add_property_resolver({&_atomic_item_size_in.back(),
+                                  get_mtu_prop_ref({res_source_info::INPUT_EDGE, port})},
+            {&_atomic_item_size_in.back()},
+            [this, port, &ais_in = _atomic_item_size_in.back()]() {
+                ais_in = std::lcm<size_t>(ais_in, get_word_size());
+                ais_in = std::min<size_t>(
+                    ais_in, get_mtu({res_source_info::INPUT_EDGE, port}));
+                if (ais_in.get() % get_word_size() > 0) {
+                    ais_in = ais_in - (ais_in.get() % get_word_size());
+                }
+                RFNOC_LOG_TRACE("Resolve atomic item size in to " << ais_in);
+            });
     }
 
     void _register_output_props(const size_t port)
@@ -361,7 +567,9 @@ private:
         const io_type_t default_type = IO_TYPE_SC16;
         const uint64_t play_offset   = 0;
         const uint64_t play_size     = _mem_size;
-        const uint32_t packet_size   = get_mtu({res_source_info::OUTPUT_EDGE, port});
+        const uint32_t max_payload =
+            get_max_payload_size({res_source_info::OUTPUT_EDGE, port});
+        const uint32_t payload_size = max_payload - (max_payload % DEFAULT_MULT);
 
         // Initialize properties
         _play_type.emplace_back(property_t<std::string>(
@@ -370,18 +578,22 @@ private:
             PROP_KEY_PLAY_OFFSET, play_offset, {res_source_info::USER, port}));
         _play_size.push_back(property_t<uint64_t>(
             PROP_KEY_PLAY_SIZE, play_size, {res_source_info::USER, port}));
-        _packet_size.push_back(property_t<uint32_t>(
-            PROP_KEY_PKT_SIZE, packet_size, {res_source_info::USER, port}));
+        _payload_size.push_back(property_t<uint32_t>(
+            PROP_KEY_PYLD_SIZE, payload_size, {res_source_info::USER, port}));
+        _atomic_item_size_out.push_back(property_t<size_t>(
+            PROP_KEY_ATOMIC_ITEM_SIZE, _word_size, {res_source_info::OUTPUT_EDGE, port}));
         UHD_ASSERT_THROW(_play_type.size() == port + 1);
         UHD_ASSERT_THROW(_play_offset.size() == port + 1);
         UHD_ASSERT_THROW(_play_size.size() == port + 1);
-        UHD_ASSERT_THROW(_packet_size.size() == port + 1);
+        UHD_ASSERT_THROW(_payload_size.size() == port + 1);
+        UHD_ASSERT_THROW(_atomic_item_size_out.size() == port + 1);
 
         // Register user properties
         register_property(&_play_type.at(port));
         register_property(&_play_offset.at(port));
         register_property(&_play_size.at(port));
-        register_property(&_packet_size.at(port));
+        register_property(&_payload_size.at(port));
+        register_property(&_atomic_item_size_out.at(port));
 
         // Add property resolvers
         add_property_resolver({&_play_type.at(port)}, {}, [this, port]() {
@@ -393,10 +605,23 @@ private:
         add_property_resolver({&_play_size.at(port)},
             {&_play_size.at(port)},
             [this, port]() { _set_play_size(_play_size.at(port).get(), port); });
-        add_property_resolver({&_packet_size.at(port),
+        add_property_resolver({&_payload_size.at(port),
+                                  get_mtu_prop_ref({res_source_info::OUTPUT_EDGE, port}),
+                                  &_atomic_item_size_out.back()},
+            {&_payload_size.at(port)},
+            [this, port]() { _set_payload_size(_payload_size.at(port).get(), port); });
+        add_property_resolver({&_atomic_item_size_out.back(),
                                   get_mtu_prop_ref({res_source_info::OUTPUT_EDGE, port})},
-            {},
-            [this, port]() { _set_packet_size(_packet_size.at(port).get(), port); });
+            {&_atomic_item_size_out.back()},
+            [this, port, &ais_out = _atomic_item_size_out.back()]() {
+                ais_out = std::lcm<size_t>(ais_out, get_word_size());
+                ais_out = std::min<size_t>(
+                    ais_out, get_mtu({res_source_info::OUTPUT_EDGE, port}));
+                if (ais_out.get() % get_word_size() > 0) {
+                    ais_out = ais_out - (ais_out.get() % get_word_size());
+                }
+                RFNOC_LOG_TRACE("Resolve atomic item size out to " << ais_out);
+            });
     }
 
     void _set_play_type(const io_type_t type, const size_t port)
@@ -449,37 +674,51 @@ private:
         _replay_reg_iface.poke64(REG_PLAY_BUFFER_SIZE_LO_ADDR, play_size, port);
     }
 
-    void _set_packet_size(const uint32_t packet_size, const size_t port)
+    // This method is only called by the property resolver and coerces the
+    // property value to a legal value if necessary.
+    void _set_payload_size(const uint32_t payload_size, const size_t port)
     {
-        // MTU is max payload size, header with timestamp is already accounted for
-        const size_t mtu               = get_mtu({res_source_info::OUTPUT_EDGE, port});
-        const uint32_t item_size       = get_play_item_size(port);
-        const uint32_t mtu_payload     = mtu - CHDR_MAX_LEN_HDR;
-        const uint32_t mtu_items       = mtu_payload / item_size;
-        const uint32_t ipc             = _word_size / item_size; // items per cycle
-        const uint32_t max_ipp_per_mtu = mtu_items - (mtu_items % ipc);
-        const uint32_t payload_size    = packet_size - CHDR_MAX_LEN_HDR;
-        uint32_t ipp                   = payload_size / item_size;
-        if (ipp > max_ipp_per_mtu) {
-            ipp = max_ipp_per_mtu;
+        const size_t max_pyld_size =
+            get_max_payload_size({res_source_info::OUTPUT_EDGE, port}, true);
+        uint32_t new_pyld_size = payload_size;
+        if (new_pyld_size > max_pyld_size) {
+            new_pyld_size = max_pyld_size;
+            RFNOC_LOG_DEBUG("Requested payload size " << payload_size
+                                                      << " exceeds maximum! Coercing to "
+                                                      << new_pyld_size);
         }
-        if ((ipp % ipc) != 0) {
-            ipp = ipp - (ipp % ipc);
-            RFNOC_LOG_WARNING(
-                "ipp must be a multiple of the block bus width! Coercing to " << ipp);
+
+        // For correct behavior, we must ensure that the replay payload size is
+        // a multiple of the:
+        //   - Replay word size (_word_size)
+        //   - Atomic item size (e.g., the radio word size)
+        //   - Configured item size (e.g., sample size)
+        const uint32_t item_size        = get_play_item_size(port);
+        const uint32_t atomic_item_size = _atomic_item_size_out.at(port).get();
+        const uint32_t min_chunk        = std::lcm<uint32_t>(
+            std::lcm<uint32_t>(item_size, atomic_item_size), _word_size);
+
+        if (new_pyld_size % min_chunk != 0) {
+            const uint32_t coerced_size = new_pyld_size - (new_pyld_size % min_chunk);
+            RFNOC_LOG_WARNING("Payload size " << new_pyld_size
+                                              << " is not compatible! Coercing to "
+                                              << coerced_size);
+            new_pyld_size = coerced_size;
         }
-        if (ipp <= 0) {
-            ipp = DEFAULT_SPP;
-            RFNOC_LOG_WARNING("ipp must be greater than zero! Coercing to " << ipp);
+        if (new_pyld_size < min_chunk) {
+            const uint32_t coerced_size = min_chunk;
+            RFNOC_LOG_WARNING("Payload size " << new_pyld_size
+                                              << " is too small! Coercing to "
+                                              << coerced_size);
+            new_pyld_size = coerced_size;
         }
-        // Packet size must be a multiple of word size
-        if ((packet_size % _word_size) != 0) {
-            throw uhd::value_error("Packet size must be a multiple of word size.");
-        }
+
         const uint16_t words_per_packet =
-            uhd::narrow_cast<uint16_t>(ipp * item_size / _word_size);
+            uhd::narrow_cast<uint16_t>(new_pyld_size / _word_size);
         _replay_reg_iface.poke32(
             REG_PLAY_WORDS_PER_PKT_ADDR, uint32_t(words_per_packet), port);
+
+        _payload_size.at(port) = new_pyld_size;
     }
 
     void _validate_record_buffer(const size_t port)
@@ -502,6 +741,36 @@ private:
         }
     }
 
+    void _handle_rx_event_action(
+        const res_source_info& src, rx_event_action_info::sptr rx_event_action)
+    {
+        UHD_ASSERT_THROW(src.type == res_source_info::INPUT_EDGE);
+        uhd::rx_metadata_t rx_md{};
+        rx_md.error_code = rx_event_action->error_code;
+        RFNOC_LOG_DEBUG("Received RX error code on channel "
+                        << src.instance << ", error code " << rx_md.strerror());
+        _record_msg_queue.push_with_pop_on_full(rx_md);
+    }
+
+    void _handle_tx_event_action(
+        const res_source_info& src, tx_event_action_info::sptr tx_event_action)
+    {
+        UHD_ASSERT_THROW(src.type == res_source_info::OUTPUT_EDGE);
+
+        uhd::async_metadata_t md;
+        md.event_code    = tx_event_action->event_code;
+        md.channel       = src.instance;
+        md.has_time_spec = tx_event_action->has_tsf;
+
+        if (md.has_time_spec) {
+            md.time_spec =
+                uhd::time_spec_t::from_ticks(tx_event_action->tsf, get_tick_rate());
+        }
+        RFNOC_LOG_DEBUG("Received TX error code on channel "
+                        << src.instance << ", error code " << md.strevent());
+        _playback_msg_queue.push_with_pop_on_full(md);
+    }
+
     /**************************************************************************
      * Attributes
      *************************************************************************/
@@ -521,7 +790,17 @@ private:
     std::vector<property_t<std::string>> _play_type;
     std::vector<property_t<uint64_t>> _play_offset;
     std::vector<property_t<uint64_t>> _play_size;
-    std::vector<property_t<uint32_t>> _packet_size;
+    std::vector<property_t<uint32_t>> _payload_size;
+    std::vector<property_t<size_t>> _atomic_item_size_in;
+    std::vector<property_t<size_t>> _atomic_item_size_out;
+
+    std::vector<size_t> _cmd_fifo_spaces;
+
+    // Message queues for async data
+    uhd::transport::bounded_buffer<uhd::async_metadata_t> _playback_msg_queue{
+        ASYNC_MSG_QUEUE_SIZE};
+    uhd::transport::bounded_buffer<uhd::rx_metadata_t> _record_msg_queue{
+        ASYNC_MSG_QUEUE_SIZE};
 };
 
 UHD_RFNOC_BLOCK_REGISTER_DIRECT(

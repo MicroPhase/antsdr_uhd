@@ -7,8 +7,13 @@ noc_id: 0x12AD1000
 
 parameters:
   NUM_PORTS: 2
-  NIPC: 1
+  NIPC: ${ config.device.parameters.get("RADIO_NIPC", 1) }
   ITEM_W: 32
+  SKIP_WR_ACK_WAIT: 0
+
+checks:
+  - condition: "${parameters['NUM_PORTS'] > 0}"
+    message: "Number of ports must be greater than 0."
 
 clocks:
   - name: rfnoc_chdr
@@ -17,9 +22,10 @@ clocks:
     freq: "[]"
   - name: radio
     freq: "[]"
+    direction: in # 'in' is the default direction for block clocks, so we could
+                  # skip it here.
 
 control:
-  sw_iface: nocscript
   fpga_iface: ctrlport
   interface_direction: remote_master_slave
   fifo_depth: 512
@@ -38,33 +44,53 @@ data:
       item_width: ITEM_W
       nipc: NIPC
       info_fifo_depth: 32
-      payload_fifo_depth: MTU
+      payload_fifo_depth: 2**MTU
       format: sc16
-      mdata_sig: ~
   outputs:
     out:
       num_ports: NUM_PORTS
       item_width: ITEM_W
       nipc: NIPC
       info_fifo_depth: 32
-      payload_fifo_depth: MTU
+      payload_fifo_depth: 2**(MTU+1)
+      sideband_at_end: True
       format: sc16
-      mdata_sig: ~
 
 io_ports:
+  # This port controls all peripherals that are part of the radio, but are not
+  # specifically part of the RFNoC block, e.g., any hardware on the daughterboard.
   ctrlport:
-    type: ctrl_port
+    type: ctrlport
     drive: master
     rename:
       pattern: (.*)
       repl: m_\1
+    required: recommended # This port normally needs to be connected, but it's not
+                          # strictly required. We only print a warning.
+  # Timekeeper port: Here we read the global time from the timekeeper.
   time:
-    type: time_keeper
+    type: timekeeper
     drive: listener
+    required: true # This port is required to be connected. Without it, we could
+                  # not do any type of timed command.
+  # This port connects the radio to the digital interface (ADC, DAC, etc.).
   radio:
-    type: radio_8x32
+    type: radio
     drive: slave
+    parameters:
+      spc: "${parameters['NIPC']}"
+      num_ports: "${parameters['NUM_PORTS']}"
+    required: true # Definitely required!
 
-registers:
-
-properties:
+# This section helps the make process find the source files for the block. If
+# this section is absent, the FPGA build process will fail as it won't be able
+# to find the source files.
+fpga_includes:
+  # 'include' points to a file that gets included into the makefile. $LIB_DIR
+  # is a variable that points to the directory where the RFNoC library is, and
+  # is encoded in the RFNoC makefiles. It is not expanded as part of the image
+  # builder process.
+  # 'make_var' is the name of the variable that contains the list of source.
+  # It is defined inside the included file.
+  - include: "$(LIB_DIR)/rfnoc/blocks/rfnoc_block_radio/Makefile.srcs"
+    make_var: "$(RFNOC_BLOCK_RADIO_SRCS)"

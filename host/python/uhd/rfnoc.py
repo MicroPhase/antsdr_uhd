@@ -24,6 +24,7 @@ FftBlockControl = lib.rfnoc.fft_block_control
 FosphorBlockControl = lib.rfnoc.fosphor_block_control
 FirFilterBlockControl = lib.rfnoc.fir_filter_block_control
 KeepOneInNBlockControl = lib.rfnoc.keep_one_in_n_block_control
+LicenseCheckBlockControl = lib.rfnoc.lc_block_control
 MovingAverageBlockControl = lib.rfnoc.moving_average_block_control
 NullBlockControl = lib.rfnoc.null_block_control
 RadioControl = lib.rfnoc.radio_control
@@ -32,3 +33,6 @@ SiggenBlockControl = lib.rfnoc.siggen_block_control
 SwitchboardBlockControl = lib.rfnoc.switchboard_block_control
 VectorIirBlockControl = lib.rfnoc.vector_iir_block_control
 WindowBlockControl = lib.rfnoc.window_block_control
+
+connect_through_blocks = lib.rfnoc.connect_through_blocks
+get_block_chain = lib.rfnoc.get_block_chain

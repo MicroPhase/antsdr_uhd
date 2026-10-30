@@ -6,6 +6,7 @@
 //
 
 #include <uhd/exception.hpp>
+#include <uhd/property_tree.hpp>
 #include <uhd/rfnoc/block_id.hpp>
 #include <boost/test/unit_test.hpp>
 #include <iostream>
@@ -23,12 +24,21 @@ BOOST_AUTO_TEST_CASE(test_block_id)
     BOOST_CHECK(not block_id_t::is_valid_blockname("0Filter/Foo"));
     BOOST_CHECK(not block_id_t::is_valid_blockname("0/Filter/Foo"));
 
+    BOOST_CHECK(block_id_t::is_valid_block_id("0/FilterFoo#1"));
+    BOOST_CHECK(block_id_t::is_valid_block_id("0/FilterFoo"));
+    BOOST_CHECK(block_id_t::is_valid_block_id("FilterFoo#1"));
+    BOOST_CHECK(block_id_t::is_valid_block_id("0/Filter_Foo#1"));
+    BOOST_CHECK(not block_id_t::is_valid_block_id("x/FilterFoo#1"));
+    BOOST_CHECK(not block_id_t::is_valid_block_id("0/FilterFoo#x"));
+    BOOST_CHECK(not block_id_t::is_valid_block_id("0/#1"));
+
     BOOST_REQUIRE_THROW(block_id_t invalid_block_id("0Filter/1"), uhd::value_error);
 
     block_id_t block_id("0/FFT#1");
     BOOST_CHECK_EQUAL(block_id.get_device_no(), 0);
     BOOST_CHECK_EQUAL(block_id.get_block_name(), "FFT");
     BOOST_CHECK_EQUAL(block_id.get_block_count(), 1);
+    BOOST_CHECK_EQUAL(block_id.get_tree_root(), "/blocks/0/FFT#1");
 
     block_id.set_device_no(17);
     BOOST_CHECK_EQUAL(block_id.get_device_no(), 17);

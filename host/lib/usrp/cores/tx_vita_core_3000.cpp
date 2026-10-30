@@ -8,11 +8,11 @@
 #include <uhd/utils/safe_call.hpp>
 #include <uhdlib/usrp/cores/tx_vita_core_3000.hpp>
 
-#define REG_CTRL_ERROR_POLICY (_base + 0)
+#define REG_CTRL_ERROR_POLICY      (_base + 0)
 #define REG_FC_PRE_RADIO_RESP_BASE (_base + 2 * 4)
-#define REG_FC_PRE_FIFO_RESP_BASE (_base + 4 * 4)
-#define REG_CTRL_FC_CYCLE_OFFSET (0 * 4)
-#define REG_CTRL_FC_PACKET_OFFSET (1 * 4)
+#define REG_FC_PRE_FIFO_RESP_BASE  (_base + 4 * 4)
+#define REG_CTRL_FC_CYCLE_OFFSET   (0 * 4)
+#define REG_CTRL_FC_PACKET_OFFSET  (1 * 4)
 
 using namespace uhd;
 
@@ -46,7 +46,7 @@ struct tx_vita_core_3000_impl : tx_vita_core_3000
 
     ~tx_vita_core_3000_impl(void) override
     {
-        UHD_SAFE_CALL(this->clear();)
+        UHD_SAFE_CALL(this->clear());
     }
 
     void clear(void) override

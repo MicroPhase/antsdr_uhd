@@ -85,10 +85,11 @@ void e3xx_radio_control_impl::_init_peripherals()
         RFNOC_LOG_TRACE("Initializing DB GPIOs for channel " << radio_idx);
         // Note: The register offset is baked into the different _wb_iface
         // objects!
-        _db_gpio.emplace_back(
-            usrp::gpio_atr::gpio_atr_3000::make_write_only(_wb_ifaces.at(radio_idx),
+        _db_gpio.emplace_back(usrp::gpio_atr::gpio_atr_3000::make(
+            _wb_ifaces.at(radio_idx),
+            usrp::gpio_atr::gpio_atr_offsets::make_write_only(
                 e3xx_regs::SR_DB_GPIO + (radio_idx * e3xx_regs::PERIPH_REG_CHAN_OFFSET),
-                e3xx_regs::PERIPH_REG_OFFSET));
+                e3xx_regs::PERIPH_REG_OFFSET)));
         _db_gpio[radio_idx]->set_atr_mode(
             usrp::gpio_atr::MODE_ATR, usrp::gpio_atr::gpio_atr_3000::MASK_SET_ALL);
     }
@@ -96,17 +97,17 @@ void e3xx_radio_control_impl::_init_peripherals()
     for (size_t radio_idx = 0; radio_idx < E3XX_NUM_CHANS; radio_idx++) {
         RFNOC_LOG_TRACE("Initializing LED GPIOs for channel " << radio_idx);
         _leds_gpio.emplace_back(
-            usrp::gpio_atr::gpio_atr_3000::make_write_only(_wb_ifaces.at(radio_idx),
-                e3xx_regs::SR_LEDS + (radio_idx * e3xx_regs::PERIPH_REG_CHAN_OFFSET),
-                e3xx_regs::PERIPH_REG_OFFSET));
+            usrp::gpio_atr::gpio_atr_3000::make(_wb_ifaces.at(radio_idx),
+                usrp::gpio_atr::gpio_atr_offsets::make_write_only(
+                    e3xx_regs::SR_LEDS + (radio_idx * e3xx_regs::PERIPH_REG_CHAN_OFFSET),
+                    e3xx_regs::PERIPH_REG_OFFSET)));
         _leds_gpio[radio_idx]->set_atr_mode(
             usrp::gpio_atr::MODE_ATR, usrp::gpio_atr::gpio_atr_3000::MASK_SET_ALL);
     }
     RFNOC_LOG_TRACE("Initializing front-panel GPIO control...")
     _fp_gpio = usrp::gpio_atr::gpio_atr_3000::make(_wb_ifaces.at(0),
-        e3xx_regs::SR_FP_GPIO,
-        e3xx_regs::RB_FP_GPIO,
-        e3xx_regs::PERIPH_REG_OFFSET);
+        usrp::gpio_atr::gpio_atr_offsets::make_default(
+            e3xx_regs::SR_FP_GPIO, e3xx_regs::RB_FP_GPIO, e3xx_regs::PERIPH_REG_OFFSET));
 
 
     auto block_args = get_block_args();
@@ -123,11 +124,16 @@ void e3xx_radio_control_impl::_init_peripherals()
 void e3xx_radio_control_impl::_init_frontend_subtree(
     uhd::property_tree::sptr subtree, const size_t chan_idx)
 {
-    const fs_path tx_fe_path = fs_path("tx_frontends") / chan_idx;
-    const fs_path rx_fe_path = fs_path("rx_frontends") / chan_idx;
+    const fs_path tx_fe_path       = fs_path("tx_frontends") / chan_idx;
+    const fs_path rx_fe_path       = fs_path("rx_frontends") / chan_idx;
+    constexpr char HW_GAIN_STAGE[] = "hw";
+    uhd::eeprom_map_t eeprom_map   = get_db_eeprom();
+    const std::string db_serial(eeprom_map["serial"].begin(), eeprom_map["serial"].end());
+
     RFNOC_LOG_TRACE("Adding non-RFNoC block properties for channel "
                     << chan_idx << " to prop tree path " << tx_fe_path << " and "
                     << rx_fe_path);
+
     // TX Standard attributes
     subtree->create<std::string>(tx_fe_path / "name").set("E3xx");
     subtree->create<std::string>(tx_fe_path / "connection").set("IQ");
@@ -156,6 +162,56 @@ void e3xx_radio_control_impl::_init_frontend_subtree(
         .add_coerced_subscriber([](const std::vector<std::string>&) {
             throw uhd::runtime_error("Attempting to update antenna options!");
         });
+    // TX Power Calibration
+    auto tx_cal_ggroup = uhd::gain_group::make();
+    tx_cal_ggroup->register_fcns(HW_GAIN_STAGE,
+        {[this, chan_idx]() { return get_tx_gain_range(chan_idx); },
+            [this, chan_idx]() { return get_tx_gain(chan_idx); },
+            [this, chan_idx](const double gain) { this->set_tx_gain(gain, chan_idx); }},
+        10 /* High priority */);
+    _tx_pwr_mgr.insert(_tx_pwr_mgr.begin() + chan_idx,
+        uhd::usrp::pwr_cal_mgr::make(
+            // Cal serial is the DB serial plus the FE name
+            db_serial + "#" + subtree->access<std::string>(tx_fe_path / "name").get(),
+            // Logger prefix
+            "E3XX-CAL-TX",
+            // Current frequency getter
+            [this, chan_idx]() { return get_tx_frequency(chan_idx); },
+            // Current calibration key getter (format is "e3xx_pwr_$dir_$chan_$ant")
+            [this, chan_idx]() {
+                const std::string ant = get_tx_antenna(chan_idx);
+                return std::string("e3xx_pwr_tx_") + std::to_string(chan_idx) + "_"
+                       + pwr_cal_mgr::sanitize_antenna_name(ant);
+            },
+            tx_cal_ggroup));
+    // Provide current FE temperature to power manager
+    _tx_pwr_mgr.at(chan_idx)->set_temperature(
+        get_tx_sensor("ad9361_temperature", chan_idx).to_int());
+    // RX Power Calibration
+    auto rx_cal_ggroup = uhd::gain_group::make();
+    rx_cal_ggroup->register_fcns(HW_GAIN_STAGE,
+        {[this, chan_idx]() { return get_rx_gain_range(chan_idx); },
+            [this, chan_idx]() { return get_rx_gain(chan_idx); },
+            [this, chan_idx](const double gain) { this->set_rx_gain(gain, chan_idx); }},
+        10 /* High priority */);
+    _rx_pwr_mgr.insert(_rx_pwr_mgr.begin() + chan_idx,
+        uhd::usrp::pwr_cal_mgr::make(
+            // Cal serial is the DB serial plus the FE name
+            db_serial + "#" + subtree->access<std::string>(rx_fe_path / "name").get(),
+            // Logger prefix
+            "E3XX-CAL-RX",
+            // Current frequency getter
+            [this, chan_idx]() { return get_rx_frequency(chan_idx); },
+            // Current calibration key getter (format is "e3xx_pwr_$dir_$chan_$ant")
+            [this, chan_idx]() {
+                const std::string ant = get_rx_antenna(chan_idx);
+                return std::string("e3xx_pwr_rx_") + std::to_string(chan_idx) + "_"
+                       + pwr_cal_mgr::sanitize_antenna_name(ant);
+            },
+            rx_cal_ggroup));
+    // Provide current FE temperature to power manager
+    _rx_pwr_mgr.at(chan_idx)->set_temperature(
+        get_rx_sensor("ad9361_temperature", chan_idx).to_int());
     // TX frequency
     subtree->create<double>(tx_fe_path / "freq" / "value")
         .set_coercer([this, chan_idx](const double freq) {

@@ -5,6 +5,7 @@
 //
 
 #include <uhd/rfnoc/chdr_types.hpp>
+#include <uhd/utils/log.hpp>
 #include <uhdlib/rfnoc/chdr_rx_data_xport.hpp>
 #include <uhdlib/rfnoc/mgmt_portal.hpp>
 #include <uhdlib/rfnoc/rfnoc_common.hpp>
@@ -39,6 +40,7 @@ chdr_rx_data_xport::chdr_rx_data_xport(uhd::transport::io_service::sptr io_srv,
     const fc_params_t& fc_params,
     disconnect_callback_t disconnect)
     : _fc_state(epids, fc_params.freq)
+    , _mtu(recv_link->get_recv_frame_size())
     , _fc_sender(pkt_factory, epids)
     , _epid(epids.second)
     , _chdr_w_bytes(chdr_w_to_bits(pkt_factory.get_chdr_w()) / 8)
@@ -52,10 +54,9 @@ chdr_rx_data_xport::chdr_rx_data_xport(uhd::transport::io_service::sptr io_srv,
     _recv_packet_cb = pkt_factory.make_generic();
     _fc_sender.set_capacity(fc_params.buff_capacity);
 
-    // Calculate max payload size
-    const size_t pyld_offset =
-        _recv_packet->calculate_payload_offset(chdr::PKT_TYPE_DATA_WITH_TS);
-    _max_payload_size = recv_link->get_recv_frame_size() - pyld_offset;
+    // Calculate header size
+    _hdr_len = _recv_packet->calculate_payload_offset(chdr::PKT_TYPE_DATA_WITH_TS);
+    UHD_ASSERT_THROW(_hdr_len);
 
     // Make data transport
     auto recv_cb =
@@ -106,6 +107,7 @@ chdr_rx_data_xport::fc_params_t chdr_rx_data_xport::configure_sep(io_service::sp
     const stream_buff_params_t& fc_freq,
     const stream_buff_params_t& fc_headroom,
     const bool lossy_xport,
+    const uhd::device_addr_t& xport_args,
     disconnect_callback_t disconnect)
 {
     const sep_id_t remote_epid = epids.first;
@@ -187,14 +189,16 @@ chdr_rx_data_xport::fc_params_t chdr_rx_data_xport::configure_sep(io_service::sp
         pyld_buff_fmt,
         mdata_buff_fmt,
         fc_freq,
-        fc_headroom);
+        fc_headroom,
+        xport_args.get("throttle", "1.0"));
 
     // Now, release the buffer. In the flow control callback for the recv_io
     // (fc_cb above), we send a stream status containing the xport buffer
     // capacity.
     auto buff = recv_io->get_recv_buff(100);
     if (!buff) {
-        throw uhd::runtime_error(
+        UHD_LOG_THROW(uhd::runtime_error,
+            "XPORT::RX_DATA_XPORT",
             "rx xport timed out getting a response from mgmt_portal");
     }
     recv_io->release_recv_buff(std::move(buff));

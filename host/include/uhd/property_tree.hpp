@@ -10,12 +10,23 @@
 
 #include <uhd/config.hpp>
 #include <uhd/utils/noncopyable.hpp>
+#include <cstddef>
 #include <functional>
 #include <memory>
 #include <string>
 #include <vector>
 
 namespace uhd {
+
+/*!
+ * A non-templated class which exists solely so we can
+ * dynamic_cast between properties.
+ */
+class UHD_API property_iface
+{
+public:
+    virtual ~property_iface() = default;
+};
 
 /*!
  * A templated property interface for holding the state
@@ -65,14 +76,14 @@ namespace uhd {
  * - T must have an assignment operator
  */
 template <typename T>
-class property : uhd::noncopyable
+class UHD_API_HEADER property : uhd::noncopyable, public property_iface
 {
 public:
     typedef std::function<void(const T&)> subscriber_type;
     typedef std::function<T(void)> publisher_type;
     typedef std::function<T(const T&)> coercer_type;
 
-    virtual ~property<T>(void) = 0;
+    virtual ~property(void) = 0;
 
     /*!
      * Register a coercer into the property.
@@ -191,11 +202,8 @@ property<T>::~property(void)
 /*!
  * FS Path: A glorified string with path manipulations.
  * Inspired by boost filesystem path, but without the dependency.
- *
- * Notice: we do not declare UHD_API on the whole structure
- * because MSVC will do weird things with std::string and linking.
  */
-struct fs_path : std::string
+struct UHD_API_HEADER fs_path : std::string
 {
     UHD_API fs_path(void);
     UHD_API fs_path(const char*);
@@ -248,14 +256,14 @@ public:
 
 private:
     //! Internal pop function
-    virtual std::shared_ptr<void> _pop(const fs_path& path) = 0;
+    virtual std::shared_ptr<property_iface> _pop(const fs_path& path) = 0;
 
     //! Internal create property with wild-card type
-    virtual void _create(const fs_path& path,
-        const std::shared_ptr<void>& prop) = 0;
+    virtual void _create(
+        const fs_path& path, const std::shared_ptr<property_iface>& prop) = 0;
 
     //! Internal access property with wild-card type
-    virtual std::shared_ptr<void>& _access(const fs_path& path) const = 0;
+    virtual std::shared_ptr<property_iface>& _access(const fs_path& path) const = 0;
 };
 
 } // namespace uhd

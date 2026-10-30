@@ -10,6 +10,8 @@
 #include <uhdlib/rfnoc/chdr_ctrl_xport.hpp>
 #include <uhdlib/rfnoc/chdr_packet_writer.hpp>
 #include <uhdlib/rfnoc/rfnoc_common.hpp>
+#include <uhdlib/rfnoc/topo_graph.hpp>
+#include <functional>
 #include <memory>
 #include <set>
 
@@ -18,7 +20,8 @@ namespace uhd { namespace rfnoc { namespace mgmt {
 //! A portal to perform low-level management operations from an endpoint
 //
 // This object provides an interface to send management commands from a software stream
-// endpoint. There must one instance of this object per software stream endpoint.
+// endpoint. There must one instance of this object per software stream endpoint
+// (i.e., every link_stream_manager owns one of these).
 // The management portal is capable of discovering all endpoints reachable from the
 // transport associated with it. It can then setup routes and configure stream endpoints
 // downstream.
@@ -52,7 +55,7 @@ public:
     //  Note that the endpoints that are not physically connected/reachable from
     //  the underlying transport will not be discovered.
     //
-    virtual const std::set<sep_addr_t>& get_reachable_endpoints() const = 0;
+    virtual std::set<sep_addr_t> get_reachable_endpoints() const = 0;
 
     //! Initialize a stream endpoint and assign an endpoint ID to it
     //
@@ -105,6 +108,9 @@ public:
     virtual bool can_remote_route(
         const sep_addr_t& dst_addr, const sep_addr_t& src_addr) const = 0;
 
+    //! Return the route from the host to a graph node
+    virtual detail::route_type get_route(const sep_addr_t& node_addr) const = 0;
+
     //! Setup a route from between the source and destination endpoints
     //
     //  After a route is established, it should be possible for the source to send packets
@@ -122,12 +128,12 @@ public:
     //  specified ID to this SW mgmt portal.
     //
     //  RX stream setup is a two-step process. After this function is called, the flow
-    //  control handler needs to acknoweledge the setup transaction then call the commit
+    //  control handler needs to acknowledge the setup transaction, then call the commit
     //  function below.
     //
     // \param xport The host stream endpoint's CTRL transport (same EPID as RX stream)
     // \param epid The endpoint ID of the data source
-    // \param lossy_xport Is the transport lossy? (e.g. UDP, not liberio)
+    // \param lossy_xport Is the transport lossy? (e.g. UDP, not PCIe)
     // \param pyld_buff_fmt Datatype of SW buffer that holds the data payload
     // \param mdata_buff_fmt Datatype of SW buffer that holds the data metadata
     // \param fc_freq Flow control response frequency parameters
@@ -141,6 +147,7 @@ public:
         const sw_buff_t mdata_buff_fmt,
         const stream_buff_params_t& fc_freq,
         const stream_buff_params_t& fc_headroom,
+        const std::string& throttle_ratio,
         const bool reset = false) = 0;
 
     //! Finish configuring a flow controlled receive data stream from the endpoint with
@@ -195,10 +202,17 @@ public:
 
     //! Define custom configuration functions for custom transports
     //
-    // \param xport_type The type of the custom transport
+    // The intention of this is to allow adding custom management operations to
+    // be inserted for specific types of transports. For example, if IPv4
+    // transport adapters were to require additional Ethernet-specific routing
+    // information, this function could add more configuration packets specific
+    // to this purpose.
+    //
+    // \param xport_type The type of the custom transport (e.g. '1' for IPV4,
+    //                   see rfnoc_xport_types.vh for a list of valid values).
     // \param init_hop_cfg_fn The function to call when initializing the custom xport
     // \param rtcfg_hop_cfg_fn The function to call when configuring routing for the
-    // custom xport
+    //                         custom xport
     //
     virtual void register_xport_hop_cfg_fns(uint8_t xport_subtype,
         xport_cfg_fn_t init_hop_cfg_fn,
@@ -206,9 +220,14 @@ public:
 
     //! Create an endpoint manager object
     //
+    // Note: This will immediately start a topology discovery starting from the
+    // local device endpoint, using the \p xport. The transport object is not
+    // stored in the management portal.
+    // The discovered topology will be stored within the referenced topo_graph.
     static uptr make(chdr_ctrl_xport& xport,
         const chdr::chdr_packet_factory& pkt_factory,
-        sep_addr_t my_sep_addr);
+        sep_addr_t my_sep_addr,
+        uhd::rfnoc::detail::topo_graph_t::sptr topo_graph);
 };
 
 }}} // namespace uhd::rfnoc::mgmt

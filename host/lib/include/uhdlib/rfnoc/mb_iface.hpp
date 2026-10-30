@@ -84,9 +84,20 @@ public:
     virtual void reset_network() = 0;
 
     /*! Return a reference to a clock iface
+     *
+     * The MB interface may interact with the hardware to determine clock
+     * properties, such as their frequency.
+     *
+     * \param clock_name The clock name that the block was registered with at
+     *                   compile time
+     * \param clk_idx The clock index that is reported during bitstream generation
+     *                If \p clock_name is set to CLOCK_KEY_AUTO, then we use
+     *                this index to identify the clock. This assumes that the
+     *                bitfile image was generated with the clock information
+     *                included.
      */
     virtual std::shared_ptr<clock_iface> get_clock_iface(
-        const std::string& clock_name) = 0;
+        const std::string& clock_name, const uint8_t clk_idx) = 0;
 
     /*! Set the IO service manager
      *
@@ -163,6 +174,45 @@ public:
         const uhd::rfnoc::sw_buff_t mdata_buff_fmt,
         const device_addr_t& xport_args,
         const std::string& streamer_id) = 0;
+
+    /*! List transport adapters that can be used for remote CHDR streaming and
+     * information about them.
+     *
+     * \returns A map of type name -> adapter info. The keys of this map are the
+     *          available transport adapters by name (e.g., "sfp0").  These can
+     *          be used in add_remote_chdr_route().
+     *          The values are dictionaries that provide additional information
+     *          about the transport adapter.
+     */
+    virtual std::map<std::string, device_addr_t> get_chdr_xport_adapters() = 0;
+
+    /*! Create a route from a transport adapter to a remote endpoint
+     *
+     * This can be called when creating a CHDR route from a device to a remote
+     * destination.
+     *
+     * The main information is carried in the \p route_args dictionary. How
+     * exactly the dictionary should be populated depends on the type of
+     * transport and the device. When using UDP streams, this dictionary requires
+     * at least the following keys:
+     * - addr (destination IP address)
+     * - port (destination UDP port)
+     * - stream_mode (how to format outgoing packets)
+     *
+     * \param adapter_id A string identifier for an adapter (e.g., 'sfp0').
+     * \param epid The endpoint ID for which this route is being set up
+     * \param route_args Routing arguments (see above)
+     *
+     * \returns An integer value representing the transport adapter used for
+     *          this route.
+     */
+    virtual int add_remote_chdr_route(const std::string& adapter_id,
+        const sep_id_t epid,
+        const device_addr_t& route_args) = 0;
+    // TODO: This implies that all routes are outgoing, what if we want to add
+    // a route for incoming traffic that should get CHDR'd up (i.e., doesn't
+    // carry a CHDR header of its own)?
+
 
 private:
     uhd::usrp::io_service_mgr::sptr _io_srv_mgr;

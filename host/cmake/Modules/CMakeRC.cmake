@@ -60,7 +60,6 @@ endif()
 
 set(_version 2.0.0)
 
-cmake_minimum_required(VERSION 3.3)
 include(CMakeParseArguments)
 
 if(COMMAND cmrc_add_resource_library)
@@ -85,7 +84,7 @@ function(_cmrc_normalize_path var)
     set("${var}" "${path}" PARENT_SCOPE)
 endfunction()
 
-get_filename_component(_inc_dir "${CMAKE_BINARY_DIR}/_cmrc/include" ABSOLUTE)
+get_filename_component(_inc_dir "${UHD_BINARY_DIR}/_cmrc/include" ABSOLUTE)
 set(CMRC_INCLUDE_DIR "${_inc_dir}" CACHE INTERNAL "Directory for CMakeRC include files")
 # Let's generate the primary include file
 file(MAKE_DIRECTORY "${CMRC_INCLUDE_DIR}/cmrc")

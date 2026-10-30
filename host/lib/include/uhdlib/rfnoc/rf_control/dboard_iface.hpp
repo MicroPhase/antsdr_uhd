@@ -8,8 +8,8 @@
 
 #include <uhd/rfnoc/rf_control/core_iface.hpp>
 #include <uhd/types/direction.hpp>
-#include <uhd/types/time_spec.hpp>
 #include <uhd/types/eeprom.hpp>
+#include <uhd/types/time_spec.hpp>
 #include <uhdlib/rfnoc/rf_control/gain_profile_iface.hpp>
 #include <uhdlib/usrp/common/pwr_cal_mgr.hpp>
 #include <memory>
@@ -23,7 +23,7 @@ namespace uhd { namespace rfnoc { namespace rf_control {
  * just includes accessors to objects which implement the required functionality.
  * This class also directly implements core_iface for the remainder.
  */
-class dboard_iface : public core_iface
+class dboard_iface : virtual public core_iface
 {
 public:
     using sptr = std::shared_ptr<dboard_iface>;

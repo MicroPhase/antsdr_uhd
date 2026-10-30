@@ -670,9 +670,9 @@ private:
                     curr_info.metadata.time_spec =
                         prev_info.metadata.time_spec
                         + time_spec_t::from_ticks(
-                              prev_info[index].ifpi.num_payload_words32 * sizeof(uint32_t)
-                                  / _bytes_per_otw_item,
-                              _samp_rate);
+                            prev_info[index].ifpi.num_payload_words32 * sizeof(uint32_t)
+                                / _bytes_per_otw_item,
+                            _samp_rate);
                     curr_info.metadata.out_of_sequence = true;
                     curr_info.metadata.error_code = rx_metadata_t::ERROR_CODE_OVERFLOW;
                     UHD_LOG_FASTPATH("D");
@@ -830,6 +830,13 @@ public:
     void issue_stream_cmd(const stream_cmd_t& stream_cmd) override
     {
         return recv_packet_handler::issue_stream_cmd(stream_cmd);
+    }
+
+    // Post an action to the input edge.
+    void post_input_action(
+        const std::shared_ptr<uhd::rfnoc::action_info>&, const size_t) override
+    {
+        throw uhd::not_implemented_error("post_input_action is not implemented here!");
     }
 
 private:

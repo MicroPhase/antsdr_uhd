@@ -11,7 +11,7 @@
 
 using namespace uhd::usrp;
 
-void dboard_iface::sleep(const boost::chrono::nanoseconds& time)
+void dboard_iface::sleep(const std::chrono::nanoseconds& time)
 {
     // This sleep function is intended to create a delay on the
     // device.  If a command time is set, just increment that time.
@@ -19,11 +19,14 @@ void dboard_iface::sleep(const boost::chrono::nanoseconds& time)
     // FIXME: Create a delay in the FPGA on the device.
     auto cmd_time = get_command_time();
     if (cmd_time.get_real_secs() != 0.0) {
-        set_command_time(cmd_time + uhd::time_spec_t(time.count()));
+        // Cast to double-represented duration so that time_spec_t() ctor knows
+        // which overloaded ctor to choose
+        const std::chrono::duration<double> time_s = time;
+        set_command_time(cmd_time + uhd::time_spec_t(time_s.count()));
     } else {
         // nanosleep is not really accurate in userland and it is also not very
         // cross-platform. So just sleep for the minimum amount of time in us.
-        if (time < boost::chrono::microseconds(1)) {
+        if (time < std::chrono::microseconds(1)) {
             std::this_thread::sleep_for(std::chrono::microseconds(1));
         } else {
             std::this_thread::sleep_for(std::chrono::nanoseconds(time.count()));

@@ -21,14 +21,11 @@
 #include <boost/algorithm/string.hpp>
 #include <boost/archive/iterators/binary_from_base64.hpp>
 #include <boost/archive/iterators/transform_width.hpp>
-#include <boost/filesystem/convenience.hpp>
 #include <boost/optional.hpp>
 #include <boost/property_tree/xml_parser.hpp>
 #include <cctype>
 #include <fstream>
 #include <iterator>
-#include <sstream>
-#include <streambuf>
 #include <string>
 #include <vector>
 
@@ -205,11 +202,13 @@ static std::string get_fpga_path(
             throw uhd::runtime_error("Found a device but could not "
                                      "auto-generate an image filename.");
         } else if (fpga_type.empty()) {
-            return find_image_path(
-                "usrp_" + boost::algorithm::to_lower_copy(dev_addr["product"]) + "_fpga.bit");
+            return find_image_path("usrp_"
+                                   + boost::algorithm::to_lower_copy(dev_addr["product"])
+                                   + "_fpga.bit");
         } else {
-            return find_image_path(
-                "usrp_" + boost::algorithm::to_lower_copy(dev_addr["product"]) + "_fpga_" + fpga_type + ".bit");
+            return find_image_path("usrp_"
+                                   + boost::algorithm::to_lower_copy(dev_addr["product"])
+                                   + "_fpga_" + fpga_type + ".bit");
         }
     }
 }
@@ -269,7 +268,7 @@ static uhd::usrp::component_files_t bin_dts_to_component_files(
     // DTS component struct
     // First, we need to determine the name
     const std::string base_name =
-        boost::filesystem::change_extension(fpga_path, "").string();
+        boost::filesystem::path(fpga_path).replace_extension("").string();
     if (base_name == fpga_path) {
         const std::string err_msg(
             "Can't cut extension from FPGA filename... " + fpga_path);
@@ -338,7 +337,7 @@ static void mpmd_send_fpga_to_device(
         UHD_LOG_TRACE("MPMD IMAGE LOADER", "FPGA path: " << fpga_path);
 
         // If the fpga_path is a lvbitx file, parse it as such
-        if (boost::filesystem::extension(fpga_path) == ".lvbitx") {
+        if (boost::filesystem::path(fpga_path).extension() == ".lvbitx") {
             all_component_files = lvbitx_to_component_files(fpga_path, delay_reload);
         } else {
             all_component_files = bin_dts_to_component_files(fpga_path, delay_reload);
@@ -362,8 +361,13 @@ static bool mpmd_image_loader(const image_loader::image_loader_args_t& image_loa
     find_hint.set("find_all", "1"); // We need to find all devices
     device_addrs_t devs = mpmd_find(find_hint);
 
-    if (devs.size() != 1) {
-        UHD_LOG_ERROR("MPMD IMAGE LOADER", "mpmd_image_loader only supports a single device.");
+    if (devs.size() > 1) {
+        UHD_LOG_ERROR(
+            "MPMD IMAGE LOADER", "mpmd_image_loader only supports a single device.");
+        return false;
+    } else if (devs.empty()) {
+        UHD_LOG_ERROR(
+            "MPMD IMAGE LOADER", "No MPM devices found for the specified arguments.");
         return false;
     }
     // Grab the first device_addr
@@ -387,7 +391,7 @@ static bool mpmd_image_loader(const image_loader::image_loader_args_t& image_loa
     return true;
 }
 
-}} // namespace uhd::
+}} // namespace uhd
 
 UHD_STATIC_BLOCK(register_mpm_image_loader)
 {

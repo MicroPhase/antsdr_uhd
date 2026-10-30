@@ -29,23 +29,6 @@ UHD_INLINE uint64_t uhd::byteswap(uint64_t x)
     return _byteswap_uint64(x);
 }
 
-#elif defined(__GNUC__) && __GNUC__ >= 4 && __GNUC_MINOR__ >= 3
-
-UHD_INLINE uint16_t uhd::byteswap(uint16_t x)
-{
-    return (x >> 8) | (x << 8); // DNE return __builtin_bswap16(x);
-}
-
-UHD_INLINE uint32_t uhd::byteswap(uint32_t x)
-{
-    return __builtin_bswap32(x);
-}
-
-UHD_INLINE uint64_t uhd::byteswap(uint64_t x)
-{
-    return __builtin_bswap64(x);
-}
-
 #elif defined(UHD_PLATFORM_MACOS)
 #    include <libkern/OSByteOrder.h>
 
@@ -62,6 +45,23 @@ UHD_INLINE uint32_t uhd::byteswap(uint32_t x)
 UHD_INLINE uint64_t uhd::byteswap(uint64_t x)
 {
     return OSSwapInt64(x);
+}
+
+#elif defined(__GNUC__) && __GNUC__ >= 4 && __GNUC_MINOR__ >= 3
+
+UHD_INLINE uint16_t uhd::byteswap(uint16_t x)
+{
+    return (x >> 8) | (x << 8); // DNE return __builtin_bswap16(x);
+}
+
+UHD_INLINE uint32_t uhd::byteswap(uint32_t x)
+{
+    return __builtin_bswap32(x);
+}
+
+UHD_INLINE uint64_t uhd::byteswap(uint64_t x)
+{
+    return __builtin_bswap64(x);
 }
 
 #elif defined(UHD_PLATFORM_LINUX)
@@ -108,7 +108,8 @@ UHD_INLINE uint64_t uhd::byteswap(uint64_t x)
  **********************************************************************/
 namespace uhd {
 
-template <typename T> UHD_INLINE T ntohx(T num)
+template <typename T>
+UHD_INLINE T ntohx(T num)
 {
 #ifdef UHD_BIG_ENDIAN
     return num;
@@ -117,7 +118,8 @@ template <typename T> UHD_INLINE T ntohx(T num)
 #endif
 }
 
-template <typename T> UHD_INLINE T htonx(T num)
+template <typename T>
+UHD_INLINE T htonx(T num)
 {
 #ifdef UHD_BIG_ENDIAN
     return num;
@@ -126,7 +128,8 @@ template <typename T> UHD_INLINE T htonx(T num)
 #endif
 }
 
-template <typename T> UHD_INLINE T wtohx(T num)
+template <typename T>
+UHD_INLINE T wtohx(T num)
 {
 #ifdef UHD_BIG_ENDIAN
     return uhd::byteswap(num);
@@ -135,7 +138,8 @@ template <typename T> UHD_INLINE T wtohx(T num)
 #endif
 }
 
-template <typename T> UHD_INLINE T htowx(T num)
+template <typename T>
+UHD_INLINE T htowx(T num)
 {
 #ifdef UHD_BIG_ENDIAN
     return uhd::byteswap(num);

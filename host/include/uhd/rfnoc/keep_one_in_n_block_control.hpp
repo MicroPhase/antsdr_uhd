@@ -14,6 +14,8 @@ namespace uhd { namespace rfnoc {
 
 /*! Keep One in N Block Control Class
  *
+ * \ingroup rfnoc_blocks
+ *
  * The Keep One in N block has two modes: sample mode and packet mode.
  * In sample mode, the first sample is kept and then N-1 samples are dropped.
  * Packet mode is similar to sample mode, except a packet of samples is kept
@@ -24,7 +26,7 @@ class UHD_API keep_one_in_n_block_control : public noc_block_base
 public:
     RFNOC_DECLARE_BLOCK(keep_one_in_n_block_control)
 
-    enum class mode {SAMPLE_MODE, PACKET_MODE};
+    enum class mode { SAMPLE_MODE, PACKET_MODE };
 
     // Block registers
     static const uint32_t REG_N_OFFSET;

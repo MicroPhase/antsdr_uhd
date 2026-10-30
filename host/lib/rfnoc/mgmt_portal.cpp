@@ -6,21 +6,33 @@
 
 
 #include <uhd/exception.hpp>
+#include <uhd/utils/cast.hpp>
 #include <uhd/utils/log.hpp>
 #include <uhdlib/rfnoc/chdr_ctrl_xport.hpp>
 #include <uhdlib/rfnoc/chdr_packet_writer.hpp>
 #include <uhdlib/rfnoc/mgmt_portal.hpp>
-#include <unordered_set>
+#include <uhdlib/utils/narrow.hpp>
 #include <boost/format.hpp>
+#include <chrono>
 #include <cmath>
+#include <map>
 #include <mutex>
 #include <queue>
+#include <string>
 #include <thread>
+#include <tuple>
+#include <vector>
 
 namespace uhd { namespace rfnoc { namespace mgmt {
 
 using namespace chdr;
 using namespace transport;
+using namespace uhd::rfnoc::detail;
+
+
+namespace {
+
+constexpr char LOG_ID[] = "RFNOC::MGMT";
 
 constexpr bool ALLOW_DAISY_CHAINING = true;
 
@@ -39,12 +51,17 @@ constexpr uint16_t REG_OSTRM_BUFF_CAP_PKTS     = 0x28; // R
 // constexpr uint16_t REG_OSTRM_SEQ_ERR_CNT       = 0x2C; // R
 // constexpr uint16_t REG_OSTRM_DATA_ERR_CNT      = 0x30; // R
 // constexpr uint16_t REG_OSTRM_ROUTE_ERR_CNT     = 0x34; // R
-constexpr uint16_t REG_ISTRM_CTRL_STATUS       = 0x38; // RW
+constexpr uint16_t REG_ISTRM_CTRL_STATUS = 0x38; // RW
+constexpr uint16_t REG_OSTRM_THROTTLE    = 0x3C; // W
 
 constexpr uint32_t RESET_AND_FLUSH_OSTRM = (1 << 0);
 constexpr uint32_t RESET_AND_FLUSH_ISTRM = (1 << 1);
 // constexpr uint32_t RESET_AND_FLUSH_CTRL  = (1 << 2);
-constexpr uint32_t RESET_AND_FLUSH_ALL   = 0x7;
+constexpr uint32_t RESET_AND_FLUSH_ALL = 0x7;
+
+constexpr uint32_t THROTTLE_W      = 16;
+constexpr uint32_t MAX_THROTTLE    = (1 << THROTTLE_W) - 1;
+constexpr uint32_t THROTTLE_FACTOR = (1 << (THROTTLE_W / 2));
 
 #ifdef UHD_BIG_ENDIAN
 constexpr endianness_t HOST_ENDIANNESS = ENDIANNESS_BIG;
@@ -67,142 +84,62 @@ constexpr uint32_t STRM_STATUS_FC_ENABLED    = 0x80000000;
 constexpr uint32_t STRM_STATUS_SETUP_ERR     = 0x40000000;
 constexpr uint32_t STRM_STATUS_SETUP_PENDING = 0x20000000;
 
+} // namespace
 
-//! The type of a node in the data-flow graph
-enum node_type {
-    //! Invalid type. The FPGA will never have a node with type = 0
-    NODE_TYPE_INVALID = 0,
-    //! CHDR Crossbar
-    NODE_TYPE_XBAR = 1,
-    //! Stream Endpoint
-    NODE_TYPE_STRM_EP = 2,
-    //! Transport
-    NODE_TYPE_XPORT = 3
-};
-
-//! A unique identifier for a node
-struct node_id_t
-{
-    //! A unique ID for device that houses this node
-    device_id_t device_id = NULL_DEVICE_ID;
-    //! The type of this node
-    node_type type = NODE_TYPE_INVALID;
-    //! The instance number of this node in the device
-    sep_inst_t inst = 0;
-    //! Extended info about node (not used for comparisons)
-    uint32_t extended_info = 0;
-
-    // ctors and operators
-    node_id_t()                     = default;
-    node_id_t(const node_id_t& rhs) = default;
-    node_id_t(device_id_t device_id_, node_type type_, sep_inst_t inst_)
-        : device_id(device_id_), type(type_), inst(inst_), extended_info(0)
-    {
-    }
-    node_id_t(device_id_t device_id_,
-        node_type type_,
-        sep_inst_t inst_,
-        uint32_t extended_info_)
-        : device_id(device_id_), type(type_), inst(inst_), extended_info(extended_info_)
-    {
-    }
-    node_id_t(const sep_addr_t& sep_addr)
-        : device_id(sep_addr.first)
-        , type(NODE_TYPE_STRM_EP)
-        , inst(sep_addr.second)
-        , extended_info(0)
-    {
-    }
-
-    inline uint64_t unique_id() const
-    {
-        return (static_cast<uint64_t>(inst) + (static_cast<uint64_t>(device_id) << 16)
-                + (static_cast<uint64_t>(type) << 32));
-    }
-    inline std::string to_string() const
-    {
-        static const std::map<node_type, std::string> NODE_STR = {
-            {NODE_TYPE_INVALID, "unknown"},
-            {NODE_TYPE_XBAR, "xbar"},
-            {NODE_TYPE_STRM_EP, "sep"},
-            {NODE_TYPE_XPORT, "xport"}};
-        return str(
-            boost::format("device:%d/%s:%d") % device_id % NODE_STR.at(type) % inst);
-    }
-
-    inline friend bool operator<(const node_id_t& lhs, const node_id_t& rhs)
-    {
-        return (lhs.unique_id() < rhs.unique_id());
-    }
-    inline friend bool operator==(const node_id_t& lhs, const node_id_t& rhs)
-    {
-        return (lhs.unique_id() == rhs.unique_id());
-    }
-    inline friend bool operator!=(const node_id_t& lhs, const node_id_t& rhs)
-    {
-        return (lhs.unique_id() != rhs.unique_id());
-    }
-    inline node_id_t& operator=(const node_id_t&) = default;
-};
-
-//! The local destination to take at the current node to reach the next node
-//  - If negative, then no specific action necessary
-//  - If non-negative, then route (select destination) to the value
-using next_dest_t = int32_t;
-
-//! An address that allows locating a node in a data-flow network starting from
-//  a specific stream endpoint. The address is a collection (vector) of nodes and
-//  the respective routing decisions to get to the final node.
-using node_addr_t = std::vector<std::pair<node_id_t, next_dest_t>>;
-
-std::string to_string(const node_addr_t& node_addr)
-{
-    if (!node_addr.empty()) {
-        std::string str("");
-        for (const auto& hop : node_addr) {
-            str += hop.first.to_string() + std::string(",") + std::to_string(hop.second)
-                   + std::string("->");
-        }
-        return str;
-    } else {
-        return std::string("<empty>");
-    }
-}
 
 // Empty dtor for stream_manager
 mgmt_portal::~mgmt_portal() {}
 
 //---------------------------------------------------------------
-// Stream Manager Implementation
+// Management Portal Implementation
 //---------------------------------------------------------------
 class mgmt_portal_impl : public mgmt_portal
 {
 public:
     mgmt_portal_impl(chdr_ctrl_xport& xport,
         const chdr::chdr_packet_factory& pkt_factory,
-        sep_addr_t my_sep_addr)
+        sep_addr_t my_sep_addr,
+        topo_graph_t::sptr topo_graph)
         : _protover(pkt_factory.get_protover())
         , _chdr_w(pkt_factory.get_chdr_w())
         , _endianness(pkt_factory.get_endianness())
-        , _my_node_id(my_sep_addr.first, NODE_TYPE_STRM_EP, xport.get_epid())
-        , _send_seqnum(0)
+        // We use the EPID of the xport as the local instance just for convenience.
+        // For the local endpoints, the 'instance' doesn't really matter because
+        // we only have one endpoint per local device.
+        , _my_node_id({my_sep_addr.first, xport.get_epid()}, true, xport.get_epid())
         , _send_pkt(pkt_factory.make_mgmt())
         , _recv_pkt(pkt_factory.make_mgmt())
+        , _tgraph(topo_graph)
     {
         std::lock_guard<std::recursive_mutex> lock(_mutex);
+        if (!_tgraph->add_node(_my_node_id)) {
+            const std::string err_msg = "Failed to add node " + _my_node_id.to_string()
+                                        + " to the topology graph! Node already exists.";
+            UHD_LOG_ERROR(LOG_ID, err_msg);
+            throw uhd::runtime_error(err_msg);
+        }
         _discover_topology(xport);
-        UHD_LOG_DEBUG("RFNOC::MGMT",
+        UHD_LOG_DEBUG(LOG_ID,
             "The following endpoints are reachable from " << _my_node_id.to_string());
-        for (const auto& ep : _discovered_ep_set) {
-            UHD_LOG_DEBUG("RFNOC::MGMT", "* " << ep.first << ":" << ep.second);
+        for (const auto& ep : get_reachable_endpoints()) {
+            UHD_LOG_DEBUG(LOG_ID, "* " << ep.first << ":" << ep.second);
         }
     }
 
     ~mgmt_portal_impl() override {}
 
-    const std::set<sep_addr_t>& get_reachable_endpoints() const override
+    std::set<sep_addr_t> get_reachable_endpoints() const override
     {
-        return _discovered_ep_set;
+        auto reachable_ep_nodes =
+            _tgraph->get_connected_nodes(_my_node_id, [](const topo_node_t& node_id) {
+                return node_id.is_local_sep == false
+                       && node_id.type == topo_node_t::node_type::STRM_EP;
+            });
+        std::set<sep_addr_t> result;
+        for (auto& node : reachable_ep_nodes) {
+            result.insert({node.device_id, node.inst});
+        }
+        return result;
     }
 
     void initialize_endpoint(
@@ -213,23 +150,21 @@ public:
         auto my_epid = xport.get_epid();
 
         // Create a node ID from lookup info
-        node_id_t lookup_node(addr.first, NODE_TYPE_STRM_EP, addr.second);
-        if (_node_addr_map.count(lookup_node) == 0) {
-            throw uhd::lookup_error(
-                "initialize_endpoint(): Cannot reach node with specified address.");
-        }
-        const node_addr_t& node_addr = _node_addr_map.at(lookup_node);
+        topo_node_t lookup_node(addr);
 
         // Build a management transaction to first get to the node
         mgmt_payload cfg_xact;
         cfg_xact.set_header(my_epid, _protover, _chdr_w);
-        _traverse_to_node(cfg_xact, node_addr);
+        _traverse_to_node(cfg_xact, lookup_node, my_epid);
 
         mgmt_hop_t cfg_hop;
         cfg_hop.add_op(mgmt_op_t(mgmt_op_t::MGMT_OP_CFG_WR_REQ,
             mgmt_op_t::cfg_payload(REG_RESET_AND_FLUSH, RESET_AND_FLUSH_ALL)));
         cfg_hop.add_op(mgmt_op_t(
             mgmt_op_t::MGMT_OP_CFG_WR_REQ, mgmt_op_t::cfg_payload(REG_EPID_SELF, epid)));
+        // Reset throttle to default value of 1.0 to prevent adverse effects of
+        // last configured value.
+        _push_ostrm_throttle_config("1.0", cfg_hop);
         cfg_hop.add_op(mgmt_op_t(mgmt_op_t::MGMT_OP_RETURN));
         cfg_xact.add_hop(cfg_hop);
 
@@ -246,26 +181,39 @@ public:
             return;
         }
         // Create a node ID from lookup info
-        node_id_t lookup_node(addr.first, NODE_TYPE_STRM_EP, addr.second);
-        if (_node_addr_map.count(lookup_node) == 0) {
+        topo_node_t lookup_node(addr);
+        if (!_tgraph->has_route(_my_node_id, lookup_node)) {
             throw uhd::lookup_error(
-                "initialize_endpoint(): Cannot reach node with specified address.");
+                "register_endpoint(): Cannot reach node with specified address: "
+                + std::to_string(addr.first) + ":" + std::to_string(addr.second));
         }
-        // Add/update the entry in the stream endpoint ID map
-        _epid_addr_map[epid] = addr;
-        UHD_LOG_DEBUG("RFNOC::MGMT",
+        // Add/update the EPID entry in the topo graph
+        _tgraph->access_node(topo_node_t(addr)).epid = epid;
+        UHD_LOG_DEBUG(LOG_ID,
             (boost::format("Bound stream endpoint with Addr=(%d,%d) to EPID=%d")
                 % addr.first % addr.second % epid));
-        UHD_LOG_TRACE("RFNOC::MGMT",
+        UHD_LOG_TRACE(LOG_ID,
             (boost::format(
                  "Stream endpoint with EPID=%d can be reached by taking the path: %s")
-                % epid % to_string(_node_addr_map.at(lookup_node))));
+                % epid % to_string(_tgraph->get_route(_my_node_id, lookup_node))));
     }
 
     bool is_endpoint_registered(const sep_id_t& epid) const override
     {
         std::lock_guard<std::recursive_mutex> lock(_mutex);
-        return (_epid_addr_map.count(epid) > 0);
+
+        const auto nodes = _tgraph->get_nodes([epid](const topo_node_t& node) {
+            return (node.type == topo_node_t::node_type::STRM_EP
+                       || node.type == topo_node_t::node_type::VIRTUAL)
+                   && node.epid == epid;
+        });
+
+        if (nodes.size() > 1) {
+            UHD_LOG_WARNING(LOG_ID,
+                "More than one endpoint with EPID " << epid << " was registered!");
+        }
+
+        return !nodes.empty();
     }
 
     sep_info_t get_endpoint_info(const sep_id_t& epid) const override
@@ -273,82 +221,86 @@ public:
         std::lock_guard<std::recursive_mutex> lock(_mutex);
 
         // Lookup the destination node address using the endpoint ID
-        if (_epid_addr_map.count(epid) == 0) {
-            throw uhd::lookup_error(
-                "get_endpoint_info(): Could not find a stream with specified ID.");
-        }
-        node_id_t lookup_node(_epid_addr_map.at(epid));
-        // If a node is in _epid_addr_map then it must be in _node_addr_map
-        UHD_ASSERT_THROW(_node_addr_map.count(lookup_node) > 0);
-        // Why is key_node different from lookup_node?
-        // Because it has additional extended info (look at operator< def)
-        const node_id_t& key_node = _node_addr_map.find(lookup_node)->first;
+        const auto key_node = _get_sep_node(epid);
 
         // Build a return val
         sep_info_t retval;
-        retval.has_ctrl        = (key_node.extended_info >> 0) & 0x1;
-        retval.has_data        = (key_node.extended_info >> 1) & 0x1;
-        retval.num_input_ports = retval.has_data ? ((key_node.extended_info >> 2) & 0x3F)
-                                                 : 0;
+        retval.has_ctrl         = (key_node.extended_info >> 0) & 0x1;
+        retval.has_data         = (key_node.extended_info >> 1) & 0x1;
+        retval.num_input_ports  = retval.has_data ? ((key_node.extended_info >> 2) & 0x3F)
+                                                  : 0;
         retval.num_output_ports = retval.has_data ? ((key_node.extended_info >> 8) & 0x3F)
                                                   : 0;
         retval.reports_strm_errs = (key_node.extended_info >> 14) & 0x1;
-        retval.addr              = _epid_addr_map.at(epid);
+        retval.addr              = {key_node.device_id, key_node.inst};
         return retval;
     }
 
     void setup_local_route(chdr_ctrl_xport& xport, const sep_id_t& dst_epid) override
     {
+        using node_type = topo_node_t::node_type;
         std::lock_guard<std::recursive_mutex> lock(_mutex);
         auto my_epid = xport.get_epid();
 
-        // Lookup the physical stream endpoint address using the endpoint ID
-        const node_addr_t& node_addr = _lookup_sep_node_addr(dst_epid);
+        auto dst_node = _get_sep_node(dst_epid);
+        auto route    = _tgraph->get_route(_my_node_id, dst_node);
+        UHD_LOG_TRACE(LOG_ID, "Setting up local route: " << to_string(route));
+        route.pop_back();
 
-        node_addr_t route_addr = node_addr_t();
-        route_addr.push_back(std::make_pair(_my_node_id, next_dest_t(-1)));
-        for (const auto& addr_pair : node_addr) {
+        // Initialize all nodes between host and destination SEP. This will
+        // program all nodes to do the reverse routing (how to send packets to
+        // my_epid, i.e. back to the host). This requires one transaction per
+        // node on the route.
+        topo_edge_t last_edge;
+        last_edge.dst_port    = -1;
+        topo_node_t last_node = route.front().node;
+        for (const auto& hop : route) {
+            UHD_LOG_TRACE(LOG_ID,
+                "Initializing node " << hop.node.to_string()
+                                     << " to send data back to EPID " << my_epid);
             mgmt_payload init_req_xact;
-            _traverse_to_node(init_req_xact, route_addr);
-            _push_node_init_hop(init_req_xact, addr_pair.first, my_epid);
-            const mgmt_payload resp_xact =
-                _send_recv_mgmt_transaction(xport, init_req_xact);
-            route_addr.push_back(addr_pair);
+            _traverse_to_node(init_req_xact, last_node, my_epid, last_edge.src_port);
+            _push_node_init_hop(init_req_xact, hop.node, my_epid, last_edge.dst_port);
+            // Send the transaction and receive a response.
+            // We don't care about the contents of the response.
+            _send_recv_mgmt_transaction(xport, init_req_xact);
+            last_edge = hop.edge;
+            last_node = hop.node;
         }
 
         // Build a management transaction to configure all the nodes in the path going to
-        // dst_epid
+        // dst_epid. This will program the nodes to do the forward routing (how
+        // to send packets to dst_epid). Unlike the reverse routing, we can do
+        // that in a single management transaction.
         mgmt_payload cfg_xact;
         cfg_xact.set_header(my_epid, _protover, _chdr_w);
-
-        for (const auto& addr_pair : node_addr) {
-            const node_id_t& curr_node   = addr_pair.first;
-            const next_dest_t& curr_dest = addr_pair.second;
+        for (const auto& hop : route) {
             mgmt_hop_t curr_cfg_hop;
-            switch (curr_node.type) {
-                case NODE_TYPE_XBAR: {
+            switch (hop.node.type) {
+                case node_type::XBAR: {
                     // Configure the routing table to route all packets going to dst_epid
                     // to the port with index next_dest_t
                     curr_cfg_hop.add_op(mgmt_op_t(mgmt_op_t::MGMT_OP_CFG_WR_REQ,
-                        mgmt_op_t::cfg_payload(dst_epid, curr_dest)));
+                        mgmt_op_t::cfg_payload(dst_epid, hop.edge.src_port)));
                     curr_cfg_hop.add_op(mgmt_op_t(mgmt_op_t::MGMT_OP_SEL_DEST,
-                        mgmt_op_t::sel_dest_payload(static_cast<uint16_t>(curr_dest))));
+                        mgmt_op_t::sel_dest_payload(
+                            static_cast<uint16_t>(hop.edge.src_port))));
                 } break;
-                case NODE_TYPE_XPORT: {
-                    uint8_t node_subtype =
-                        static_cast<uint8_t>(curr_node.extended_info & 0xFF);
+                case node_type::XPORT: {
+                    const uint8_t node_subtype =
+                        static_cast<uint8_t>(hop.node.extended_info & 0xFF);
                     // Run a hop configuration function for custom transports
                     if (_rtcfg_cfg_fns.count(node_subtype)) {
-                        _rtcfg_cfg_fns.at(node_subtype)(curr_node.device_id,
-                            curr_node.inst,
+                        _rtcfg_cfg_fns.at(node_subtype)(hop.node.device_id,
+                            hop.node.inst,
                             node_subtype,
                             curr_cfg_hop);
                     } else {
                         curr_cfg_hop.add_op(mgmt_op_t(mgmt_op_t::MGMT_OP_NOP));
                     }
                 } break;
-                case NODE_TYPE_STRM_EP: {
-                    // Stream are not involved in routing, so do nothing
+                case node_type::STRM_EP: {
+                    // Stream endpoints are not involved in routing, so do nothing
                 } break;
                 default: {
                     UHD_THROW_INVALID_CODE_PATH();
@@ -361,8 +313,8 @@ public:
         }
 
         // If we follow this route then we should end up at a stream endpoint
-        // so add an extra hop and return the packet back with the node info we will
-        // sanity check it later
+        // so add an extra hop and return the packet back with the node info.
+        // We will sanity check it later
         mgmt_hop_t discover_hop;
         discover_hop.add_op(mgmt_op_t(mgmt_op_t::MGMT_OP_INFO_REQ));
         discover_hop.add_op(mgmt_op_t(mgmt_op_t::MGMT_OP_RETURN));
@@ -370,19 +322,19 @@ public:
 
         // Send the transaction and validate that we saw a stream endpoint
         const mgmt_payload sep_info_xact = _send_recv_mgmt_transaction(xport, cfg_xact);
-        const node_id_t sep_node         = _pop_node_discovery_hop(sep_info_xact);
-        if (sep_node.type != NODE_TYPE_STRM_EP) {
+        const topo_node_t sep_node       = _pop_node_discovery_hop(sep_info_xact);
+        if (sep_node.type != topo_node_t::node_type::STRM_EP) {
             throw uhd::routing_error(
                 "Route setup failed. Could not confirm terminal stream endpoint");
         }
 
-        UHD_LOG_DEBUG("RFNOC::MGMT",
+        UHD_LOG_DEBUG(LOG_ID,
             (boost::format("Established a route from EPID=%d (SW) to EPID=%d")
                 % xport.get_epid() % dst_epid));
-        UHD_LOG_TRACE("RFNOC::MGMT",
+        UHD_LOG_TRACE(LOG_ID,
             (boost::format("The destination for EPID=%d has been added to all routers in "
                            "the path: %s")
-                % dst_epid % to_string(node_addr)));
+                % dst_epid % to_string(route)));
     }
 
     bool can_remote_route(
@@ -390,28 +342,15 @@ public:
     {
         std::lock_guard<std::recursive_mutex> lock(_mutex);
 
-        if ((_discovered_ep_set.count(dst_addr) == 0)
-            || (_discovered_ep_set.count(src_addr) == 0)) {
-            // Can't route to/from something if we don't know about it
-            return false;
-        }
+        const auto src_node = _get_sep_node(src_addr);
+        const auto dst_node = _get_sep_node(dst_addr);
 
-        UHD_ASSERT_THROW(_node_addr_map.count(node_id_t(dst_addr)) > 0);
-        UHD_ASSERT_THROW(_node_addr_map.count(node_id_t(src_addr)) > 0);
+        return _tgraph->has_route(src_node, dst_node);
+    }
 
-        // Lookup the src and dst node address using the endpoint ID
-        const node_addr_t& dst_node_addr = _node_addr_map.at(node_id_t(dst_addr));
-        const node_addr_t& src_node_addr = _node_addr_map.at(node_id_t(src_addr));
-
-        // Find a common parent (could be faster than n^2 but meh, this is easier)
-        for (const auto& dnode : dst_node_addr) {
-            for (const auto& snode : src_node_addr) {
-                if (dnode.first == snode.first && dnode.first.type == NODE_TYPE_XBAR) {
-                    return true;
-                }
-            }
-        }
-        return false;
+    route_type get_route(const sep_addr_t& node_addr) const override
+    {
+        return _tgraph->get_route(_my_node_id, topo_node_t(node_addr));
     }
 
     void setup_remote_route(chdr_ctrl_xport& xport,
@@ -421,36 +360,56 @@ public:
         std::lock_guard<std::recursive_mutex> lock(_mutex);
 
         if (not is_endpoint_registered(dst_epid)) {
-            throw uhd::routing_error("Route setup failed. The destination endpoint was "
-                                     "not bound to an EPID and registered");
+            throw uhd::routing_error("mgmt_portal::setup_remote_route(): Route setup "
+                                     "failed. The requested destination endpoint "
+                                     + std::to_string(dst_epid)
+                                     + " was not bound to an EPID and registered");
         }
         if (not is_endpoint_registered(src_epid)) {
-            throw uhd::routing_error("Route setup failed. The source endpoint was "
-                                     "not bound to an EPID and registered");
+            throw uhd::routing_error("mgmt_portal::setup_remote_route(): Route setup "
+                                     "failed. The requested source endpoint "
+                                     + std::to_string(src_epid)
+                                     + " was not bound to an EPID and registered");
         }
 
-        if (not can_remote_route(
-                _epid_addr_map.at(dst_epid), _epid_addr_map.at(src_epid))) {
-            throw uhd::routing_error("Route setup failed. The endpoints don't share a "
-                                     "common crossbar parent.");
+        if (!can_remote_route(
+                _get_sep_node(dst_epid).get_addr(), _get_sep_node(src_epid).get_addr())) {
+            const std::string err_msg = "Failed to route from EPID "
+                                        + std::to_string(src_epid) + " to EPID "
+                                        + std::to_string(dst_epid) + ". No route found";
+            UHD_LOG_ERROR(LOG_ID, err_msg);
+            throw uhd::routing_error(err_msg);
         }
 
-        // If we setup local routes from this host to both the source and destination
-        // endpoints then the routing algorithm will guarantee that packet between src and
-        // dst will have a path between them as long as they share a common parent
-        // (crossbar). The assumption is verified above. It is also guaranteed that the
-        // path between them will be the shortest one. It is possible that we are
-        // configuring more crossbars than necessary but we do this for simplicity. If
-        // there is a need to optimize for routing table fullness, we can do a software
-        // graph traversal here, find the closest common parent (crossbar) for the two
-        // nodes and only configure the nodes downstream of that.
-        setup_local_route(xport, dst_epid);
-        setup_local_route(xport, src_epid);
+        const auto my_epid  = xport.get_epid();
+        const auto src_node = _get_sep_node(src_epid);
+        const auto dst_node = _get_sep_node(dst_epid);
+        const auto route    = _tgraph->get_route(src_node, dst_node);
 
-        UHD_LOG_DEBUG("RFNOC::MGMT",
-            (boost::format(
-                 "The two routes above now enable a route from EPID=%d to EPID=%s")
-                % src_epid % dst_epid));
+        auto in_edge = route.cbegin()->edge;
+        for (auto hop_it = route.cbegin(); hop_it != route.cend(); ++hop_it) {
+            const auto node     = hop_it->node;
+            const auto out_edge = hop_it->edge;
+            if (node.type == topo_node_t::node_type::XBAR) {
+                mgmt_payload cfg_xact;
+                cfg_xact.set_header(my_epid, _protover, _chdr_w);
+                _traverse_to_node(cfg_xact, node, my_epid, -1, true);
+                mgmt_hop_t xbar_route_hop;
+                xbar_route_hop.add_op(mgmt_op_t(mgmt_op_t::MGMT_OP_CFG_WR_REQ,
+                    mgmt_op_t::cfg_payload(src_epid, in_edge.dst_port)));
+                xbar_route_hop.add_op(mgmt_op_t(mgmt_op_t::MGMT_OP_CFG_WR_REQ,
+                    mgmt_op_t::cfg_payload(dst_epid, out_edge.src_port)));
+                xbar_route_hop.add_op(mgmt_op_t(mgmt_op_t::MGMT_OP_RETURN));
+                cfg_xact.add_hop(xbar_route_hop);
+                _send_recv_mgmt_transaction(xport, cfg_xact);
+            }
+
+            in_edge = out_edge;
+        }
+
+        UHD_LOG_DEBUG(LOG_ID,
+            (boost::format("Programmed a route from EPID=%d to EPID=%s") % src_epid
+                % dst_epid));
     }
 
     void config_local_rx_stream_start(chdr_ctrl_xport& xport,
@@ -460,6 +419,7 @@ public:
         const sw_buff_t mdata_buff_fmt,
         const stream_buff_params_t& fc_freq,
         const stream_buff_params_t& fc_headroom,
+        const std::string& throttle_ratio,
         const bool reset = false) override
     {
         std::lock_guard<std::recursive_mutex> lock(_mutex);
@@ -468,12 +428,12 @@ public:
         // The discovery process has already setup a route from the
         // destination to us. No additional action is necessary.
 
-        const node_addr_t& node_addr = _lookup_sep_node_addr(epid);
+        auto dst_node = _get_sep_node(epid);
 
         // Build a management transaction to first get to the node
         mgmt_payload cfg_xact;
         cfg_xact.set_header(my_epid, _protover, _chdr_w);
-        _traverse_to_node(cfg_xact, node_addr);
+        _traverse_to_node(cfg_xact, dst_node, my_epid);
 
         mgmt_hop_t cfg_hop;
         // Assert reset if requested
@@ -492,6 +452,7 @@ public:
             fc_freq,
             fc_headroom,
             cfg_hop);
+        _push_ostrm_throttle_config(throttle_ratio, cfg_hop);
         // Return the packet back to us
         cfg_hop.add_op(mgmt_op_t(mgmt_op_t::MGMT_OP_RETURN));
 
@@ -500,8 +461,8 @@ public:
         cfg_xact.add_hop(cfg_hop);
         _send_recv_mgmt_transaction(xport, cfg_xact);
 
-        UHD_LOG_DEBUG("RFNOC::MGMT",
-            (boost::format("Initiated RX stream setup for EPID=%d") % epid));
+        UHD_LOG_DEBUG(
+            LOG_ID, (boost::format("Initiated RX stream setup for EPID=%d") % epid));
     }
 
     stream_buff_params_t config_local_rx_stream_commit(chdr_ctrl_xport& xport,
@@ -511,15 +472,16 @@ public:
     {
         std::lock_guard<std::recursive_mutex> lock(_mutex);
 
-        // Wait for stream configuration to finish on the HW side
-        const node_addr_t& node_addr = _lookup_sep_node_addr(epid);
-        _validate_stream_setup(xport, node_addr, timeout, fc_enabled);
+        auto dst_node = _get_sep_node(epid);
 
-        UHD_LOG_DEBUG("RFNOC::MGMT",
-            (boost::format("Finished RX stream setup for EPID=%d") % epid));
+        // Wait for stream configuration to finish on the HW side
+        _validate_stream_setup(xport, dst_node, timeout, fc_enabled);
+
+        UHD_LOG_DEBUG(
+            LOG_ID, (boost::format("Finished RX stream setup for EPID=%d") % epid));
 
         // Return discovered buffer parameters
-        return std::get<1>(_get_ostrm_status(xport, node_addr));
+        return std::get<1>(_get_ostrm_status(xport, dst_node));
     }
 
     void config_local_tx_stream(chdr_ctrl_xport& xport,
@@ -529,17 +491,16 @@ public:
         const bool reset = false) override
     {
         std::lock_guard<std::recursive_mutex> lock(_mutex);
-        auto my_epid = xport.get_epid();
+        auto my_epid  = xport.get_epid();
+        auto dst_node = _get_sep_node(epid);
 
         // First setup a route between to the endpoint
         setup_local_route(xport, epid);
 
-        const node_addr_t& node_addr = _lookup_sep_node_addr(epid);
-
         // Build a management transaction to first get to the node
         mgmt_payload cfg_xact;
         cfg_xact.set_header(my_epid, _protover, _chdr_w);
-        _traverse_to_node(cfg_xact, node_addr);
+        _traverse_to_node(cfg_xact, dst_node, my_epid);
 
         mgmt_hop_t cfg_hop;
         // Assert reset if requested
@@ -562,8 +523,8 @@ public:
         // We don't care about the contents of the response.
         _send_recv_mgmt_transaction(xport, cfg_xact);
 
-        UHD_LOG_DEBUG("RFNOC::MGMT",
-            (boost::format("Finished TX stream setup for EPID=%d") % epid));
+        UHD_LOG_DEBUG(
+            LOG_ID, (boost::format("Finished TX stream setup for EPID=%d") % epid));
     }
 
     stream_buff_params_t config_remote_stream(chdr_ctrl_xport& xport,
@@ -576,14 +537,14 @@ public:
         const double timeout = 0.2) override
     {
         std::lock_guard<std::recursive_mutex> lock(_mutex);
-        auto my_epid = xport.get_epid();
+        auto my_epid          = xport.get_epid();
         const bool fc_enabled = (fc_freq.bytes != 0) || (fc_freq.packets != 0);
 
         // First setup a route between the two endpoints
         setup_remote_route(xport, dst_epid, src_epid);
 
-        const node_addr_t& dst_node_addr = _lookup_sep_node_addr(dst_epid);
-        const node_addr_t& src_node_addr = _lookup_sep_node_addr(src_epid);
+        const auto src_node = _get_sep_node(src_epid);
+        const auto dst_node = _get_sep_node(dst_epid);
 
         // If requested, send transactions to reset and flush endpoints
         if (reset) {
@@ -591,7 +552,7 @@ public:
             for (size_t i = 0; i < 2; i++) {
                 mgmt_payload rst_xact;
                 rst_xact.set_header(my_epid, _protover, _chdr_w);
-                _traverse_to_node(rst_xact, (i == 0) ? src_node_addr : dst_node_addr);
+                _traverse_to_node(rst_xact, (i == 0) ? src_node : dst_node, my_epid);
                 mgmt_hop_t rst_hop;
                 rst_hop.add_op(mgmt_op_t(mgmt_op_t::MGMT_OP_CFG_WR_REQ,
                     mgmt_op_t::cfg_payload(REG_RESET_AND_FLUSH,
@@ -606,7 +567,7 @@ public:
         {
             mgmt_payload cfg_xact;
             cfg_xact.set_header(my_epid, _protover, _chdr_w);
-            _traverse_to_node(cfg_xact, src_node_addr);
+            _traverse_to_node(cfg_xact, src_node, my_epid);
             mgmt_hop_t cfg_hop;
             // Set destination of the stream to dst_epid
             cfg_hop.add_op(mgmt_op_t(mgmt_op_t::MGMT_OP_CFG_WR_REQ,
@@ -614,6 +575,9 @@ public:
             // Configure flow control parameters
             _push_ostrm_flow_control_config(
                 lossy_xport, BUFF_U64, BUFF_U64, false, fc_freq, fc_headroom, cfg_hop);
+            // Reset throttle to default value of 1.0 to prevent adverse effects of
+            // last configured value.
+            _push_ostrm_throttle_config("1.0", cfg_hop);
             // Return the packet back to us
             cfg_hop.add_op(mgmt_op_t(mgmt_op_t::MGMT_OP_RETURN));
 
@@ -627,7 +591,7 @@ public:
         {
             mgmt_payload cfg_xact;
             cfg_xact.set_header(my_epid, _protover, _chdr_w);
-            _traverse_to_node(cfg_xact, dst_node_addr);
+            _traverse_to_node(cfg_xact, dst_node, my_epid);
             mgmt_hop_t cfg_hop;
             // Configure buffer types
             cfg_hop.add_op(mgmt_op_t(mgmt_op_t::MGMT_OP_CFG_WR_REQ,
@@ -642,14 +606,14 @@ public:
         }
 
         // Wait for stream configuration to finish on the HW side
-        _validate_stream_setup(xport, src_node_addr, timeout, fc_enabled);
+        _validate_stream_setup(xport, src_node, timeout, fc_enabled);
 
-        UHD_LOG_DEBUG("RFNOC::MGMT",
+        UHD_LOG_DEBUG(LOG_ID,
             (boost::format("Setup a stream from EPID=%d to EPID=%d") % src_epid
                 % dst_epid));
 
         // Return discovered buffer parameters
-        return std::get<1>(_get_ostrm_status(xport, src_node_addr));
+        return std::get<1>(_get_ostrm_status(xport, src_node));
     }
 
 
@@ -666,39 +630,30 @@ private: // Functions
     // Discover all nodes that are reachable from this software stream endpoint
     void _discover_topology(chdr_ctrl_xport& xport)
     {
+        using port_t    = topo_edge_t::port_t;
+        using node_type = topo_node_t::node_type;
         // Initialize a queue of pending paths. We will use this for a breadth-first
         // traversal of the dataflow graph. The queue consists of a previously discovered
         // node and the next destination to take from that node.
-        std::queue<std::pair<node_id_t, next_dest_t>> pending_paths;
-        auto my_epid = xport.get_epid();
+        std::queue<std::pair<topo_node_t, port_t>> pending_paths;
+        const auto my_epid = xport.get_epid();
 
         // Add ourselves to the the pending queue to kick off the search
-        UHD_LOG_DEBUG("RFNOC::MGMT",
-            "Starting topology discovery from " << _my_node_id.to_string());
-        bool is_first_path = true;
-        pending_paths.push(std::make_pair(_my_node_id, next_dest_t(-1)));
+        UHD_LOG_DEBUG(
+            LOG_ID, "Starting topology discovery from " << _my_node_id.to_string());
+        pending_paths.push({_my_node_id, port_t(-1)});
 
-        while (not pending_paths.empty()) {
+        while (!pending_paths.empty()) {
             // Pop the next path to discover from the pending queue
-            const auto& next_path = pending_paths.front();
+            const auto next_path = pending_paths.front();
             pending_paths.pop();
-
-            // We need to build a node_addr_t to allow us to get to next_path
-            // To do so we first lookup how to get to next_path.first. This location has
-            // already been discovered so we should just be able to look it up in
-            // _node_addr_map. The only exception for that is when we are just starting
-            // out, in which case our previous node is "us".
-            node_addr_t next_addr = is_first_path ? node_addr_t()
-                                                  : _node_addr_map.at(next_path.first);
-            // Once we know how to get to the base node, then add the next destination
-            next_addr.push_back(next_path);
-            is_first_path = false;
+            const auto& next_node = next_path.first;
 
             // Build a management transaction to first get to our destination so that we
             // can ask it to identify itself
             mgmt_payload route_xact;
             route_xact.set_header(my_epid, _protover, _chdr_w);
-            _traverse_to_node(route_xact, next_addr);
+            _traverse_to_node(route_xact, next_node, my_epid, next_path.second);
 
             // Discover downstream node (we ask the node to identify itself)
             mgmt_payload disc_req_xact(route_xact);
@@ -707,8 +662,12 @@ private: // Functions
             disc_hop.add_op(mgmt_op_t(mgmt_op_t::MGMT_OP_INFO_REQ));
             disc_hop.add_op(mgmt_op_t(mgmt_op_t::MGMT_OP_RETURN));
             disc_req_xact.add_hop(disc_hop);
+            UHD_LOG_TRACE(LOG_ID,
+                "Discovering next node upstream from "
+                    << next_node.to_string() << ", output port " << next_path.second
+                    << " using management transaction: " << disc_req_xact.to_string());
 
-            node_id_t new_node;
+            topo_node_t new_node;
             try {
                 // Send the discovery transaction
                 const mgmt_payload disc_resp_xact =
@@ -722,10 +681,11 @@ private: // Functions
                 // legitimate error. In all other cases we assume that there was nothing
                 // to discover downstream.
                 if (next_path.second < 0) {
+                    UHD_LOG_ERROR(LOG_ID, io_err.what());
                     throw io_err;
                 } else {
                     // Move to the next pending path
-                    UHD_LOG_TRACE("RFNOC::MGMT",
+                    UHD_LOG_TRACE(LOG_ID,
                         "Nothing connected on " << next_path.first.to_string() << "->"
                                                 << next_path.second
                                                 << ". Ignoring that path.");
@@ -734,110 +694,136 @@ private: // Functions
             }
 
             // We found a node!
-            // First check if we have already seen this node in the past. If not, we have
-            // to add it to our internal data structures. If we have already seen it then
-            // we just skip it. It is OK to skip the node because we are doing a BFS,
-            // which means that the first time a node is discovered during the traversal,
-            // the distance from this EP to that node will be the shortest path. The core
-            // design philosophy for RFNoC is that the data will always take the shortest
-            // path, because we make the assumption that a shorter path *always* has
-            // better QoS compared to a longer one. If this assumption is not true, we
-            // have to handle ordering by QoS for which we need to modify this search a
-            // bit and provide QoS preferences in the API. That may be a future feature.
-            if (_node_addr_map.count(new_node) > 0) {
-                UHD_LOG_DEBUG("RFNOC::MGMT",
+            // Identify destination port number. This only matters on a crossbar.
+            // Crossbars publish the port we're connected on in the 'inst' field.
+            // However, that means we need to manually count the instances of
+            // crossbars to uniquely identify them.
+            port_t dst_port = topo_edge_t::ANY_PORT;
+            if (new_node.type == node_type::XBAR) {
+                dst_port = new_node.inst;
+                // TODO: For now, we assume one xbar per device, so this is easy.
+                // If we want to allow multiple crossbars, we either need to add
+                // some identification, or we identify crossbars by the things
+                // they're connected to (e.g., only one crossbar can be attached
+                // to next_node on this very port).
+                new_node.inst = 0;
+            }
+
+            topo_edge_t new_edge(next_node, new_node, next_path.second, dst_port);
+
+            // Because next_node was unknown before topo discovery started, we
+            // can safely add a route from next_node to new_node. That doesn't
+            // preclude that new_node was previously detected, so we check for that.
+            // If new_node was already in the graph, we can terminate the discovery
+            // on this path.
+            if (!_tgraph->add_biedge(next_node, new_node, new_edge)) {
+                UHD_LOG_DEBUG(LOG_ID,
                     "Re-discovered node " << new_node.to_string() << ". Skipping it");
-            } else {
-                UHD_LOG_DEBUG("RFNOC::MGMT", "Discovered node " << new_node.to_string());
-                _node_addr_map[new_node] = next_addr;
+                continue;
+            }
+            UHD_LOG_DEBUG(LOG_ID, "Discovered node " << new_node.to_string());
 
-                // Initialize the node (first time config)
-                mgmt_payload init_req_xact(route_xact);
-                _push_node_init_hop(init_req_xact, new_node, my_epid);
-                const mgmt_payload init_resp_xact =
-                    _send_recv_mgmt_transaction(xport, init_req_xact);
-                UHD_LOG_DEBUG("RFNOC::MGMT", "Initialized node " << new_node.to_string());
+            // Initialize the node (first time config)
+            mgmt_payload init_req_xact(route_xact);
+            _push_node_init_hop(init_req_xact, new_node, my_epid, new_edge.dst_port);
+            // Send the transaction and receive a response.
+            // We don't care about the contents of the response.
+            _send_recv_mgmt_transaction(xport, init_req_xact);
+            UHD_LOG_DEBUG(LOG_ID, "Initialized node " << new_node.to_string());
 
-                // If the new node is a stream endpoint then we are done traversing this
-                // path. If not, then check all ports downstream of the new node and add
-                // them to pending_paths for further traversal
-                switch (new_node.type) {
-                    case NODE_TYPE_XBAR: {
-                        // Total ports on this crossbar
-                        size_t nports =
-                            static_cast<size_t>(new_node.extended_info & 0xFF);
-                        // Total transport ports on this crossbar (the first nports_xport
-                        // ports are transport ports)
-                        size_t nports_xport =
-                            static_cast<size_t>((new_node.extended_info >> 8) & 0xFF);
-                        // When we allow daisy chaining, we need to recursively check
-                        // other transports
-                        size_t start_port = ALLOW_DAISY_CHAINING ? 0 : nports_xport;
-                        for (size_t i = start_port; i < nports; i++) {
-                            // Skip the current port because it's the input
-                            if (i != static_cast<size_t>(new_node.inst)) {
-                                // If there is a single downstream port then do nothing
-                                pending_paths.push(std::make_pair(
-                                    new_node, static_cast<next_dest_t>(i)));
-                            }
+            // If the new node is a stream endpoint then we are done traversing this
+            // path. If not, then check all ports downstream of the new node and add
+            // them to pending_paths for further traversal
+            switch (new_node.type) {
+                case node_type::XBAR: {
+                    // Total ports on this crossbar
+                    const size_t nports =
+                        static_cast<size_t>(new_node.extended_info & 0xFF);
+                    // Total transport ports on this crossbar (the first nports_xport
+                    // ports are transport ports)
+                    const size_t nports_xport =
+                        static_cast<size_t>((new_node.extended_info >> 8) & 0xFF);
+                    // When we allow daisy chaining, we need to recursively check
+                    // other transports
+                    const size_t start_port = ALLOW_DAISY_CHAINING ? 0 : nports_xport;
+                    for (size_t i = start_port; i < nports; i++) {
+                        // Skip the input port
+                        if (i != static_cast<size_t>(dst_port)) {
+                            pending_paths.push(
+                                std::make_pair(new_node, static_cast<port_t>(i)));
                         }
-                        UHD_LOG_TRACE("RFNOC::MGMT",
-                            "* " << new_node.to_string() << " has " << nports
-                                 << " ports, " << nports_xport
-                                 << " transports and we are hooked up on port "
-                                 << new_node.inst);
-                    } break;
-                    case NODE_TYPE_STRM_EP: {
-                        // Stop searching when we find a stream endpoint
-                        // Add the endpoint to the discovered endpoint vector
-                        _discovered_ep_set.insert(
-                            sep_addr_t(new_node.device_id, new_node.inst));
-                    } break;
-                    case NODE_TYPE_XPORT: {
-                        // A transport has only one output. We don't need to take
-                        // any action to reach
-                        pending_paths.push(std::make_pair(new_node, -1));
-                    } break;
-                    default: {
-                        UHD_THROW_INVALID_CODE_PATH();
-                        break;
                     }
+                    UHD_LOG_TRACE(LOG_ID,
+                        "* " << new_node.to_string() << " has " << nports << " ports, "
+                             << nports_xport
+                             << " transports and we are hooked up on port " << dst_port);
+                } break;
+                case node_type::STRM_EP: {
+                    // Stop searching when we find a stream endpoint
+                } break;
+                case node_type::XPORT: {
+                    // A transport has only one output. We don't need to take
+                    // any action to reach the next node.
+                    pending_paths.push(std::make_pair(new_node, -1));
+                } break;
+                default: {
+                    UHD_THROW_INVALID_CODE_PATH();
+                    break;
                 }
             }
+            // That's it! Now go check the next path.
         }
     }
 
-    // Add hops to the management transaction to reach the specified node
-    void _traverse_to_node(mgmt_payload& transaction, const node_addr_t& node_addr)
+    //! Add hops to the management transaction to reach the specified node
+    //
+    // The typical use case is to add a management transaction that's aimed at
+    // the node after \p dst_node. If the intention is to add a management
+    // transaction for \p dst_node itself, then set \p dst_is_target to true.
+    topo_edge_t _traverse_to_node(mgmt_payload& transaction,
+        const topo_node_t& dst_node,
+        const sep_id_t my_epid,
+        const topo_edge_t::port_t last_port_override = -1,
+        const bool dst_is_target                     = false)
     {
-        for (const auto& addr_pair : node_addr) {
-            const node_id_t& curr_node   = addr_pair.first;
-            const next_dest_t& curr_dest = addr_pair.second;
-            if (curr_node.type != NODE_TYPE_STRM_EP) {
-                // If a node is a crossbar, then it have have a non-negative destination
-                UHD_ASSERT_THROW((curr_node.type != NODE_TYPE_XBAR || curr_dest >= 0));
-                _push_advance_hop(transaction, curr_dest);
-            } else {
-                // This is a stream endpoint. Nothing needs to be done to advance
-                // here. The behavior of this operation is identical whether or
-                // not the stream endpoint is in software or not.
+        if (dst_node == _my_node_id) {
+            return topo_edge_t();
+        }
+        auto route = _tgraph->get_route(_my_node_id, dst_node);
+        if (dst_is_target) {
+            route.pop_back();
+        }
+        route.back().edge.src_port = last_port_override;
+        topo_edge_t last_edge;
+        for (const auto& hop : route) {
+            mgmt_hop_t mgmt_hop;
+            switch (hop.node.type) {
+                case topo_node_t::node_type::STRM_EP:
+                    // This is a stream endpoint. Nothing needs to be done to
+                    // advance here. The behavior of this operation is identical
+                    // whether or not the stream endpoint is in software or not.
+                    continue;
+                case topo_node_t::node_type::XBAR: {
+                    // If we're on a crossbar, then we have to manually choose
+                    // how to get to the next node. We also program the return
+                    // path.
+                    UHD_ASSERT_THROW(hop.edge.src_port >= 0);
+                    UHD_ASSERT_THROW(last_edge.dst_port >= 0);
+                    mgmt_hop.add_op(mgmt_op_t(mgmt_op_t::MGMT_OP_CFG_WR_REQ,
+                        mgmt_op_t::cfg_payload(my_epid, last_edge.dst_port)));
+                    mgmt_hop.add_op(mgmt_op_t(mgmt_op_t::MGMT_OP_SEL_DEST,
+                        mgmt_op_t::sel_dest_payload(
+                            static_cast<uint16_t>(hop.edge.src_port))));
+                } break;
+                default:
+                    // For any other node, we only need a NOP to traverse.
+                    mgmt_hop.add_op(mgmt_op_t(mgmt_op_t::MGMT_OP_NOP));
+                    break;
             }
+            transaction.add_hop(mgmt_hop);
+            last_edge = hop.edge;
         }
-    }
-
-    // Add a hop to the transaction simply to get to the next node
-    void _push_advance_hop(mgmt_payload& transaction, const next_dest_t& next_dst)
-    {
-        if (next_dst >= 0) {
-            mgmt_hop_t sel_dest_hop;
-            sel_dest_hop.add_op(mgmt_op_t(mgmt_op_t::MGMT_OP_SEL_DEST,
-                mgmt_op_t::sel_dest_payload(static_cast<uint16_t>(next_dst))));
-            transaction.add_hop(sel_dest_hop);
-        } else {
-            mgmt_hop_t nop_hop;
-            nop_hop.add_op(mgmt_op_t(mgmt_op_t::MGMT_OP_NOP));
-            transaction.add_hop(nop_hop);
-        }
+        return route.back().edge;
     }
 
     // Add operations to a hop to configure flow control for an output stream
@@ -880,15 +866,54 @@ private: // Functions
                     true, lossy_xport, pyld_buff_fmt, mdata_buff_fmt, byte_swap))));
     }
 
+    void _push_ostrm_throttle_config(const std::string& throttle_ratio_s, mgmt_hop_t& hop)
+    {
+        const double throttle_ratio = [&](std::string ratio_s) -> double {
+            try {
+                if (ratio_s.back() == '%') {
+                    ratio_s.resize(ratio_s.size() - 1);
+                    return uhd::cast::from_str<double>(ratio_s) / 100.0;
+                }
+                return uhd::cast::from_str<double>(ratio_s);
+            } catch (const uhd::runtime_error&) {
+                UHD_LOG_WARNING(LOG_ID,
+                    "Invalid throttle argument provided: `"
+                        << throttle_ratio_s << "', setting throttle to 1.0.");
+                return 1.0;
+            }
+        }(throttle_ratio_s);
+
+        if (throttle_ratio <= 0.0 || throttle_ratio > 1.0) {
+            UHD_LOG_THROW(uhd::value_error,
+                LOG_ID,
+                "Throttle ratio " + throttle_ratio_s + " is out of bounds, "
+                    + "must be in the range (0, 1] or (0%, 100%]");
+        }
+        const uint32_t throttle_val = [](const double ratio) -> uint32_t {
+            const double throttle_f = ((1.0 / ratio) - 1.0) * THROTTLE_FACTOR;
+            if (throttle_f > MAX_THROTTLE) {
+                return MAX_THROTTLE;
+            }
+            return uhd::narrow_cast<uint32_t>(throttle_f);
+        }(throttle_ratio);
+        UHD_LOG_DEBUG(LOG_ID,
+            "Throttling stream endpoint to "
+                << (100.0 / ((static_cast<float>(throttle_val) / THROTTLE_FACTOR) + 1))
+                << "% "
+                << "(0x" << std::hex << (int)throttle_val << ")");
+        hop.add_op(mgmt_op_t(mgmt_op_t::MGMT_OP_CFG_WR_REQ,
+            mgmt_op_t::cfg_payload(REG_OSTRM_THROTTLE, throttle_val)));
+    }
+
     // Send/recv a management transaction that will get the output stream status
     std::tuple<uint32_t, stream_buff_params_t> _get_ostrm_status(
-        chdr_ctrl_xport& xport, const node_addr_t& node_addr)
+        chdr_ctrl_xport& xport, const topo_node_t& dst)
     {
         auto my_epid = xport.get_epid();
         // Build a management transaction to first get to the node
         mgmt_payload status_xact;
         status_xact.set_header(my_epid, _protover, _chdr_w);
-        _traverse_to_node(status_xact, node_addr);
+        _traverse_to_node(status_xact, dst, my_epid);
 
         // Read all the status registers
         mgmt_hop_t cfg_hop;
@@ -909,7 +934,7 @@ private: // Functions
             throw uhd::op_failed("Management operation failed. Incorrect format (hops).");
         }
         const mgmt_hop_t& rhop = resp_xact.get_hop(0);
-        if (rhop.get_num_ops() <= 1
+        if (rhop.get_num_ops() < 2
             || rhop.get_op(0).get_op_code() != mgmt_op_t::MGMT_OP_NOP) {
             throw uhd::op_failed(
                 "Management operation failed. Incorrect format (operations).");
@@ -936,7 +961,7 @@ private: // Functions
 
     // Make sure that stream setup is complete and successful, else throw exception
     void _validate_stream_setup(chdr_ctrl_xport& xport,
-        const node_addr_t& node_addr,
+        const topo_node_t& dst_node,
         const double timeout,
         const bool fc_enabled)
     {
@@ -944,10 +969,11 @@ private: // Functions
         uint32_t ostrm_status = 0;
         double sleep_s        = 0.001;
         for (size_t i = 0; i < size_t(std::ceil(timeout / sleep_s)); i++) {
-            ostrm_status = std::get<0>(_get_ostrm_status(xport, node_addr));
+            ostrm_status = std::get<0>(_get_ostrm_status(xport, dst_node));
             if ((ostrm_status & STRM_STATUS_SETUP_PENDING) != 0) {
                 // Wait and retry
-                std::this_thread::sleep_for(std::chrono::milliseconds(static_cast<int64_t>(sleep_s * 1000)));
+                std::this_thread::sleep_for(
+                    std::chrono::milliseconds(static_cast<int64_t>(sleep_s * 1000)));
             } else {
                 // Configuration is done
                 break;
@@ -967,48 +993,54 @@ private: // Functions
 
 
     // Pop a node discovery response from a transaction and parse it
-    const node_id_t _pop_node_discovery_hop(const mgmt_payload& transaction)
+    const topo_node_t _pop_node_discovery_hop(const mgmt_payload& transaction)
     {
         if (transaction.get_num_hops() != 1) {
             throw uhd::op_failed("Management operation failed. Incorrect format (hops).");
         }
-        const mgmt_hop_t& rhop     = transaction.get_hop(0);
+        const mgmt_hop_t& rhop = transaction.get_hop(0);
+        if (rhop.get_num_ops() < 2) {
+            throw uhd::op_failed(
+                "Management operation failed. Incorrect number of operations.");
+        }
         const mgmt_op_t& nop_resp  = rhop.get_op(0);
         const mgmt_op_t& info_resp = rhop.get_op(1);
-        if (rhop.get_num_ops() <= 1 || nop_resp.get_op_code() != mgmt_op_t::MGMT_OP_NOP
+        if (nop_resp.get_op_code() != mgmt_op_t::MGMT_OP_NOP
             || info_resp.get_op_code() != mgmt_op_t::MGMT_OP_INFO_RESP) {
             throw uhd::op_failed(
                 "Management operation failed. Incorrect format (operations).");
         }
         mgmt_op_t::node_info_payload resp_pl(info_resp.get_op_payload());
-        return std::move(node_id_t(resp_pl.device_id,
-            static_cast<node_type>(resp_pl.node_type),
+        return topo_node_t(resp_pl.device_id,
+            static_cast<topo_node_t::node_type>(resp_pl.node_type),
             resp_pl.node_inst,
-            resp_pl.ext_info));
+            resp_pl.ext_info);
     }
 
     // Push a hop onto a transaction to initialize the current node
-    void _push_node_init_hop(
-        mgmt_payload& transaction, const node_id_t& node, const sep_id_t& my_epid)
+    void _push_node_init_hop(mgmt_payload& transaction,
+        const topo_node_t& node,
+        const sep_id_t& my_epid,
+        const topo_edge_t::port_t dst_port)
     {
         mgmt_hop_t init_hop;
         switch (node.type) {
-            case NODE_TYPE_XBAR: {
+            case topo_node_t::node_type::XBAR: {
                 // Configure the routing table to route all packets going to my_epid back
                 // to the port where the packet is entering
                 // The address for the transaction is the EPID and the data is the port #
                 init_hop.add_op(mgmt_op_t(mgmt_op_t::MGMT_OP_CFG_WR_REQ,
-                    mgmt_op_t::cfg_payload(my_epid, node.inst)));
+                    mgmt_op_t::cfg_payload(my_epid, dst_port)));
             } break;
-            case NODE_TYPE_STRM_EP: {
+            case topo_node_t::node_type::STRM_EP: {
                 // Do nothing
                 init_hop.add_op(mgmt_op_t(mgmt_op_t::MGMT_OP_NOP));
             } break;
-            case NODE_TYPE_XPORT: {
+            case topo_node_t::node_type::XPORT: {
                 uint8_t node_subtype = static_cast<uint8_t>(node.extended_info & 0xFF);
                 // Run a hop configuration function for custom transports
-                if (_rtcfg_cfg_fns.count(node_subtype)) {
-                    _rtcfg_cfg_fns.at(node_subtype)(
+                if (_init_cfg_fns.count(node_subtype)) {
+                    _init_cfg_fns.at(node_subtype)(
                         node.device_id, node.inst, node_subtype, init_hop);
                 } else {
                     // For a generic transport, just advertise the transaction to the
@@ -1024,19 +1056,54 @@ private: // Functions
         transaction.add_hop(init_hop);
     }
 
-    // Lookup the full address of a stream endpoint node given the EPID
-    const node_addr_t& _lookup_sep_node_addr(const sep_id_t& epid)
+    //! Returns the node object for a given stream endpoint ID (virtual or non-virtual)
+    topo_node_t _get_sep_node(const sep_id_t& epid) const
     {
         // Lookup the destination node address using the endpoint ID
-        if (_epid_addr_map.count(epid) == 0) {
-            throw uhd::lookup_error(
-                "Could not find a stream endpoint with the requested ID.");
+        auto nodes = _tgraph->get_nodes([epid](const topo_node_t& node) {
+            return (node.type == topo_node_t::node_type::STRM_EP
+                       || node.type == topo_node_t::node_type::VIRTUAL)
+                   && node.epid == epid;
+        });
+        if (nodes.size() > 1) {
+            throw uhd::lookup_error("mgmt_portal::_get_sep_node(): Found more than one ("
+                                    + std::to_string(nodes.size())
+                                    + ") stream endpoint with EPID "
+                                    + std::to_string(epid));
         }
-        node_id_t sep_node(_epid_addr_map.at(epid));
-        // If a node is in _epid_addr_map then it must be in _node_addr_map
-        UHD_ASSERT_THROW(_node_addr_map.count(sep_node) > 0);
-        return _node_addr_map.at(sep_node);
+        if (nodes.empty()) {
+            throw uhd::lookup_error("mgmt_portal::_get_sep_node(): Could not find a "
+                                    "stream endpoint with specified EPID "
+                                    + std::to_string(epid));
+        }
+
+        return nodes.front();
     }
+
+    topo_node_t _get_sep_node(const sep_addr_t& addr) const
+    {
+        // Lookup the destination node address using the address
+        auto nodes = _tgraph->get_nodes([addr](const topo_node_t& node) {
+            return (node.type == topo_node_t::node_type::STRM_EP
+                       || node.type == topo_node_t::node_type::VIRTUAL)
+                   && node.device_id == addr.first && node.inst == addr.second;
+        });
+        if (nodes.size() > 1) {
+            throw uhd::lookup_error(
+                "mgmt_portal::_get_sep_node(): Found more than one ("
+                + std::to_string(nodes.size()) + ") stream endpoint with address "
+                + std::to_string(addr.first) + ":" + std::to_string(addr.second));
+        }
+        if (nodes.empty()) {
+            throw uhd::lookup_error("mgmt_portal::_get_sep_node(): Could not find a "
+                                    "stream endpoint with address "
+                                    + std::to_string(addr.first) + ":"
+                                    + std::to_string(addr.second));
+        }
+
+        return nodes.front();
+    }
+
 
     // Send the specified management transaction to the device
     void _send_mgmt_transaction(
@@ -1045,14 +1112,15 @@ private: // Functions
         chdr_header header;
         header.set_pkt_type(PKT_TYPE_MGMT);
         header.set_num_mdata(0);
-        header.set_seq_num(_send_seqnum++);
-        header.set_length(payload.get_size_bytes() + (chdr_w_to_bits(_chdr_w) / 8));
+        header.set_seq_num(static_cast<uint16_t>(_send_seqnum++));
+        header.set_length(uhd::narrow_cast<uint16_t>(
+            payload.get_size_bytes() + (chdr_w_to_bits(_chdr_w) / 8)));
         header.set_dst_epid(0);
 
-        auto send_buff = xport.get_send_buff(timeout * 1000);
+        auto send_buff = xport.get_send_buff(static_cast<int32_t>(timeout * 1000));
         if (not send_buff) {
             UHD_LOG_ERROR(
-                "RFNOC::MGMT", "Timed out getting send buff for management transaction");
+                LOG_ID, "Timed out getting send buff for management transaction");
             throw uhd::io_error("Timed out getting send buff for management transaction");
         }
         _send_pkt->refresh(send_buff->data(), header, payload);
@@ -1075,7 +1143,7 @@ private: // Functions
         // Send the transaction over the wire
         _send_mgmt_transaction(xport, send);
 
-        auto mgmt_buff = xport.get_mgmt_buff(timeout * 1000);
+        auto mgmt_buff = xport.get_mgmt_buff(static_cast<int32_t>(timeout * 1000));
         if (not mgmt_buff) {
             throw uhd::io_error("Timed out getting recv buff for management transaction");
         }
@@ -1095,34 +1163,29 @@ private: // Members
     // Endianness for the transport
     const endianness_t _endianness;
     // The node ID for this software endpoint
-    const node_id_t _my_node_id;
-    // A table that maps a node_id_t to a node_addr_t. This map allows looking up the
-    // address of a node given the node ID. There may be multiple ways to get to the
-    // node but we only store the shortest path here.
-    std::map<node_id_t, node_addr_t> _node_addr_map;
-    // A list of all discovered endpoints
-    std::set<sep_addr_t> _discovered_ep_set;
-    // A table that maps a stream endpoint ID to the physical address of the stream
-    // endpoint. This is a cache of the values from the epid_allocator
-    std::map<sep_id_t, sep_addr_t> _epid_addr_map;
+    const topo_node_t _my_node_id;
     // Send/recv transports
-    size_t _send_seqnum;
+    size_t _send_seqnum = 0;
     // Management packet containers
     chdr_mgmt_packet::uptr _send_pkt;
     chdr_mgmt_packet::cuptr _recv_pkt;
     // Hop configuration function maps
     std::map<uint8_t, xport_cfg_fn_t> _init_cfg_fns;
     std::map<uint8_t, xport_cfg_fn_t> _rtcfg_cfg_fns;
+    // Reference to the topology graph
+    topo_graph_t::sptr _tgraph;
     // Mutex that protects all state in this class
     mutable std::recursive_mutex _mutex;
-}; // namespace mgmt
+}; // class mgmt_portal_impl
 
 
 mgmt_portal::uptr mgmt_portal::make(chdr_ctrl_xport& xport,
     const chdr::chdr_packet_factory& pkt_factory,
-    sep_addr_t my_sep_addr)
+    sep_addr_t my_sep_addr,
+    uhd::rfnoc::detail::topo_graph_t::sptr topo_graph)
 {
-    return std::make_unique<mgmt_portal_impl>(xport, pkt_factory, my_sep_addr);
+    return std::make_unique<mgmt_portal_impl>(
+        xport, pkt_factory, my_sep_addr, topo_graph);
 }
 
 }}} // namespace uhd::rfnoc::mgmt

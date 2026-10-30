@@ -17,7 +17,6 @@
 #include <uhd/transport/if_addrs.hpp>
 #include <uhd/transport/udp_constants.hpp>
 #include <uhd/transport/udp_simple.hpp>
-#include <uhd/transport/udp_zero_copy.hpp>
 #include <uhd/utils/algorithm.hpp>
 #include <uhd/utils/byteswap.hpp>
 #include <uhd/utils/cast.hpp>
@@ -30,7 +29,7 @@
 #    include <uhdlib/transport/dpdk_simple.hpp>
 #    include <uhdlib/transport/udp_dpdk_link.hpp>
 #endif
-#include <boost/asio.hpp>
+#include <uhdlib/asio.hpp>
 #include <string>
 
 uhd::wb_iface::sptr x300_make_ctrl_iface_enet(
@@ -45,25 +44,29 @@ namespace asio = boost::asio;
 
 namespace {
 
-constexpr size_t XGE_DATA_FRAME_SEND_SIZE           = x300::DATA_FRAME_MAX_SIZE;
-constexpr size_t XGE_DATA_FRAME_RECV_SIZE           = x300::DATA_FRAME_MAX_SIZE;
-constexpr size_t GE_DATA_FRAME_SEND_SIZE            = 1472;
-constexpr size_t GE_DATA_FRAME_RECV_SIZE            = 1472;
-constexpr size_t ETH_MSG_NUM_FRAMES                 = 64;
+constexpr size_t XGE_DATA_FRAME_SEND_SIZE = x300::DATA_FRAME_MAX_SIZE;
+constexpr size_t XGE_DATA_FRAME_RECV_SIZE = x300::DATA_FRAME_MAX_SIZE;
+constexpr size_t GE_DATA_FRAME_SEND_SIZE  = 1472;
+constexpr size_t GE_DATA_FRAME_RECV_SIZE  = 1472;
+constexpr size_t ETH_MSG_NUM_FRAMES       = 64;
 
 // Default for num data frames is set to a value that will work well when send
 // or recv offload is enabled, or when using DPDK.
 constexpr size_t ETH_DATA_NUM_FRAMES = 32;
 
 constexpr size_t ETH_MSG_FRAME_SIZE = uhd::transport::udp_simple::mtu; // bytes
-constexpr size_t MAX_RATE_10GIGE    = (size_t)( // bytes/s
+// Note: These rates do not account for protocol overhead (CHDR headers), but
+// only have to be approximately correct. They are used as identifiers, and to
+// size buffers. Since the buffers also need to hold CHDR headers, this value
+// is good enough.
+constexpr size_t MAX_RATE_10GIGE = (size_t)( // bytes/s
     10e9 / 8 * // wire speed multiplied by percentage of packets that is sample data
-    (float(x300::DATA_FRAME_MAX_SIZE - CHDR_MAX_LEN_HDR)
+    (float(x300::DATA_FRAME_MAX_SIZE)
         / float(x300::DATA_FRAME_MAX_SIZE
                 + 8 /* UDP header */ + 20 /* Ethernet header length */)));
-constexpr size_t MAX_RATE_1GIGE     = (size_t)( // bytes/s
-    10e9 / 8 * // wire speed multiplied by percentage of packets that is sample data
-    (float(GE_DATA_FRAME_RECV_SIZE - CHDR_MAX_LEN_HDR)
+constexpr size_t MAX_RATE_1GIGE  = (size_t)( // bytes/s
+    1e9 / 8 * // wire speed multiplied by percentage of packets that is sample data
+    (float(GE_DATA_FRAME_RECV_SIZE)
         / float(GE_DATA_FRAME_RECV_SIZE
                 + 8 /* UDP header */ + 20 /* Ethernet header length */)));
 
@@ -196,9 +199,9 @@ eth_manager::eth_manager(
     // Initially store only the first address provided to setup communication
     // Once we read the EEPROM, we use it to map IP to its interface
     // In discover_eth(), we'll check and enable the other IP address, if given
-    x300_eth_conn_t init;
-    init.addr      = args.get_first_addr();
-    auto device_id = allocate_device_id();
+    x300_eth_conn_t init = x300_eth_conn_t();
+    init.addr            = args.get_first_addr();
+    auto device_id       = allocate_device_id();
     _local_device_ids.push_back(device_id);
     eth_conns[device_id] = init;
 
@@ -226,18 +229,10 @@ both_links_t eth_manager::get_links(link_type_t link_type,
     // a DMA FIFO, which is a device-specific thing. So punt on that for now.
 
     x300_eth_conn_t conn = eth_conns[local_device_id];
-    zero_copy_xport_params default_buff_args;
 
     const bool enable_fc = not link_args.has_key("enable_fc")
                            || uhd::cast::from_str<bool>(link_args.get("enable_fc"));
     const bool lossy_xport = enable_fc;
-
-    const size_t send_mtu = get_mtu(uhd::TX_DIRECTION);
-    const size_t recv_mtu = get_mtu(uhd::RX_DIRECTION);
-
-    // Set size and number of frames
-    default_buff_args.send_frame_size = std::min(send_mtu, ETH_MSG_FRAME_SIZE);
-    default_buff_args.recv_frame_size = std::min(recv_mtu, ETH_MSG_FRAME_SIZE);
 
     // Buffering is done in the socket buffers, so size them relative to
     // the link rate
@@ -250,15 +245,15 @@ both_links_t eth_manager::get_links(link_type_t link_type,
     default_link_params.recv_frame_size = conn.link_rate == MAX_RATE_1GIGE
                                               ? GE_DATA_FRAME_RECV_SIZE
                                               : XGE_DATA_FRAME_RECV_SIZE;
-    default_link_params.send_buff_size = conn.link_rate / 50;
-    default_link_params.recv_buff_size = std::max(conn.link_rate / 50,
+    default_link_params.send_buff_size  = conn.link_rate / 50;
+    default_link_params.recv_buff_size  = std::max(conn.link_rate / 50,
         ETH_MSG_NUM_FRAMES * ETH_MSG_FRAME_SIZE); // enough to hold greater of 20 ms or
                                                   // number of msg frames
 
 #ifdef HAVE_DPDK
-    if(_args.get_use_dpdk()) {
-        default_link_params.num_recv_frames = default_link_params.recv_buff_size /
-            default_link_params.recv_frame_size;
+    if (_args.get_use_dpdk()) {
+        default_link_params.num_recv_frames =
+            default_link_params.recv_buff_size / default_link_params.recv_frame_size;
     }
 #endif
 

@@ -13,11 +13,10 @@
 #include "uhd/device.hpp"
 #include "uhd/property_tree.hpp"
 #include "uhd/transport/bounded_buffer.hpp"
-#include "uhd/transport/usb_zero_copy.hpp"
 #include "uhd/types/dict.hpp"
 #include "uhd/types/sensors.hpp"
 #include "uhd/types/stream_cmd.hpp"
-#include "uhd/usrp/gps_ctrl.hpp"
+#include "uhdlib/usrp/gps_ctrl.hpp"
 #include "uhd/usrp/mboard_eeprom.hpp"
 #include "uhd/usrp/subdev_spec.hpp"
 #include "uhd/utils/pimpl.hpp"
@@ -27,13 +26,14 @@
 #include "uhdlib/usrp/common/adf4001_ctrl.hpp"
 #include "uhdlib/usrp/common/recv_packet_demuxer_3000.hpp"
 #include "uhdlib/usrp/cores/gpio_atr_3000.hpp"
-#include "uhdlib/usrp/cores/radio_ctrl_core_3000.hpp"
+#include "../b200/b200_radio_ctrl_core.hpp"
 #include "uhdlib/usrp/cores/rx_dsp_core_3000.hpp"
 #include "uhdlib/usrp/cores/rx_vita_core_3000.hpp"
 #include "uhdlib/usrp/cores/time_core_3000.hpp"
 #include "uhdlib/usrp/cores/tx_dsp_core_3000.hpp"
 #include "uhdlib/usrp/cores/tx_vita_core_3000.hpp"
 #include "uhdlib/usrp/cores/user_settings_core_3000.hpp"
+#include <boost/function.hpp>
 #include "uhdlib/usrp/common/pwr_cal_mgr.hpp"
 #include <boost/assign.hpp>
 #include <memory>
@@ -167,7 +167,7 @@ private:
     std::unique_ptr<ant_device_process_lock> _device_process_lock;
 
     // controllers
-    radio_ctrl_core_3000::sptr _local_ctrl;
+    b200_radio_ctrl_core::sptr _local_ctrl;
     uhd::usrp::ad9361_ctrl::sptr _codec_ctrl;
     uhd::usrp::ad936x_manager::sptr _codec_mgr;
     ant_local_spi_core::sptr _spi_iface;
@@ -194,8 +194,8 @@ private:
     struct AsyncTaskData
     {
         std::shared_ptr<async_md_type> async_md;
-        std::weak_ptr<radio_ctrl_core_3000> local_ctrl;
-        std::weak_ptr<radio_ctrl_core_3000> radio_ctrl[2];
+        std::weak_ptr<b200_radio_ctrl_core> local_ctrl;
+        std::weak_ptr<b200_radio_ctrl_core> radio_ctrl[2];
         ant_uart::sptr gpsdo_uart;
     };
     std::shared_ptr<AsyncTaskData> _async_task_data;
@@ -220,7 +220,7 @@ private:
     // perifs in the radio core
     struct radio_perifs_t
     {
-        radio_ctrl_core_3000::sptr ctrl;
+        b200_radio_ctrl_core::sptr ctrl;
         uhd::usrp::gpio_atr::gpio_atr_3000::sptr atr;
         uhd::usrp::gpio_atr::gpio_atr_3000::sptr fp_gpio;
         time_core_3000::sptr time64;

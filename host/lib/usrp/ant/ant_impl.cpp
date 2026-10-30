@@ -10,7 +10,6 @@
 #include "uhd/cal/database.hpp"
 #include "uhd/config.hpp"
 #include "uhd/exception.hpp"
-#include "uhd/transport/usb_control.hpp"
 #include "uhd/usrp/dboard_eeprom.hpp"
 #include "uhd/utils/cast.hpp"
 #include "uhd/utils/log.hpp"
@@ -32,6 +31,7 @@
 #include <functional>
 #include <iomanip>
 #include <memory>
+#include <set>
 #include <sstream>
 #include <stdexcept>
 #include <string>
@@ -92,6 +92,30 @@ std::string trim_board_string(const char* data, const size_t size)
         value.pop_back();
     }
     return value;
+}
+
+std::string normalize_product_id(const std::string& product)
+{
+    std::string normalized;
+    normalized.reserve(product.size());
+    for (const unsigned char value : product) {
+        if (std::isalnum(value)) {
+            normalized.push_back(static_cast<char>(std::toupper(value)));
+        }
+    }
+    return normalized;
+}
+
+bool is_e200_product(const std::string& product)
+{
+    const std::string normalized = normalize_product_id(product);
+    return normalized.rfind("E200", 0) == 0;
+}
+
+bool is_e310_compatible_product(const std::string& product)
+{
+    const std::string normalized = normalize_product_id(product);
+    return normalized == "E310" || normalized == "E310V2" || normalized == "E316";
 }
 }
 
@@ -308,6 +332,7 @@ static device_addrs_t ant_find(const device_addr_t& hint)
     const microphase_ant_ctrl_data_t *ctrl_data_in =
             reinterpret_cast<const microphase_ant_ctrl_data_t *>(microphase_ant_ctrl_data_in_mem);
 
+    std::set<std::string> discovered_devices;
     while (true) {
         size_t len = udp_transport->recv(boost::asio::buffer(microphase_ant_ctrl_data_in_mem));
         if (len > offsetof(microphase_ant_ctrl_data_t, serial)
@@ -340,16 +365,22 @@ static device_addrs_t ant_find(const device_addr_t& hint)
             else
                 mp_addr["product"] = board_str;
             mp_addr["serial"] = serial_str;
-            if (mp_addr["product"].find("E200") == 0) {
+            if (is_e200_product(mp_addr["product"])) {
                 mp_addr["name"] = "ANTSDR-E200";
-            } else if (mp_addr["product"].find("E310") == 0) {
+            } else if (is_e310_compatible_product(mp_addr["product"])) {
+                // E316 is protocol-compatible with the E310V2 host path.
                 mp_addr["name"] = "ANTSDR-E310V2";
             } else {
                 mp_addr["name"] = "ANTSDR-" + mp_addr["product"];
             }
             // Found a device. Keep receiving until the discovery timeout so
-            // all boards on the broadcast domain are returned.
-            ant_addrs.push_back(mp_addr);
+            // all boards on the broadcast domain are returned. A board may
+            // answer more than once, so suppress duplicate serial/address
+            // pairs while preserving distinct devices.
+            const std::string device_key = mp_addr["serial"] + "\n" + mp_addr["addr"];
+            if (discovered_devices.insert(device_key).second) {
+                ant_addrs.push_back(mp_addr);
+            }
         }
         if (len == 0)
             break;
@@ -413,9 +444,9 @@ ant_impl::ant_impl(const uhd::device_addr_t &device_addr)
         _product = B210;
         const std::string ant_product =
             device_addr.has_key("product") ? device_addr["product"] : "";
-        if (ant_product.find("E200") == 0) {
+        if (is_e200_product(ant_product)) {
             _antsdr_product = antsdr_product_t::E200;
-        } else if (ant_product.find("E310") == 0) {
+        } else if (is_e310_compatible_product(ant_product)) {
             _antsdr_product = antsdr_product_t::E310V2;
         } else {
             _antsdr_product = antsdr_product_t::UNKNOWN;
@@ -436,9 +467,7 @@ ant_impl::ant_impl(const uhd::device_addr_t &device_addr)
                         std::bind(&ant_impl::set_mb_eeprom, this)
                 );
 
-        _gpsdo_capable = 0;
-        if(ant_product == "E310  v2")
-            _gpsdo_capable = 1;
+        _gpsdo_capable = is_e310_compatible_product(ant_product);
         ////////////////////////////////////////////////////////////////////
         // Set up frontend mapping
         ////////////////////////////////////////////////////////////////////
@@ -507,7 +536,7 @@ ant_impl::ant_impl(const uhd::device_addr_t &device_addr)
         ////////////////////////////////////////////////////////////////////
         // Local control endpoint
         ////////////////////////////////////////////////////////////////////
-        _local_ctrl = radio_ctrl_core_3000::make(false /*lilE*/,
+        _local_ctrl = b200_radio_ctrl_core::make(false /*lilE*/,
                                                  _ctrl_transport,
                                                  zero_copy_if::sptr() /*null*/,
                                                  ANT_LOCAL_CTRL_SID);
@@ -527,7 +556,7 @@ ant_impl::ant_impl(const uhd::device_addr_t &device_addr)
             if ((_local_ctrl->peek32(RB32_CORE_STATUS) & 0xff) != ANT_GPSDO_ST_NONE) {
                 UHD_LOGGER_INFO("ANT") << "Detecting internal GPSDO.... " << std::flush;
                 try {
-                    _gps = gps_ctrl::make(_async_task_data->gpsdo_uart,true);
+                    _gps = gps_ctrl::make(_async_task_data->gpsdo_uart);
                 } catch (std::exception &e) {
                     UHD_LOGGER_ERROR("ANT")
                             << "An error occurred making GPSDO control: " << e.what();
@@ -720,7 +749,8 @@ ant_impl::ant_impl(const uhd::device_addr_t &device_addr)
         // front panel gpio
         ////////////////////////////////////////////////////////////////////
         _radio_perifs[0].fp_gpio =
-                gpio_atr_3000::make(_radio_perifs[0].ctrl, TOREG(SR_FP_GPIO), RB32_FP_GPIO);
+                gpio_atr_3000::make(_radio_perifs[0].ctrl,
+                    gpio_atr_offsets::make_default(TOREG(SR_FP_GPIO), RB32_FP_GPIO));
         for (const auto &attr: gpio_attr_map) {
             switch (attr.first) {
                 case usrp::gpio_atr::GPIO_SRC:
@@ -840,22 +870,22 @@ void ant_impl::setup_radio(const size_t dspno)
     ////////////////////////////////////////////////////////////////////
     // radio control
     ////////////////////////////////////////////////////////////////////
-    perif.ctrl = radio_ctrl_core_3000::make(
+    perif.ctrl = b200_radio_ctrl_core::make(
         false /*lilE*/, _ctrl_transport, zero_copy_if::sptr() /*null*/, sid);
     perif.ctrl->hold_task(_async_task);
     _async_task_data->radio_ctrl[dspno] = perif.ctrl; // weak
     _tree->access<time_spec_t>(mb_path / "time" / "cmd")
         .add_coerced_subscriber(std::bind(
-            &radio_ctrl_core_3000::set_time, perif.ctrl, std::placeholders::_1));
+            &b200_radio_ctrl_core::set_time, perif.ctrl, std::placeholders::_1));
     _tree->access<double>(mb_path / "tick_rate")
         .add_coerced_subscriber(std::bind(
-            &radio_ctrl_core_3000::set_tick_rate, perif.ctrl, std::placeholders::_1));
+            &b200_radio_ctrl_core::set_tick_rate, perif.ctrl, std::placeholders::_1));
     this->register_loopback_self_test(perif.ctrl);
 
     ////////////////////////////////////////////////////////////////////
     // Set up peripherals
     ////////////////////////////////////////////////////////////////////
-    perif.atr = gpio_atr_3000::make_write_only(perif.ctrl, TOREG(SR_ATR));
+    perif.atr = gpio_atr_3000::make(perif.ctrl, gpio_atr_offsets::make_write_only(TOREG(SR_ATR)));
     perif.atr->set_atr_mode(MODE_ATR, 0xFFFFFFFF);
     // create rx dsp control objects
     perif.framer = rx_vita_core_3000::make(perif.ctrl, TOREG(SR_RX_CTRL));

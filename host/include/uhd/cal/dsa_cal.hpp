@@ -9,9 +9,12 @@
 
 #include <uhd/cal/container.hpp>
 #include <uhd/config.hpp>
-#include <boost/optional.hpp>
 #include <array>
-#include <map>
+#include <cstddef>
+#include <cstdint>
+#include <memory>
+#include <string>
+#include <vector>
 
 namespace uhd { namespace usrp { namespace cal {
 
@@ -58,7 +61,7 @@ public:
      * Use NUM_DSA and NUM_GAIN_STAGES to find values in the list.
      */
     virtual std::vector<uint32_t> get_band_settings(double freq, uint8_t dsa) const = 0;
-    
+
     /*!
      * Clear all stored values
      */
@@ -112,7 +115,7 @@ public:
      */
     virtual std::vector<uint32_t> get_band_settings(double freq, uint8_t dsa) const = 0;
 
-    /*! 
+    /*!
      * Clear all stored values
      */
     virtual void clear() = 0;

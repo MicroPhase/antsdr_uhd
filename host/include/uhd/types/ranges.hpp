@@ -8,6 +8,7 @@
 #pragma once
 
 #include <uhd/config.hpp>
+#include <type_traits>
 #include <string>
 #include <vector>
 
@@ -46,7 +47,7 @@ public:
     double step(void) const;
 
     //! Convert this range to a printable string
-    const std::string to_pp_string(void) const;
+    std::string to_pp_string(void) const;
 
     //! Equality operator
     bool operator==(const range_t& other) const;
@@ -61,7 +62,7 @@ private:
 /*!
  * A meta-range object holds a list of individual ranges.
  */
-struct UHD_API meta_range_t : std::vector<range_t>
+struct UHD_API meta_range_t : public std::vector<range_t>
 {
     //! A default constructor for an empty meta-range
     meta_range_t(void);
@@ -76,6 +77,12 @@ struct UHD_API meta_range_t : std::vector<range_t>
     meta_range_t(InputIterator first, InputIterator last)
         : std::vector<range_t>(first, last)
     { /* NOP */
+        // This is to avoid people accidentally doing silly things like:
+        // meta_range_t(0, 0)
+        // which probably was supposed to call meta_range_t(double, double, double)
+        // but actually calls this constructor.
+        static_assert(!std::is_integral<typename std::decay<InputIterator>::type>::value,
+            "You can't pass integers to meta_range_t's constructor!");
     }
 
     /*!
@@ -104,8 +111,20 @@ struct UHD_API meta_range_t : std::vector<range_t>
      */
     double clip(double value, bool clip_step = false) const;
 
+    /*!
+     * A method for converting an arbitrary meta_range_t into a monotonic
+     * meta_range_t which has no overlapping ranges, and where all ranges
+     * are sorted.
+     *
+     * Requires that all subranges have a step size of zero, or else it
+     * throws uhd::value_error.
+     *
+     * \return a monotonic meta_range_t
+     */
+    meta_range_t as_monotonic() const;
+
     //! Convert this meta-range to a printable string
-    const std::string to_pp_string(void) const;
+    std::string to_pp_string(void) const;
 };
 
 typedef meta_range_t gain_range_t;

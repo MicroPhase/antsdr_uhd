@@ -208,7 +208,7 @@ double rhodium_radio_control_impl::set_tx_frequency(const double freq, const siz
         is_highband ? coerced_target_freq : _get_lowband_lo_freq() - coerced_target_freq;
     const double actual_lo_freq = set_tx_lo_freq(target_lo_freq, RHODIUM_LO1, chan);
     const double coerced_freq   = is_highband ? actual_lo_freq
-                                            : _get_lowband_lo_freq() - actual_lo_freq;
+                                              : _get_lowband_lo_freq() - actual_lo_freq;
     const auto conn = is_highband ? TX_FE_CONNECTION_HIGHBAND : TX_FE_CONNECTION_LOWBAND;
 
     // update the cached frequency value now so calls to set gain and update
@@ -260,7 +260,7 @@ double rhodium_radio_control_impl::set_rx_frequency(const double freq, const siz
         is_highband ? coerced_target_freq : _get_lowband_lo_freq() - coerced_target_freq;
     const double actual_lo_freq = set_rx_lo_freq(target_lo_freq, RHODIUM_LO1, chan);
     const double coerced_freq   = is_highband ? actual_lo_freq
-                                            : _get_lowband_lo_freq() - actual_lo_freq;
+                                              : _get_lowband_lo_freq() - actual_lo_freq;
     const auto conn = is_highband ? RX_FE_CONNECTION_HIGHBAND : RX_FE_CONNECTION_LOWBAND;
 
     // update the cached frequency value now so calls to set gain and update
@@ -446,12 +446,12 @@ void rhodium_radio_control_impl::_update_corrections(
 {
     const std::string fe_path_part = dir == RX_DIRECTION ? "rx_fe_corrections"
                                                          : "tx_fe_corrections";
-    const fs_path fe_corr_path = FE_PATH / fe_path_part / 0;
+    const fs_path fe_corr_path     = FE_PATH / fe_path_part / 0;
 
     if (enable) {
         const std::vector<uint8_t> db_serial_u8 = get_db_eeprom().count("serial")
-                                                      ? std::vector<uint8_t>()
-                                                      : get_db_eeprom().at("serial");
+                                                      ? get_db_eeprom().at("serial")
+                                                      : std::vector<uint8_t>();
         const std::string db_serial =
             db_serial_u8.empty() ? "unknown"
                                  : std::string(db_serial_u8.begin(), db_serial_u8.end());
@@ -576,7 +576,7 @@ uhd::meta_range_t rhodium_radio_control_impl::get_rx_bandwidth_range(size_t) con
  *************************************************************************/
 size_t rhodium_radio_control_impl::get_chan_from_dboard_fe(
     const std::string& fe, const direction_t /* dir */
-    ) const
+) const
 {
     UHD_ASSERT_THROW(boost::lexical_cast<size_t>(fe) == 0);
     return 0;
@@ -584,7 +584,7 @@ size_t rhodium_radio_control_impl::get_chan_from_dboard_fe(
 
 std::string rhodium_radio_control_impl::get_dboard_fe_from_chan(
     const size_t chan, const direction_t /* dir */
-    ) const
+) const
 {
     UHD_ASSERT_THROW(chan == 0);
     return "0";
@@ -620,7 +620,7 @@ void rhodium_radio_control_impl::set_tx_iq_balance(
 
 void rhodium_radio_control_impl::set_rx_dc_offset(const bool enb, size_t)
 {
-    _rx_fe_core->set_dc_offset(enb);
+    _rx_fe_core->set_dc_offset_auto(enb);
 }
 
 void rhodium_radio_control_impl::set_rx_dc_offset(
@@ -634,11 +634,6 @@ meta_range_t rhodium_radio_control_impl::get_rx_dc_offset_range(size_t) const
     return get_tree()
         ->access<meta_range_t>(FE_PATH / "rx_fe_corrections" / 0 / "dc_offset/range")
         .get();
-}
-
-void rhodium_radio_control_impl::set_rx_iq_balance(const bool enb, size_t)
-{
-    _rx_fe_core->set_iq_balance(enb);
 }
 
 void rhodium_radio_control_impl::set_rx_iq_balance(
@@ -734,9 +729,9 @@ std::vector<std::string> rhodium_radio_control_impl::get_tx_sensor_names(size_t)
 sensor_value_t rhodium_radio_control_impl::get_tx_sensor(
     const std::string& name, size_t chan)
 {
-    if (!uhd::has(_rx_sensor_names, name)) {
-        RFNOC_LOG_ERROR("Invalid RX sensor name: " << name);
-        throw uhd::key_error("Invalid RX sensor name!");
+    if (!uhd::has(_tx_sensor_names, name)) {
+        RFNOC_LOG_ERROR("Invalid TX sensor name: " << name);
+        throw uhd::key_error("Invalid TX sensor name!");
     }
     if (name == "lo_locked") {
         return sensor_value_t(

@@ -13,9 +13,9 @@
 #include <uhd/rfnoc/constants.hpp>
 #include <uhd/types/device_addr.hpp>
 #include <uhd/utils/log.hpp>
+#include <uhdlib/asio.hpp>
 #include <uhdlib/transport/links.hpp>
 #include <uhdlib/utils/narrow.hpp>
-#include <boost/asio.hpp>
 #include <boost/format.hpp>
 #include <thread>
 
@@ -81,17 +81,16 @@ UHD_INLINE bool wait_for_recv_ready(int sock_fd, int32_t timeout_ms)
 }
 
 UHD_INLINE socket_sptr open_udp_socket(
-    const std::string& addr, const std::string& port, boost::asio::io_service& io_service)
+    const std::string& addr, const std::string& port, boost::asio::io_context& io_context)
 {
     using udp = boost::asio::ip::udp;
 
     // resolve the address
-    udp::resolver resolver(io_service);
-    udp::resolver::query query(udp::v4(), addr, port);
-    udp::endpoint receiver_endpoint = *resolver.resolve(query);
+    udp::resolver resolver(io_context);
+    udp::endpoint receiver_endpoint = *resolver.resolve(udp::v4(), addr, port).begin();
 
     // create, open, and connect the socket
-    socket_sptr socket = socket_sptr(new udp::socket(io_service));
+    socket_sptr socket = socket_sptr(new udp::socket(io_context));
     socket->open(udp::v4());
     socket->connect(receiver_endpoint);
 
@@ -248,8 +247,11 @@ inline link_params_t calculate_udp_link_params(
     if (link_type == link_type_t::CTRL) {
         // Control links typically do not allow the number of frames to be
         // configured.
+        // Keep the default_link_params value if it is higher to handle
+        // high speed DPDK links
         link_params.num_recv_frames =
-            uhd::rfnoc::CMD_FIFO_SIZE / uhd::rfnoc::MAX_CMD_PKT_SIZE;
+            std::max(uhd::rfnoc::CMD_FIFO_SIZE / uhd::rfnoc::MAX_CMD_PKT_SIZE,
+                link_params.num_recv_frames);
     } else if (link_type == link_type_t::TX_DATA) {
         // Note that the send frame size will be capped to the Tx MTU.
         link_params.send_frame_size = link_args.cast<size_t>("send_frame_size",

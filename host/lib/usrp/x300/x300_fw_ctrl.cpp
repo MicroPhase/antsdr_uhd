@@ -8,16 +8,16 @@
 #include "x300_fw_common.h"
 #include "x300_regs.hpp"
 #include <uhd/exception.hpp>
-#include <uhd/transport/nirio/niriok_proxy.h>
-#include <uhd/transport/nirio/status.h>
 #include <uhd/transport/udp_simple.hpp>
 #include <uhd/types/wb_iface.hpp>
 #include <uhd/utils/byteswap.hpp>
 #include <uhd/utils/log.hpp>
+#include <uhdlib/transport/nirio/niriok_proxy.h>
+#include <uhdlib/transport/nirio/status.h>
 #include <boost/date_time/posix_time/posix_time.hpp>
 #include <boost/format.hpp>
-#include <boost/thread/mutex.hpp>
 #include <chrono>
+#include <mutex>
 #include <thread>
 
 using namespace uhd;
@@ -35,14 +35,14 @@ public:
 
     void flush(void)
     {
-        boost::mutex::scoped_lock lock(reg_access);
+        std::lock_guard<std::mutex> lock(reg_access);
         __flush();
     }
 
     void poke32(const wb_addr_type addr, const uint32_t data) override
     {
         for (size_t i = 1; i <= num_retries; i++) {
-            boost::mutex::scoped_lock lock(reg_access);
+            std::lock_guard<std::mutex> lock(reg_access);
             try {
                 return this->__poke32(addr, data);
             } catch (const uhd::io_error& ex) {
@@ -60,7 +60,7 @@ public:
     uint32_t peek32(const wb_addr_type addr) override
     {
         for (size_t i = 1; i <= num_retries; i++) {
-            boost::mutex::scoped_lock lock(reg_access);
+            std::lock_guard<std::mutex> lock(reg_access);
             try {
                 uint32_t data = this->__peek32(addr);
                 return data;
@@ -85,7 +85,7 @@ protected:
     virtual void __flush()                                              = 0;
     virtual std::string __loc_info()                                    = 0;
 
-    boost::mutex reg_access;
+    std::mutex reg_access;
 };
 
 
@@ -134,6 +134,10 @@ protected:
         UHD_ASSERT_THROW(reply.sequence == request.sequence);
         UHD_ASSERT_THROW(reply.addr == request.addr);
         UHD_ASSERT_THROW(reply.data == request.data);
+
+        if (flags & X300_FW_COMMS_FLAGS_ARP_FAIL) {
+            throw uhd::lookup_error("Device failed to look up IP address.");
+        }
     }
 
     uint32_t __peek32(const wb_addr_type addr) override

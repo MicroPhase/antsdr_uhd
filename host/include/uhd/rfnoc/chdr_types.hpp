@@ -315,19 +315,24 @@ public: // Functions
     }
 
     //! Deserialize the payload from a uint64_t buffer
+    //! \param buff Buffer to deserialize the payload from
+    //! \param buff_size Number of elements in the buffer
+    //! \param conv_byte_order Byte order converter function (buffer to host endianness)
     void deserialize(const uint64_t* buff,
-        size_t num_elems,
+        size_t buff_size,
         const std::function<uint64_t(uint64_t)>& conv_byte_order);
 
     //! Deserialize the payload from a uint64_t buffer (no conversion function)
+    //! \param buff Buffer to deserialize the payload from
+    //! \param buff_size Number of elements in the buffer
     template <endianness_t endianness>
-    void deserialize(const uint64_t* buff, size_t num_elems)
+    void deserialize(const uint64_t* buff, size_t buff_size)
     {
         auto conv_byte_order = [](uint64_t x) -> uint64_t {
             return (endianness == uhd::ENDIANNESS_BIG) ? uhd::ntohx<uint64_t>(x)
                                                        : uhd::wtohx<uint64_t>(x);
         };
-        deserialize(buff, num_elems, conv_byte_order);
+        deserialize(buff, buff_size, conv_byte_order);
     }
 
     //! Get the serialized size of this payload in 64 bit words
@@ -349,7 +354,7 @@ public: // Functions
     }
 
     //! Return a string representation of this object
-    const std::string to_string() const;
+    std::string to_string() const;
 
 private:
     static constexpr size_t DST_PORT_WIDTH    = 10;
@@ -410,7 +415,36 @@ public: // Members
     //! Buffer info (16 bits)
     uint16_t buff_info = 0;
     //! Extended status info (48 bits)
-    uint64_t status_info = 0;
+    union {
+        uint64_t info = 0;
+        struct
+        {
+            uint16_t last_control_seq_num  : 16;
+            uint16_t expected_seq_num      : 16;
+            uint16_t reserved_1            : 12;
+            bool stop_on_seq_error_enabled : 1;
+            bool seq_error_occoured        : 1;
+            bool reserved_2                : 1;
+            bool flow_control_due          : 1;
+        } status;
+        struct
+        {
+            uint16_t current_seq_num       : 16;
+            uint16_t expected_seq_num      : 16;
+            uint8_t chdr_packet_type       : 3;
+            uint16_t reserved_1            : 9;
+            bool stop_on_seq_error_enabled : 1;
+            bool seq_error_occoured        : 1;
+            bool reserved_2                : 1;
+            bool reserved_3                : 1;
+        } sequence_error;
+        struct
+        {
+            uint16_t dest_epid  : 16;
+            uint16_t this_epid  : 16;
+            uint32_t reserved_1 : 32;
+        } routing_error;
+    } status_info;
 
 public: // Functions
     strs_payload()                        = default;
@@ -439,19 +473,24 @@ public: // Functions
     }
 
     //! Deserialize the payload from a uint64_t buffer
+    //! \param buff Buffer to deserialize the payload from
+    //! \param buff_size Number of elements in the buffer
+    //! \param conv_byte_order Byte order converter function (buffer to host endianness)
     void deserialize(const uint64_t* buff,
-        size_t num_elems,
+        size_t buff_size,
         const std::function<uint64_t(uint64_t)>& conv_byte_order);
 
     //! Deserialize the payload from a uint64_t buffer (no conversion function)
+    //! \param buff Buffer to deserialize the payload from
+    //! \param buff_size Number of elements in the buffer
     template <endianness_t endianness>
-    void deserialize(const uint64_t* buff, size_t num_elems)
+    void deserialize(const uint64_t* buff, size_t buff_size)
     {
         auto conv_byte_order = [](uint64_t x) -> uint64_t {
             return (endianness == uhd::ENDIANNESS_BIG) ? uhd::ntohx<uint64_t>(x)
                                                        : uhd::wtohx<uint64_t>(x);
         };
-        deserialize(buff, num_elems, conv_byte_order);
+        deserialize(buff, buff_size, conv_byte_order);
     }
 
     //! Get the serialized size of this payload in 64 bit words
@@ -467,7 +506,7 @@ public: // Functions
     }
 
     //! Return a string representation of this object
-    const std::string to_string() const;
+    std::string to_string() const;
 
 private:
     static constexpr size_t SRC_EPID_WIDTH        = 16;
@@ -541,19 +580,24 @@ public: // Functions
     }
 
     //! Deserialize the payload from a uint64_t buffer
+    //! \param buff Buffer to deserialize the payload from
+    //! \param buff_size Number of elements in the buffer
+    //! \param conv_byte_order Byte order converter function (buffer to host endianness)
     void deserialize(const uint64_t* buff,
-        size_t num_elems,
+        size_t buff_size,
         const std::function<uint64_t(uint64_t)>& conv_byte_order);
 
     //! Deserialize the payload from a uint64_t buffer (no conversion function)
+    //! \param buff Buffer to deserialize the payload from
+    //! \param buff_size Number of elements in the buffer
     template <endianness_t endianness>
-    void deserialize(const uint64_t* buff, size_t num_elems)
+    void deserialize(const uint64_t* buff, size_t buff_size)
     {
         auto conv_byte_order = [](uint64_t x) -> uint64_t {
             return (endianness == uhd::ENDIANNESS_BIG) ? uhd::ntohx<uint64_t>(x)
                                                        : uhd::wtohx<uint64_t>(x);
         };
-        deserialize(buff, num_elems, conv_byte_order);
+        deserialize(buff, buff_size, conv_byte_order);
     }
 
     //! Get the serialized size of this payload in 64 bit words
@@ -569,7 +613,7 @@ public: // Functions
     }
 
     //! Return a string representation of this object
-    const std::string to_string() const;
+    std::string to_string() const;
 
 private:
     static constexpr size_t SRC_EPID_WIDTH = 16;
@@ -595,6 +639,9 @@ class UHD_API mgmt_op_t
 {
 public:
     // Operation code
+    // Note that a management packet has 8 bits available for op codes. The
+    // values for these enums are used to construct the packets, so these values
+    // must match the values in rfnoc_chdr_internal_utils.vh.
     enum op_code_t {
         //! Do nothing
         MGMT_OP_NOP = 0,
@@ -685,11 +732,25 @@ public:
         }
     };
 
-    mgmt_op_t(const op_code_t op_code, const payload_t op_payload = 0)
-        : _op_code(op_code), _op_payload(op_payload)
+    mgmt_op_t(const op_code_t op_code,
+        const payload_t op_payload = 0,
+        const uint8_t ops_pending  = 0)
+        : _op_code(op_code), _op_payload(op_payload), _ops_pending(ops_pending)
     {
     }
-    mgmt_op_t(const mgmt_op_t& rhs) = default;
+
+    mgmt_op_t(const mgmt_op_t& rhs)            = default;
+    mgmt_op_t& operator=(const mgmt_op_t& rhs) = default;
+
+
+    //! Get the ops pending for this transaction
+    //  Note that ops_pending is not used by UHD, since it can infer this value
+    //  from the ops vector in mgmt_hop_t. It is needed only by the CHDR
+    //  dissector.
+    inline uint8_t get_ops_pending() const
+    {
+        return _ops_pending;
+    }
 
     //! Get the op-code for this transaction
     inline op_code_t get_op_code() const
@@ -710,11 +771,12 @@ public:
     }
 
     //! Return a string representation of this object
-    const std::string to_string() const;
+    std::string to_string() const;
 
 private:
     op_code_t _op_code;
     payload_t _op_payload;
+    uint8_t _ops_pending;
 };
 
 //! A class that represents a single management hop
@@ -766,7 +828,7 @@ public:
     }
 
     //! Return a string representation of this object
-    const std::string to_string() const;
+    std::string to_string() const;
 
 private:
     std::vector<mgmt_op_t> _ops;
@@ -847,29 +909,34 @@ public:
     }
 
     //! Deserialize the payload from a uint64_t buffer
+    //! \param buff Buffer to deserialize the payload from
+    //! \param buff_size Number of elements in the buffer
+    //! \param conv_byte_order Byte order converter function (buffer to host endianness)
     void deserialize(const uint64_t* buff,
-        size_t num_elems,
+        size_t buff_size,
         const std::function<uint64_t(uint64_t)>& conv_byte_order);
 
     //! Deserialize the payload from a uint64_t buffer (no conversion function)
+    //! \param buff Buffer to deserialize the payload from
+    //! \param buff_size Number of elements in the buffer
     template <endianness_t endianness>
-    void deserialize(const uint64_t* buff, size_t num_elems)
+    void deserialize(const uint64_t* buff, size_t buff_size)
     {
         auto conv_byte_order = [](uint64_t x) -> uint64_t {
             return (endianness == uhd::ENDIANNESS_BIG) ? uhd::ntohx<uint64_t>(x)
                                                        : uhd::wtohx<uint64_t>(x);
         };
-        deserialize(buff, num_elems, conv_byte_order);
+        deserialize(buff, buff_size, conv_byte_order);
     }
 
     //! Get the serialized size of this payload in 64 bit words
     size_t get_length() const;
 
     //! Return a string representation of this object
-    const std::string to_string() const;
+    std::string to_string() const;
 
     //! Return a string representaiton of the hops contained by this object
-    const std::string hops_to_string() const;
+    std::string hops_to_string() const;
 
     //! Return the source EPID for this transaction
     inline sep_id_t get_src_epid() const

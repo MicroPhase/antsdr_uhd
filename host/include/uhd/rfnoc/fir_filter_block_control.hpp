@@ -4,8 +4,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 //
 
-#ifndef INCLUDED_LIBUHD_FIR_FILTER_BLOCK_CONTROL_HPP
-#define INCLUDED_LIBUHD_FIR_FILTER_BLOCK_CONTROL_HPP
+#pragma once
 
 #include <uhd/config.hpp>
 #include <uhd/rfnoc/noc_block_base.hpp>
@@ -14,6 +13,8 @@
 namespace uhd { namespace rfnoc {
 
 /*! FIR Filter Block Control Class
+ *
+ * \ingroup rfnoc_blocks
  *
  * The FIR Filter Block is a finite impulse response filter block for RFNoC.
  *
@@ -26,10 +27,15 @@ class UHD_API fir_filter_block_control : public noc_block_base
 public:
     RFNOC_DECLARE_BLOCK(fir_filter_block_control)
 
+    static const uint16_t MINOR_COMPAT;
+    static const uint16_t MAJOR_COMPAT;
+
     // Block registers
+    static const uint32_t REG_FIR_BLOCK_SIZE;
     static const uint32_t REG_FIR_MAX_NUM_COEFFS_ADDR;
     static const uint32_t REG_FIR_LOAD_COEFF_ADDR;
     static const uint32_t REG_FIR_LOAD_COEFF_LAST_ADDR;
+    static const uint32_t REG_COMPAT_NUM_ADDR;
 
     /*! Get the maximum number of filter coefficients supported by this block
      *
@@ -38,7 +44,7 @@ public:
      *
      * \returns The maximum number of filter coefficients supported by this block
      */
-    virtual size_t get_max_num_coefficients() const = 0;
+    virtual size_t get_max_num_coefficients(const size_t chan = 0) const = 0;
 
     /*! Set the filter coefficients
      *
@@ -52,8 +58,10 @@ public:
      * a `uhd::value_error` is thrown.
      *
      * \param coeffs A vector of integer coefficients for the FIR filter
+     * \param chan Channel index
      */
-    virtual void set_coefficients(const std::vector<int16_t>& coeffs) = 0;
+    virtual void set_coefficients(
+        const std::vector<int16_t>& coeffs, const size_t chan = 0) = 0;
 
     /*! Get the filter coefficients
      *
@@ -61,9 +69,7 @@ public:
      *
      * \returns The vector of current filter coefficients
      */
-    virtual std::vector<int16_t> get_coefficients() const = 0;
+    virtual std::vector<int16_t> get_coefficients(const size_t chan = 0) const = 0;
 };
 
 }} // namespace uhd::rfnoc
-
-#endif /* INCLUDED_LIBUHD_FIR_FILTER_BLOCK_CONTROL_HPP */

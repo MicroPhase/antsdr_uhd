@@ -26,6 +26,7 @@
 
 #include <uhd/config.hpp>
 #include <uhd/device.hpp>
+#include <uhd/extension/extension.hpp>
 #include <uhd/rfnoc/mb_controller.hpp>
 #include <uhd/rfnoc/radio_control.hpp>
 #include <uhd/types/filters.hpp>
@@ -233,6 +234,11 @@ public:
 
     /*!
      * Get the current time in the usrp time registers.
+     *
+     * For RFNoC devices with multiple timekeepers, this returns the time of the first
+     * timekeeper. To access specific timekeepers, use the corresponding RFNoC APIs
+     * (e.g., mb_controller::get_timekeeper()).
+     *
      * \param mboard which motherboard to query
      * \return a timespec representing current usrp time
      */
@@ -240,18 +246,21 @@ public:
 
     /*!
      * Get the time when the last pps pulse occurred.
+     *
+     * For RFNoC devices with multiple timekeepers, this returns the time of the first
+     * timekeeper. To access specific timekeepers, use the corresponding RFNoC APIs
+     * (e.g., mb_controller::get_timekeeper()).
+     *
      * \param mboard which motherboard to query
      * \return a timespec representing the last pps
      */
     virtual time_spec_t get_time_last_pps(size_t mboard = 0) = 0;
 
-    /*!
-     * Sets the time registers on the usrp immediately.
+    /*! Sets the time registers on the USRP immediately.
      *
-     * If only one MIMO master is present in your configuration, set_time_now is
-     * safe to use because the slave's time automatically follows the master's time.
-     * Otherwise, this call cannot set the time synchronously across multiple devices.
-     * Please use the set_time_next_pps or set_time_unknown_pps calls with a PPS signal.
+     * This will set the tick count on the timekeepers of all devices as soon
+     * as possible.  It is done serially for multiple timekeepers, so times
+     * across multiple timekeepers will not be synchronized.
      *
      * \param time_spec the time to latch into the usrp device
      * \param mboard the motherboard index 0 to M-1
@@ -259,14 +268,30 @@ public:
     virtual void set_time_now(
         const time_spec_t& time_spec, size_t mboard = ALL_MBOARDS) = 0;
 
-    /*!
-     * Set the time registers on the usrp at the next pps tick.
-     * The values will not be latched in until the pulse occurs.
-     * It is recommended that the user sleep(1) after calling to ensure
-     * that the time registers will be in a known state prior to use.
+    /*! Set the time registers on the USRP at the next PPS rising edge.
      *
-     * Note: Because this call sets the time on the "next" pps,
-     * the seconds in the time spec should be current seconds + 1.
+     * This will set the tick count on the timekeepers of all devices on
+     * the next rising edge of the PPS trigger signal.  It is important
+     * to note that this means the time may not be set for up to 1 second
+     * after this call is made, so it is recommended to wait for 1 second
+     * after this call before making any calls that depend on the time to
+     * ensure that the time registers will be in a known state prior to use.
+     *
+     * \b Note: Because this call sets the time on the next PPS edge, the time
+     * spec supplied should correspond to the next pulse (i.e. current
+     * time + 1 second).
+     *
+     * \b Note: Make sure to not call this shortly before the next PPS edge. This
+     * should be called with plenty of time before the next PPS edge to ensure
+     * that all timekeepers on all devices will execute this command on the
+     * same PPS edge. If not, timekeepers could be unsynchronized in time by
+     * exactly one second. If in doubt, use set_time_unknown_pps() which will
+     * take care of this issue (but will also take longer to execute).
+     *
+     * \b Note: When changing clock sources, a previously set time will most
+     * likely be lost. It is recommended to set the time after changing the
+     * clock source. Otherwise, an unexpected time may line up with future PPS
+     * edges.
      *
      * \param time_spec the time to latch into the usrp device
      * \param mboard the motherboard index 0 to M-1
@@ -274,8 +299,8 @@ public:
     virtual void set_time_next_pps(
         const time_spec_t& time_spec, size_t mboard = ALL_MBOARDS) = 0;
 
-    /*!
-     * Synchronize the times across all motherboards in this configuration.
+    /*! Synchronize the times across all motherboards in this configuration.
+     *
      * Use this method to sync the times when the edge of the PPS is unknown.
      *
      * Ex: Host machine is not attached to serial port of GPSDO
@@ -286,6 +311,11 @@ public:
      *
      * - Step1: wait for the last pps time to transition to catch the edge
      * - Step2: set the time at the next pps (synchronous for all boards)
+     *
+     * \b Note: When changing clock sources, a previously set time will most
+     * likely be lost. It is recommended to set the time after changing the
+     * clock source. Otherwise, an unexpected time may line up with future PPS
+     * edges.
      *
      * \param time_spec the time to latch at the next pps after catching the edge
      */
@@ -427,6 +457,14 @@ public:
      * // The clock source is still guaranteed to be "internal" at this point
      * ~~~
      *
+     * \b Note: Reconfiguring the clock source will affect the clocking
+     * within the FPGAs of USRPs, and affect timekeeping as well as proper
+     * functioning of blocks that depend on these clocks. It is therefore
+     * strongly recommended to configure clock and time source before doing
+     * anything else. In particular, setting the device time should be done
+     * after calling this, and there should be no ongoing streaming operation
+     * while reconfiguring the clock/time source.
+     *
      * See also:
      * - set_time_source()
      * - set_sync_source()
@@ -482,6 +520,14 @@ public:
      * This function does not force a re-initialization of the underlying
      * hardware when the value does not change. See also set_time_source() and
      * set_clock_source() for more details.
+     *
+     * \b Note: Reconfiguring the sync source may affect the clocking
+     * within the FPGAs of USRPs, and affect timekeeping as well as proper
+     * functioning of blocks that depend on these clocks. It is therefore
+     * strongly recommended to configure clock and time source before doing
+     * anything else. In particular, setting the device time should be done
+     * after calling this, and there should be no ongoing streaming operation
+     * while reconfiguring the sync source.
      *
      * \param sync_source A dictionary representing the various source settings.
      * \param mboard which motherboard to set the config
@@ -616,6 +662,31 @@ public:
      * \throws uhd::not_implemented_error if not on an RFNoC device.
      */
     virtual uhd::rfnoc::radio_control& get_radio_control(const size_t chan = 0) = 0;
+
+    /*! Get a handle to any RF extension objects which may exist.
+     *
+     * \param trx The TX/RX direction
+     * \param chan The channel index
+     * \returns A pointer to the extension matching the given trx/channel or a nullptr if
+     * the extension is not found.
+     */
+    virtual uhd::extension::extension::sptr get_extension(
+        const direction_t trx, const size_t chan) = 0;
+
+    /*! Get a handle to a RF extension object
+     *
+     * This function retrieves a handle to a RF extension object and casts it to
+     * the given type, which must be a derived class of uhd::extension::extension.
+     *
+     * \param trx The TX/RX direction
+     * \param chan The channel index
+     * \returns A pointer to the extension matching the given trx/channel
+     */
+    template <typename T>
+    typename T::sptr get_extension(const direction_t trx, const size_t chan)
+    {
+        return std::dynamic_pointer_cast<T>(get_extension(trx, chan));
+    }
 
     /*******************************************************************
      * RX methods
@@ -1704,8 +1775,8 @@ public:
      * GPIO methods
      ******************************************************************/
 
-    /*!
-     * Enumerate gpio banks on the specified device.
+    /*! Enumerate GPIO banks on the specified device.
+     *
      * \param mboard the motherboard index 0 to M-1
      * \return a list of string for each bank name
      */
@@ -1714,15 +1785,50 @@ public:
     /*! Set a GPIO attribute on a particular GPIO bank.
      *
      * Possible attribute names:
-     *  - CTRL - 1 for ATR mode 0 for GPIO mode
-     *  - DDR - 1 for output 0 for input
+     *  - CTRL - 1 for ATR mode, 0 for GPIO mode
+     *  - DDR - 1 for output, 0 for input
      *  - OUT - GPIO output level (not ATR mode)
      *  - ATR_0X - ATR idle state
      *  - ATR_RX - ATR receive only state
      *  - ATR_TX - ATR transmit only state
      *  - ATR_XX - ATR full duplex state
+     *
+     * A note on bank names: Query get_gpio_banks() for a valid list of arguments
+     * for bank names. Note that RFNoC devices (E3xx, N3xx, X3x0, X410) behave
+     * slightly differently when using this API vs. using the
+     * radio_control::set_gpio_attr() API. For backward-compatibility reasons,
+     * this API does not have a dedicated argument to address a specific radio,
+     * although the aforementioned devices have separate GPIO banks for each
+     * radio. This API thus allows appending the slot name (typically "A" or "B")
+     * to the GPIO bank to differentiate between radios. The following example
+     * shows the difference between the RFNoC and multi_usrp APIs on a USRP N310:
+     * ~~~{.py}
+     * my_usrp = uhd.usrp.MultiUSRP("type=n3xx")
+     * print(my_usrp.get_gpio_banks()) # Will print: FP0A, FP0B
+     * # Now set all pins to GPIO for Radio 1 (note the 'B' in 'FP0B'):
+     * my_usrp.set_gpio_attr("FP0B", "CTRL", 0x000)
+     * # For backwards compatibility, you can omit the 'A', but that will default
+     * # to radio 0. The following lines thus do the same:
+     * my_usrp.set_gpio_attr("FP0", "CTRL", 0x000)
+     * my_usrp.set_gpio_attr("FP0A", "CTRL", 0x000)
+     * ### This is how you do the same thing with RFNoC API:
+     * print(my_usrp.get_radio_control(0).get_gpio_banks()) # Will print: FP0
+     * print(my_usrp.get_radio_control(1).get_gpio_banks()) # Will print: FP0
+     * # Note how the radio controller only has a single bank!
+     * # When accessing the radio directly, we thus can't specify any other bank
+     * # than FP0:
+     * my_usrp.get_radio_control(1).set_gpio_attr("FP0", "CTRL", 0x000)
+     * ~~~
+     *
+     * The \p mask argument can be used to apply \p value only to select pins,
+     * and retain the existing value on the rest. Because of this feature, this
+     * API call will incur two register transactions (one read, one write).
+     *
+     * Note that this API call alone may not be sufficient to configure the
+     * physical GPIO pins. See set_gpio_src() for more details.
+     *
      * \param bank the name of a GPIO bank
-     * \param attr the name of a GPIO attribute
+     * \param attr the name of a GPIO attribute (see list above)
      * \param value the new value for this GPIO bank
      * \param mask the bit mask to effect which pins are changed
      * \param mboard the motherboard index 0 to M-1
@@ -1734,19 +1840,22 @@ public:
         const uint32_t mask = 0xffffffff,
         const size_t mboard = 0) = 0;
 
-    /*!
-     * Get a GPIO attribute on a particular GPIO bank.
+    /*! Get a GPIO attribute on a particular GPIO bank.
+     *
      * Possible attribute names:
-     *  - CTRL - 1 for ATR mode 0 for GPIO mode
-     *  - DDR - 1 for output 0 for input
+     *  - CTRL - 1 for ATR mode, 0 for GPIO mode
+     *  - DDR - 1 for output, 0 for input
      *  - OUT - GPIO output level (not ATR mode)
      *  - ATR_0X - ATR idle state
      *  - ATR_RX - ATR receive only state
      *  - ATR_TX - ATR transmit only state
      *  - ATR_XX - ATR full duplex state
      *  - READBACK - readback input GPIOs
+     *
+     * For bank names, refer to set_gpio_attr().
+     *
      * \param bank the name of a GPIO bank
-     * \param attr the name of a GPIO attribute
+     * \param attr the name of a GPIO attribute (see list above)
      * \param mboard the motherboard index 0 to M-1
      * \return the value set for this attribute
      */
@@ -1757,7 +1866,10 @@ public:
      *
      * This is a different set of banks than those returned from get_gpio_banks().
      * Here, we return a list of banks that can be used as arguments for
-     * get_gpio_src(), get_gpio_srcs(), and set_gpio_src().
+     * get_gpio_src(), get_gpio_srcs(), and set_gpio_src(). These return values
+     * correspond to the physical connectors of the USRP, e.g., for X410, it
+     * will return "GPIO0" and "GPIO1" (see also \ref page_x400_gpio_api). On
+     * X310, it will return a single value, "FP0" (see also \ref xgpio_fpanel_gpio).
      *
      * Some motherboards have GPIO banks that can be driven from different
      * sources, e.g., the N310 can have any radio channel drive the FP-GPIOs,
@@ -1773,8 +1885,8 @@ public:
      * Each of the pins in the chosen bank can be driven from one of the
      * returned sources.
      *
-     * \param bank the name of a GPIO bank. Valid values can be obtained by
-     *        calling get_gpio_src_banks().
+     * \param bank the name of a GPIO bank (connector). Valid values can be
+     *             obtained by calling get_gpio_src_banks().
      * \param mboard the motherboard index 0 to M-1
      * \return a list of strings with each valid source for the chosen bank
      */
@@ -1783,8 +1895,8 @@ public:
 
     /*! Get the current source for each pin in a GPIO bank.
      *
-     * \param bank the name of a GPIO bank. Valid values can be obtained by
-     *        calling get_gpio_src_banks().
+     * \param bank the name of a GPIO bank (connector). Valid values can be
+     *             obtained by calling get_gpio_src_banks().
      * \param mboard the motherboard index 0 to M-1
      * \return a list of strings for current source of each GPIO pin in the
      *         chosen bank. The length of the return value matches the number of
@@ -1798,8 +1910,8 @@ public:
      * Note: The length of the vector must be identical to the number of
      * programmable GPIO pins.
      *
-     * \param bank the name of a GPIO bank. Valid values can be obtained by
-     *        calling get_gpio_src_banks().
+     * \param bank the name of a GPIO bank (connector). Valid values can be
+     *             obtained by calling get_gpio_src_banks().
      * \param src a list of strings specifying the source of each pin in a GPIO bank
      * \param mboard the motherboard index 0 to M-1
      * \throws uhd::key_error if the bank does not exist

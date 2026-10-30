@@ -45,10 +45,12 @@ BOOST_AUTO_TEST_CASE(test_get_paths)
     BOOST_CHECK(true);
     std::cout << "pkg_path: " << get_pkg_path() << std::endl;
     BOOST_CHECK(true);
+    std::cout << "pkg_data_path: " << get_pkg_data_path() << std::endl;
+    BOOST_CHECK(true);
     std::cout << "cal_path: " << get_cal_data_path() << std::endl;
     BOOST_CHECK(true);
 
-    const auto module_paths    = get_module_paths();
+    const auto module_paths = get_module_paths();
     for (const auto& module_path : module_paths) {
         std::cout << "module path: " << module_path << std::endl;
     }

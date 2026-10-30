@@ -12,6 +12,7 @@
 #include <uhd/config.hpp>
 #include <uhd/exception.hpp>
 #include <uhd/transport/usb_control.hpp>
+#include <uhd/types/metadata.hpp>
 #include <uhd/usrp/dboard_eeprom.hpp>
 #include <uhd/utils/cast.hpp>
 #include <uhd/utils/log.hpp>
@@ -27,6 +28,7 @@
 #include <cstdio>
 #include <ctime>
 #include <functional>
+#include <cctype>
 #include <memory>
 
 using namespace uhd;
@@ -37,21 +39,24 @@ using namespace uhd::transport;
 namespace {
 constexpr int64_t REENUMERATION_TIMEOUT_MS = 3000;
 }
+constexpr bool is_b2xx_mini(const b200_product_t& product)
+{
+    return product == B200MINI || product == B205MINI || product == B206MINI;
+}
 
-// u220
-class u220_ad9361_client_t : public ad9361_params
+// AntSDR U220/U220V2/U200-compatible AD9361 wiring.
+// These products use the same digital interface timing as B200, but their
+// RF path is hard-wired so all band edges must select the default port.
+class antsdr_u220_family_ad9361_client_t : public ad9361_params
 {
 public:
-    ~u220_ad9361_client_t() override {}
+    ~antsdr_u220_family_ad9361_client_t() override {}
     double get_band_edge(frequency_band_t band) override
     {
         switch (band) {
             case AD9361_RX_BAND0:
-                return 0; // Port C
             case AD9361_RX_BAND1:
-                return 0; // Port B
             case AD9361_TX_BAND0:
-                return 0; // Port B
             default:
                 return 0;
         }
@@ -152,6 +157,29 @@ public:
 /***********************************************************************
  * Helpers
  **********************************************************************/
+std::string normalize_antsdr_product_id(const std::string& product)
+{
+    std::string normalized;
+    normalized.reserve(product.size());
+    for (const unsigned char value : product) {
+        if (std::isalnum(value)) {
+            normalized.push_back(static_cast<char>(std::toupper(value)));
+        }
+    }
+    return normalized;
+}
+
+bool is_antsdr_u220_family(const device_addr_t& device_addr)
+{
+    for (const char* key : {"name", "product"}) {
+        const std::string product = normalize_antsdr_product_id(device_addr.get(key, ""));
+        if (product == "U220" || product == "U220V2" || product == "U200") {
+            return true;
+        }
+    }
+    return false;
+}
+
 std::string check_option_valid(const std::string& name,
     const std::vector<std::string>& valid_options,
     const std::string& option)
@@ -338,6 +366,7 @@ b200_impl::b200_impl(
     _revision(0)
     , _enable_user_regs(device_addr.has_key("enable_user_regs"))
     , _time_source(UNKNOWN)
+    , _time_set_with_pps(false)
     , _tick_rate(0.0) // Forces a clock initialization at startup
 {
     _tree                 = property_tree::make();
@@ -376,6 +405,8 @@ b200_impl::b200_impl(
         vid_pid_pair_list.push_back(
             usb_device_handle::vid_pid_pair_t(vid, B205MINI_PRODUCT_ID));
         vid_pid_pair_list.push_back(
+            usb_device_handle::vid_pid_pair_t(vid, B206MINI_PRODUCT_ID));
+        vid_pid_pair_list.push_back(
             usb_device_handle::vid_pid_pair_t(vid, B200_PRODUCT_NI_ID));
         vid_pid_pair_list.push_back(
             usb_device_handle::vid_pid_pair_t(vid, B210_PRODUCT_NI_ID));
@@ -395,6 +426,8 @@ b200_impl::b200_impl(
             usb_device_handle::vid_pid_pair_t(B200_VENDOR_ID, B200MINI_PRODUCT_ID));
         vid_pid_pair_list.push_back(
             usb_device_handle::vid_pid_pair_t(B200_VENDOR_ID, B205MINI_PRODUCT_ID));
+        vid_pid_pair_list.push_back(
+            usb_device_handle::vid_pid_pair_t(B200_VENDOR_ID, B206MINI_PRODUCT_ID));
         vid_pid_pair_list.push_back(
             usb_device_handle::vid_pid_pair_t(B200_VENDOR_NI_ID, B200_PRODUCT_NI_ID));
         vid_pid_pair_list.push_back(
@@ -456,7 +489,7 @@ b200_impl::b200_impl(
 
     UHD_LOGGER_INFO("B200") << "Detected Device: " << B2XX_STR_NAMES[_product];
 
-    _gpsdo_capable = (not(_product == B200MINI or _product == B205MINI));
+    _gpsdo_capable = not is_b2xx_mini(_product);
 
     ////////////////////////////////////////////////////////////////////
     // Set up frontend mapping
@@ -475,14 +508,14 @@ b200_impl::b200_impl(
     _fe2                 = 0;
     _gpio_state.swap_atr = 1;
     // Unswapped setup:
-    if (_product == B200MINI or _product == B205MINI
-        or (_product == B200 and _revision >= 5)) {
+    if (is_b2xx_mini(_product) or (_product == B200 and _revision >= 5)) {
         _fe1                 = 0; // map radio0 to FE1
         _fe2                 = 1; // map radio1 to FE2
         _gpio_state.swap_atr = 0; // ATRs for radio0 are mapped to FE1
     }
 
-    if(device_addr["name"] == "u220"){
+    // AntSDR U220-family boards use the direct A->FE1/B->FE2 mapping.
+    if (is_antsdr_u220_family(device_addr)) {
         _fe1                 = 0;
         _fe2                 = 1;
         _gpio_state.swap_atr = 0;
@@ -535,15 +568,9 @@ b200_impl::b200_impl(
     _async_task_data.reset(new AsyncTaskData());
     _async_task_data->async_md.reset(new async_md_type(1000 /*messages deep*/));
     if (_gpsdo_capable) {
-        if(device_addr["name"] == "u220" or device_addr["name"] == "u220v2"){
-            _async_task_data->gpsdo_uart =
-            b200_uart::make(_ctrl_transport, B200_TX_GPS_UART_SID,9600);
-        }
-        else{
-            _async_task_data->gpsdo_uart =
-            b200_uart::make(_ctrl_transport, B200_TX_GPS_UART_SID,115200);
-        }
-        
+        const uint32_t gps_baud = is_antsdr_u220_family(device_addr) ? 9600 : 115200;
+        _async_task_data->gpsdo_uart =
+            b200_uart::make(_ctrl_transport, B200_TX_GPS_UART_SID, gps_baud);
     }
     _async_task = uhd::msg_task::make(std::bind(
         &b200_impl::handle_async_task, this, _ctrl_transport, _async_task_data));
@@ -551,7 +578,7 @@ b200_impl::b200_impl(
     ////////////////////////////////////////////////////////////////////
     // Local control endpoint
     ////////////////////////////////////////////////////////////////////
-    _local_ctrl = radio_ctrl_core_3000::make(false /*lilE*/,
+    _local_ctrl = b200_radio_ctrl_core::make(false /*lilE*/,
         _ctrl_transport,
         zero_copy_if::sptr() /*null*/,
         B200_LOCAL_CTRL_SID);
@@ -571,11 +598,7 @@ b200_impl::b200_impl(
         if ((_local_ctrl->peek32(RB32_CORE_STATUS) & 0xff) != B200_GPSDO_ST_NONE) {
             UHD_LOGGER_INFO("B200") << "Detecting internal GPSDO.... " << std::flush;
             try {
-                if(device_addr["name"] == "u220" or device_addr["name"] == "u220v2"){
-                    _gps = gps_ctrl::make(_async_task_data->gpsdo_uart,true);
-                }else{
-                    _gps = gps_ctrl::make(_async_task_data->gpsdo_uart,false);
-                }
+                _gps = gps_ctrl::make(_async_task_data->gpsdo_uart);
             } catch (std::exception& e) {
                 UHD_LOGGER_ERROR("B200")
                     << "An error occurred making GPSDO control: " << e.what();
@@ -597,7 +620,7 @@ b200_impl::b200_impl(
     _tree->create<std::string>("/name").set("B-Series Device");
     _tree->create<std::string>(mb_path / "name").set(product_name);
     _tree->create<std::string>(mb_path / "codename")
-        .set((_product == B200MINI or _product == B205MINI) ? "Pixie" : "Sasquatch");
+        .set(is_b2xx_mini(_product) ? "Pixie" : "Sasquatch");
 
     ////////////////////////////////////////////////////////////////////
     // Create data transport
@@ -662,7 +685,7 @@ b200_impl::b200_impl(
     // create time and clock control objects
     ////////////////////////////////////////////////////////////////////
     _spi_iface = b200_local_spi_core::make(_local_ctrl);
-    if (not(_product == B200MINI or _product == B205MINI)) {
+    if (not is_b2xx_mini(_product)) {
         _adf4001_iface = std::make_shared<b200_ref_pll_ctrl>(_spi_iface);
     }
 
@@ -672,15 +695,13 @@ b200_impl::b200_impl(
     UHD_LOGGER_INFO("B200") << "Initialize CODEC control...";
     reset_codec();
     ad9361_params::sptr client_settings;
-    if (_product == B200MINI or _product == B205MINI) {
+    if (is_b2xx_mini(_product)) {
         client_settings = std::make_shared<b2xxmini_ad9361_client_t>();
+    } else if (is_antsdr_u220_family(device_addr)) {
+        client_settings = std::make_shared<antsdr_u220_family_ad9361_client_t>();
     } else {
         client_settings = std::make_shared<b200_ad9361_client_t>();
     }
-
-    if(device_addr["name"] == "u220")
-        client_settings = std::make_shared<u220_ad9361_client_t>();
-
     _codec_ctrl = ad9361_ctrl::make_spi(client_settings, _spi_iface, AD9361_SLAVENO);
 
     ////////////////////////////////////////////////////////////////////
@@ -773,11 +794,9 @@ b200_impl::b200_impl(
     _tree->create<time_spec_t>(mb_path / "time" / "pps")
         .set_publisher(
             std::bind(&time_core_3000::get_time_last_pps, _radio_perifs[0].time64));
-    for (radio_perifs_t& perif : _radio_perifs) {
-        _tree->access<time_spec_t>(mb_path / "time" / "pps")
-            .add_coerced_subscriber(std::bind(
-                &time_core_3000::set_time_next_pps, perif.time64, std::placeholders::_1));
-    }
+    _tree->access<time_spec_t>(mb_path / "time" / "pps")
+        .add_coerced_subscriber(
+            std::bind(&b200_impl::set_time_next_pps, this, std::placeholders::_1));
 
     // setup time source props
     const std::vector<std::string> time_sources =
@@ -806,8 +825,8 @@ b200_impl::b200_impl(
     ////////////////////////////////////////////////////////////////////
     // front panel gpio
     ////////////////////////////////////////////////////////////////////
-    _radio_perifs[0].fp_gpio =
-        gpio_atr_3000::make(_radio_perifs[0].ctrl, TOREG(SR_FP_GPIO), RB32_FP_GPIO);
+    _radio_perifs[0].fp_gpio = gpio_atr_3000::make(_radio_perifs[0].ctrl,
+        gpio_atr_offsets::make_default(TOREG(SR_FP_GPIO), RB32_FP_GPIO));
     for (const auto& attr : gpio_attr_map) {
         switch (attr.first) {
             case usrp::gpio_atr::GPIO_SRC:
@@ -907,7 +926,7 @@ b200_impl::b200_impl(
 
 b200_impl::~b200_impl(void)
 {
-    UHD_SAFE_CALL(_async_task.reset();)
+    UHD_SAFE_CALL(_async_task.reset());
 }
 
 /***********************************************************************
@@ -926,22 +945,23 @@ void b200_impl::setup_radio(const size_t dspno)
     ////////////////////////////////////////////////////////////////////
     // radio control
     ////////////////////////////////////////////////////////////////////
-    perif.ctrl = radio_ctrl_core_3000::make(
+    perif.ctrl = b200_radio_ctrl_core::make(
         false /*lilE*/, _ctrl_transport, zero_copy_if::sptr() /*null*/, sid);
     perif.ctrl->hold_task(_async_task);
     _async_task_data->radio_ctrl[dspno] = perif.ctrl; // weak
     _tree->access<time_spec_t>(mb_path / "time" / "cmd")
         .add_coerced_subscriber(std::bind(
-            &radio_ctrl_core_3000::set_time, perif.ctrl, std::placeholders::_1));
+            &b200_radio_ctrl_core::set_time, perif.ctrl, std::placeholders::_1));
     _tree->access<double>(mb_path / "tick_rate")
         .add_coerced_subscriber(std::bind(
-            &radio_ctrl_core_3000::set_tick_rate, perif.ctrl, std::placeholders::_1));
+            &b200_radio_ctrl_core::set_tick_rate, perif.ctrl, std::placeholders::_1));
     this->register_loopback_self_test(perif.ctrl);
 
     ////////////////////////////////////////////////////////////////////
     // Set up peripherals
     ////////////////////////////////////////////////////////////////////
-    perif.atr = gpio_atr_3000::make_write_only(perif.ctrl, TOREG(SR_ATR));
+    perif.atr =
+        gpio_atr_3000::make(perif.ctrl, gpio_atr_offsets::make_write_only(TOREG(SR_ATR)));
     perif.atr->set_atr_mode(MODE_ATR, 0xFFFFFFFF);
     // create rx dsp control objects
     perif.framer = rx_vita_core_3000::make(perif.ctrl, TOREG(SR_RX_CTRL));
@@ -1042,8 +1062,8 @@ void b200_impl::setup_radio(const size_t dspno)
     // b2xx_power_cal_$dir_$ant, depending on the form factor.
     // $dir is either "tx" or "rx", and "ant" is either "tx_rx" or "rx2" (i.e.,
     // sanitized version of the antenna names that work in filenames.
-    const std::string cal_key_base =
-        (_product == B200MINI or _product == B205MINI) ? "b2xxmini_pwr_" : "b2xx_pwr_";
+    const std::string cal_key_base = (is_b2xx_mini(_product)) ? "b2xxmini_pwr_"
+                                                              : "b2xx_pwr_";
     for (direction_t dir : std::vector<direction_t>{RX_DIRECTION, TX_DIRECTION}) {
         const std::string dir_key = (dir == RX_DIRECTION) ? "rx" : "tx";
         const std::string key     = std::string(((dir == RX_DIRECTION) ? "RX" : "TX"))
@@ -1260,9 +1280,8 @@ void b200_impl::check_fpga_compat(void)
         throw uhd::runtime_error(
             "b200::check_fpga_compat signature register readback failed");
 
-    const uint16_t expected = ((_product == B200MINI or _product == B205MINI)
-                                   ? B205_FPGA_COMPAT_NUM
-                                   : B200_FPGA_COMPAT_NUM);
+    const uint16_t expected =
+        (is_b2xx_mini(_product) ? B205_FPGA_COMPAT_NUM : B200_FPGA_COMPAT_NUM);
     if (compat_major != expected) {
         throw uhd::runtime_error(str(
             boost::format("Expected FPGA compatibility number %d, but got %d:\n"
@@ -1282,7 +1301,7 @@ void b200_impl::check_fpga_compat(void)
 void b200_impl::update_clock_source(const std::string& source)
 {
     // For B205, ref_sel selects whether or not to lock to the external clock source
-    if (_product == B200MINI or _product == B205MINI) {
+    if (is_b2xx_mini(_product)) {
         if (source == "external" and _time_source == EXTERNAL) {
             throw uhd::value_error(
                 "external reference cannot be both a clock source and a time source");
@@ -1331,8 +1350,7 @@ void b200_impl::update_clock_source(const std::string& source)
 
 void b200_impl::update_time_source(const std::string& source)
 {
-    if ((_product == B200MINI or _product == B205MINI) and source == "external"
-        and _gpio_state.ref_sel == 1) {
+    if (is_b2xx_mini(_product) and source == "external" and _gpio_state.ref_sel == 1) {
         throw uhd::value_error(
             "external reference cannot be both a time source and a clock source");
     }
@@ -1362,11 +1380,28 @@ void b200_impl::set_time(const uhd::time_spec_t& t)
         perif.time64->set_time_sync(t);
     _local_ctrl->poke32(TOREG(SR_CORE_SYNC), 1 << 2 | uint32_t(_time_source));
     _local_ctrl->poke32(TOREG(SR_CORE_SYNC), _time_source);
+    _time_set_with_pps = false;
+}
+
+void b200_impl::set_time_next_pps(const uhd::time_spec_t& t)
+{
+    for (radio_perifs_t& perif : _radio_perifs)
+        perif.time64->set_time_next_pps(t);
+    _time_set_with_pps = true;
 }
 
 void b200_impl::sync_times()
 {
-    set_time(_radio_perifs[0].time64->get_time_now());
+    if (_time_set_with_pps) {
+        UHD_LOG_DEBUG("B200", "Re-synchronizing time using PPS");
+        uhd::time_spec_t time_last_pps = _radio_perifs[0].time64->get_time_last_pps();
+        while (_radio_perifs[0].time64->get_time_last_pps() == time_last_pps) {
+            std::this_thread::sleep_for(std::chrono::milliseconds(1));
+        }
+        set_time_next_pps(time_last_pps + 2.0);
+    } else {
+        set_time(_radio_perifs[0].time64->get_time_now());
+    }
 }
 
 /***********************************************************************
@@ -1376,7 +1411,7 @@ void b200_impl::sync_times()
 void b200_impl::update_bandsel(const std::string& which, double freq)
 {
     // B205 does not have bandsels
-    if (_product == B200MINI or _product == B205MINI) {
+    if (is_b2xx_mini(_product)) {
         return;
     }
 
@@ -1441,9 +1476,9 @@ void b200_impl::update_atrs(void)
         const bool enb_tx     = bool(perif.tx_streamer.lock());
         const bool is_rx2     = perif.ant_rx2;
         const uint32_t rxonly = (enb_rx) ? ((is_rx2) ? STATE_RX1_RX2 : STATE_RX1_TXRX)
-                                         : STATE_OFF;
-        const uint32_t txonly = (enb_tx) ? (STATE_TX1_TXRX) : STATE_OFF;
-        uint32_t fd           = STATE_OFF;
+                                         : STATE_RX1_OFF;
+        const uint32_t txonly = (enb_tx) ? (STATE_TX1_TXRX) : STATE_RX1_OFF;
+        uint32_t fd           = STATE_RX1_OFF;
         if (enb_rx and enb_tx)
             fd = STATE_FDX1_TXRX;
         if (enb_rx and not enb_tx)
@@ -1451,7 +1486,7 @@ void b200_impl::update_atrs(void)
         if (not enb_rx and enb_tx)
             fd = txonly;
         gpio_atr_3000::sptr atr = perif.atr;
-        atr->set_atr_reg(ATR_REG_IDLE, STATE_OFF);
+        atr->set_atr_reg(ATR_REG_IDLE, STATE_RX1_OFF);
         atr->set_atr_reg(ATR_REG_RX_ONLY, rxonly);
         atr->set_atr_reg(ATR_REG_TX_ONLY, txonly);
         atr->set_atr_reg(ATR_REG_FULL_DUPLEX, fd);
@@ -1462,9 +1497,9 @@ void b200_impl::update_atrs(void)
         const bool enb_tx     = bool(perif.tx_streamer.lock());
         const bool is_rx2     = perif.ant_rx2;
         const uint32_t rxonly = (enb_rx) ? ((is_rx2) ? STATE_RX2_RX2 : STATE_RX2_TXRX)
-                                         : STATE_OFF;
-        const uint32_t txonly = (enb_tx) ? (STATE_TX2_TXRX) : STATE_OFF;
-        uint32_t fd           = STATE_OFF;
+                                         : STATE_RX2_OFF;
+        const uint32_t txonly = (enb_tx) ? (STATE_TX2_TXRX) : STATE_RX2_OFF;
+        uint32_t fd           = STATE_RX2_OFF;
         if (enb_rx and enb_tx)
             fd = STATE_FDX2_TXRX;
         if (enb_rx and not enb_tx)
@@ -1472,7 +1507,7 @@ void b200_impl::update_atrs(void)
         if (not enb_rx and enb_tx)
             fd = txonly;
         gpio_atr_3000::sptr atr = perif.atr;
-        atr->set_atr_reg(ATR_REG_IDLE, STATE_OFF);
+        atr->set_atr_reg(ATR_REG_IDLE, STATE_RX2_OFF);
         atr->set_atr_reg(ATR_REG_RX_ONLY, rxonly);
         atr->set_atr_reg(ATR_REG_TX_ONLY, txonly);
         atr->set_atr_reg(ATR_REG_FULL_DUPLEX, fd);
@@ -1500,7 +1535,7 @@ void b200_impl::update_enables(void)
                          and bool(_radio_perifs[_fe2].rx_streamer.lock());
     const size_t num_rx = (enb_rx1 ? 1 : 0) + (enb_rx2 ? 1 : 0);
     const size_t num_tx = (enb_tx1 ? 1 : 0) + (enb_tx2 ? 1 : 0);
-    const bool mimo     = num_rx == 2 or num_tx == 2;
+    const uint32_t mimo = (num_rx == 2 or num_tx == 2) ? 1 : 0;
 
     if ((num_rx + num_tx) == 3) {
         throw uhd::runtime_error(
@@ -1512,9 +1547,12 @@ void b200_impl::update_enables(void)
     if ((num_rx + num_tx) == 0)
         _codec_ctrl->set_active_chains(true, false, true, false); // enable something
 
-    // figure out if mimo is enabled based on new state
-    _gpio_state.mimo = (mimo) ? 1 : 0;
-    update_gpio_state();
+    // update MIMO state and re-sync times if necessary
+    if (_gpio_state.mimo != mimo) {
+        _gpio_state.mimo = mimo;
+        update_gpio_state();
+        sync_times();
+    }
 
     // atrs change based on enables
     this->update_atrs();

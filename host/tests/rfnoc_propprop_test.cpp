@@ -4,16 +4,21 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 //
 
-#include "rfnoc_graph_mock_nodes.hpp"
+#include <uhd/rfnoc/detail/graph.hpp>
 #include <uhd/rfnoc/mock_block.hpp>
+#include <uhd/rfnoc/mock_nodes.hpp>
 #include <uhd/rfnoc/noc_block_base.hpp>
+#include <uhd/rfnoc/node_accessor.hpp>
+#include <uhd/rfnoc/rfnoc_types.hpp>
 #include <uhd/utils/log.hpp>
 #include <uhdlib/rfnoc/clock_iface.hpp>
-#include <uhdlib/rfnoc/graph.hpp>
-#include <uhdlib/rfnoc/node_accessor.hpp>
 #include <uhdlib/rfnoc/prop_accessor.hpp>
 #include <boost/test/unit_test.hpp>
+#include <algorithm>
 #include <iostream>
+
+using namespace uhd::rfnoc;
+using namespace uhd::rfnoc::test;
 
 /*! Mock invalid node
  *
@@ -168,8 +173,8 @@ public:
 class mock_noc_block_t : public noc_block_base
 {
 public:
-    mock_noc_block_t(noc_block_base::make_args_ptr make_args) :
-        noc_block_base(std::move(make_args))
+    mock_noc_block_t(noc_block_base::make_args_ptr make_args)
+        : noc_block_base(std::move(make_args))
     {
     }
 
@@ -250,21 +255,20 @@ BOOST_AUTO_TEST_CASE(test_mtu_forwarding_policy_restrictions)
     // Most of this is just dummy stuff required to correctly instantiate a
     // noc_block_base-derived block and is inconsequential to the test itself
     mock_block_container mbc;
-    mbc.reg_iface = std::make_shared<mock_reg_iface_t>();
-    mbc.tree      = uhd::property_tree::make();
-    mbc.make_args                   = std::make_unique<noc_block_base::make_args_t>();
-    mbc.make_args->noc_id           = 0x01020304;
-    mbc.make_args->block_id         = block_id_t("0/Dummy#0");
-    mbc.make_args->num_input_ports  = 2;
-    mbc.make_args->num_output_ports = 2;
-    mbc.make_args->mtu              = 8000;
-    mbc.make_args->reg_iface        = mbc.reg_iface;
-    mbc.make_args->tree             = mbc.tree;
-    mbc.make_args->tb_clk_iface =
-        std::make_shared<clock_iface>("dummy");
-    mbc.make_args->ctrlport_clk_iface =
-        std::make_shared<clock_iface>("dummy");
-    mbc.make_args->mb_control = nullptr;
+    mbc.reg_iface                     = std::make_shared<mock_reg_iface_t>();
+    mbc.tree                          = uhd::property_tree::make();
+    mbc.make_args                     = std::make_unique<noc_block_base::make_args_t>();
+    mbc.make_args->noc_id             = 0x01020304;
+    mbc.make_args->block_id           = block_id_t("0/Dummy#0");
+    mbc.make_args->num_input_ports    = 2;
+    mbc.make_args->num_output_ports   = 2;
+    mbc.make_args->mtu                = 8000;
+    mbc.make_args->chdr_w             = uhd::rfnoc::CHDR_W_64;
+    mbc.make_args->reg_iface          = mbc.reg_iface;
+    mbc.make_args->tree               = mbc.tree;
+    mbc.make_args->tb_clk_iface       = std::make_shared<clock_iface>("dummy");
+    mbc.make_args->ctrlport_clk_iface = std::make_shared<clock_iface>("dummy");
+    mbc.make_args->mb_control         = nullptr;
 
     // Construct the dummy RFNoC block
     mock_noc_block_t mock_block(std::move(mbc.make_args));
@@ -273,7 +277,9 @@ BOOST_AUTO_TEST_CASE(test_mtu_forwarding_policy_restrictions)
     mock_block.set_mtu_forwarding_policy(noc_block_base::forwarding_policy_t::ONE_TO_ONE);
 
     // And the seocnd time should generate an exception
-    BOOST_REQUIRE_THROW(mock_block.set_mtu_forwarding_policy(noc_block_base::forwarding_policy_t::ONE_TO_FAN), uhd::runtime_error);
+    BOOST_REQUIRE_THROW(mock_block.set_mtu_forwarding_policy(
+                            noc_block_base::forwarding_policy_t::ONE_TO_FAN),
+        uhd::runtime_error);
 }
 
 BOOST_AUTO_TEST_CASE(test_graph_resolve_ddc_radio)
@@ -295,10 +301,10 @@ BOOST_AUTO_TEST_CASE(test_graph_resolve_ddc_radio)
     // In this simple graph, all connections are identical from an edge info
     // perspective, so we're lazy and share an edge_info object:
     uhd::rfnoc::detail::graph_t::graph_edge_t edge_info;
-    edge_info.src_port                    = 0;
-    edge_info.dst_port                    = 0;
-    edge_info.property_propagation_active = true;
-    edge_info.edge = uhd::rfnoc::detail::graph_t::graph_edge_t::DYNAMIC;
+    edge_info.src_port        = 0;
+    edge_info.dst_port        = 0;
+    edge_info.is_forward_edge = true;
+    edge_info.edge            = uhd::rfnoc::detail::graph_t::graph_edge_t::DYNAMIC;
 
     // Now create the graph and commit:
     graph.connect(&mock_rx_radio, &mock_ddc, edge_info);
@@ -341,10 +347,10 @@ BOOST_AUTO_TEST_CASE(test_graph_catch_invalid_graph)
     // In this simple graph, all connections are identical from an edge info
     // perspective, so we're lazy and share an edge_info object:
     uhd::rfnoc::detail::graph_t::graph_edge_t edge_info;
-    edge_info.src_port                    = 0;
-    edge_info.dst_port                    = 0;
-    edge_info.property_propagation_active = true;
-    edge_info.edge = uhd::rfnoc::detail::graph_t::graph_edge_t::DYNAMIC;
+    edge_info.src_port        = 0;
+    edge_info.dst_port        = 0;
+    edge_info.is_forward_edge = true;
+    edge_info.edge            = uhd::rfnoc::detail::graph_t::graph_edge_t::DYNAMIC;
 
     // Now create the graph and commit:
     graph.connect(&mock_rx_radio, &mock_tx_radio, edge_info);
@@ -371,10 +377,10 @@ BOOST_AUTO_TEST_CASE(test_graph_ro_prop)
     // In this simple graph, all connections are identical from an edge info
     // perspective, so we're lazy and share an edge_info object:
     uhd::rfnoc::detail::graph_t::graph_edge_t edge_info;
-    edge_info.src_port                    = 0;
-    edge_info.dst_port                    = 0;
-    edge_info.property_propagation_active = true;
-    edge_info.edge = uhd::rfnoc::detail::graph_t::graph_edge_t::DYNAMIC;
+    edge_info.src_port        = 0;
+    edge_info.dst_port        = 0;
+    edge_info.is_forward_edge = true;
+    edge_info.edge            = uhd::rfnoc::detail::graph_t::graph_edge_t::DYNAMIC;
 
     // Now create the graph and commit:
     graph.connect(&mock_rx_radio, &mock_tx_radio, edge_info);
@@ -383,8 +389,9 @@ BOOST_AUTO_TEST_CASE(test_graph_ro_prop)
     const size_t rx_rssi_resolver_count = mock_rx_radio.rssi_resolver_count;
     UHD_LOG_INFO("TEST", "Now testing mock RSSI resolver/get prop");
     UHD_LOG_DEBUG("TEST", "RX RSSI: " << mock_rx_radio.get_property<double>("rssi"));
-    // The next value must match the value in graph.cpp
-    BOOST_CHECK_EQUAL(rx_rssi_resolver_count + 1, mock_rx_radio.rssi_resolver_count);
+    // The next value must match the value in graph.cpp. We have one additional
+    // backward- and forward resolution.
+    BOOST_CHECK_EQUAL(rx_rssi_resolver_count + 2, mock_rx_radio.rssi_resolver_count);
 }
 
 BOOST_AUTO_TEST_CASE(test_graph_double_connect)
@@ -622,10 +629,10 @@ BOOST_AUTO_TEST_CASE(test_graph_node_deletion_resolver_fix)
 
     // Connect the radio to the DDC in a simple graph
     uhd::rfnoc::detail::graph_t::graph_edge_t edge_info;
-    edge_info.src_port                    = 0;
-    edge_info.dst_port                    = 0;
-    edge_info.property_propagation_active = true;
-    edge_info.edge = uhd::rfnoc::detail::graph_t::graph_edge_t::DYNAMIC;
+    edge_info.src_port        = 0;
+    edge_info.dst_port        = 0;
+    edge_info.is_forward_edge = true;
+    edge_info.edge            = uhd::rfnoc::detail::graph_t::graph_edge_t::DYNAMIC;
 
     graph.connect(&mock_rx_radio, &mock_ddc, edge_info);
     BOOST_CHECK_EQUAL(mock_ddc._decim.get(), new_interp_ratio);
@@ -650,4 +657,109 @@ BOOST_AUTO_TEST_CASE(test_graph_node_deletion_resolver_fix)
     mock_ddc.set_property<int>("decim", disconnected_interp_ratio, 0);
     BOOST_CHECK_EQUAL(mock_ddc._samp_rate_in.get() / disconnected_interp_ratio,
         mock_ddc._samp_rate_out.get());
+}
+
+
+BOOST_AUTO_TEST_CASE(test_graph_node_loop_resolve)
+{
+    // Mock the radio with only the AIS property. It will keep AIS at a multiple
+    // of 4.
+    class mock_radio_ais_node_t : public node_t
+    {
+    public:
+        mock_radio_ais_node_t()
+        {
+            register_property(&_ais_in);
+            register_property(&_ais_out);
+
+            add_property_resolver({&_ais_in}, {&_ais_in}, [this]() {
+                _ais_in = std::max<size_t>(4, (_ais_in.get() / 4) * 4);
+            });
+            add_property_resolver({&_ais_out}, {&_ais_out}, [this]() {
+                _ais_out = std::max<size_t>(4, (_ais_out.get() / 4) * 4);
+            });
+        }
+
+        std::string get_unique_id() const override
+        {
+            return "MOCK_RADIO_AIS_NODE";
+        }
+
+        size_t get_num_input_ports() const override
+        {
+            return 1;
+        }
+
+        size_t get_num_output_ports() const override
+        {
+            return 1;
+        }
+
+    private:
+        property_t<size_t> _ais_in{
+            PROP_KEY_ATOMIC_ITEM_SIZE, 4, {res_source_info::INPUT_EDGE}};
+        property_t<size_t> _ais_out{
+            PROP_KEY_ATOMIC_ITEM_SIZE, 8, {res_source_info::OUTPUT_EDGE}};
+    };
+
+    // Mock the replay with only the AIS property. It will keep AIS at exactly 8.
+    class mock_replay_ais_node_t : public node_t
+    {
+    public:
+        mock_replay_ais_node_t()
+        {
+            register_property(&_ais_in);
+            register_property(&_ais_out);
+
+            add_property_resolver({&_ais_in}, {&_ais_in}, [this]() { _ais_in = 8; });
+            add_property_resolver({&_ais_out}, {&_ais_out}, [this]() { _ais_out = 8; });
+        }
+
+        std::string get_unique_id() const override
+        {
+            return "MOCK_REPLAY_AIS_NODE";
+        }
+
+        size_t get_num_input_ports() const override
+        {
+            return 1;
+        }
+
+        size_t get_num_output_ports() const override
+        {
+            return 1;
+        }
+
+    private:
+        property_t<size_t> _ais_in{
+            PROP_KEY_ATOMIC_ITEM_SIZE, 4, {res_source_info::INPUT_EDGE}};
+        property_t<size_t> _ais_out{
+            PROP_KEY_ATOMIC_ITEM_SIZE, 8, {res_source_info::OUTPUT_EDGE}};
+    };
+
+    // Now let's define things
+    node_accessor_t node_accessor{};
+    uhd::rfnoc::detail::graph_t graph{};
+
+    // Create mock blocks
+    mock_radio_ais_node_t mock_radio_ais_node{};
+    mock_replay_ais_node_t mock_replay_ais_node{};
+
+    // These init calls would normally be done by the framework
+    node_accessor.init_props(&mock_radio_ais_node);
+    node_accessor.init_props(&mock_replay_ais_node);
+
+    // Connect the radio to the replay in a simple graph
+    uhd::rfnoc::detail::graph_t::graph_edge_t edge_info;
+    edge_info.src_port        = 0;
+    edge_info.dst_port        = 0;
+    edge_info.is_forward_edge = true;
+    edge_info.edge            = uhd::rfnoc::detail::graph_t::graph_edge_t::DYNAMIC;
+
+    graph.connect(&mock_radio_ais_node, &mock_replay_ais_node, edge_info);
+    // Declare back-edge
+    edge_info.is_forward_edge = false;
+    graph.connect(&mock_replay_ais_node, &mock_radio_ais_node, edge_info);
+    UHD_LOG_INFO("TEST", "Committing replay/radio loop graph");
+    BOOST_CHECK_NO_THROW(graph.commit(););
 }

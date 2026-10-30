@@ -47,10 +47,9 @@ uhd::usrp::component_files_t _update_component(
             metadata[key]           = comp.metadata[key];
             comp_copy.metadata[key] = comp.metadata[key];
             if (key == "just_reload") {
-                just_reload =
-                    just_reload
-                    | uhd::cast::from_str<bool>(metadata.at("just_reload"));
-                    //| (boost::to_lower_copy(metadata.at("just_reload")) == "true");
+                just_reload = just_reload
+                              | uhd::cast::from_str<bool>(metadata.at("just_reload"));
+                //| (boost::to_lower_copy(metadata.at("just_reload")) == "true");
             }
         }
         // Copy to the update component args
@@ -121,6 +120,16 @@ void mpmd_impl::init_property_tree(
         .set(mb->device_info.get("fpga_version_hash", "UNKNOWN"));
     tree->create<std::string>(mb_path / "token").set(mb->get_token());
     tree->create<uhd::device_addr_t>(mb_path / "args").set(mb->mb_args);
+    tree->create<std::string>(mb_path / "mender_artifact")
+        .set(mb->device_info.get("mender_artifact", "UNKNOWN"));
+    tree->create<std::string>(mb_path / "mpm_sw_version")
+        .set(mb->device_info.get("mpm_sw_version", "UNKNOWN"));
+    tree->create<std::string>(mb_path / "fs_version")
+        .set(mb->device_info.get("fs_version", "UNKNOWN"));
+    if (mb->device_info.has_key("device_dna")) {
+        tree->create<std::string>(mb_path / "device_dna")
+            .set(mb->device_info.get("device_dna", "UNKNOWN"));
+    }
 
     /*** Clocking *******************************************************/
     tree->create<std::string>(mb_path / "clock_source/value")

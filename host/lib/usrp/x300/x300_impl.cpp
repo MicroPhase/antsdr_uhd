@@ -7,6 +7,7 @@
 //
 
 #include "x300_impl.hpp"
+#include "../dboard/db_obx.hpp"
 #include "../dboard/db_ubx.hpp"
 #include "x300_claim.hpp"
 #include "x300_eth_mgr.hpp"
@@ -18,14 +19,19 @@
 #include <uhd/transport/if_addrs.hpp>
 #include <uhd/usrp/dboard_eeprom.hpp>
 #include <uhd/usrp/dboard_id.hpp>
+#include <uhd/utils/algorithm.hpp>
+#include <uhd/utils/compat_check.hpp>
 #include <uhd/utils/log.hpp>
 #include <uhd/utils/paths.hpp>
 #include <uhd/utils/safe_call.hpp>
 #include <uhd/utils/static.hpp>
 #include <uhdlib/rfnoc/device_id.hpp>
+#include <uhdlib/utils/paths.hpp>
+#include <boost/format.hpp>
 #include <chrono>
 #include <fstream>
 #include <thread>
+#include <vector>
 #ifdef HAVE_DPDK
 #    include <uhdlib/transport/dpdk/common.hpp>
 #endif
@@ -40,8 +46,10 @@ namespace asio = boost::asio;
 
 namespace uhd { namespace usrp { namespace x300 {
 
-void init_prop_tree(
-    const size_t mb_idx, uhd::rfnoc::x300_mb_controller* mbc, property_tree::sptr pt);
+void init_prop_tree(const size_t mb_idx,
+    uhd::rfnoc::x300_mb_controller* mbc,
+    property_tree::sptr pt,
+    const uhd::compat_num32 fpga_compat);
 
 }}} // namespace uhd::usrp::x300
 
@@ -228,14 +236,16 @@ x300_impl::x300_impl(const uhd::device_addr_t& dev_addr) : rfnoc_device()
     size_t num_usrps   = 0;
     while (num_usrps < total_usrps) {
         size_t init_usrps = std::min(total_usrps - num_usrps, x300::MAX_INIT_THREADS);
-        boost::thread_group setup_threads;
+        std::vector<std::thread> setup_threads;
         for (size_t i = 0; i < init_usrps; i++) {
             const size_t index = num_usrps + i;
-            setup_threads.create_thread([this, index, device_args]() {
+            setup_threads.emplace_back([this, index, device_args]() {
                 this->setup_mb(index, device_args[index]);
             });
         }
-        setup_threads.join_all();
+        for (auto& setup_thread : setup_threads) {
+            setup_thread.join();
+        }
         num_usrps += init_usrps;
     }
 }
@@ -282,8 +292,8 @@ void x300_impl::setup_mb(const size_t mb_i, const uhd::device_addr_t& dev_addr)
 
     // check compat numbers
     // check fpga compat before fw compat because the fw is a subset of the fpga image
-    this->check_fpga_compat(mb_path, mb);
-    this->check_fw_compat(mb_path, mb);
+    auto fpga_compat = this->check_fpga_compat(mb_path, mb);
+    auto fw_compat   = this->check_fw_compat(mb_path, mb);
 
     // store which FPGA image is loaded
     mb.loaded_fpga_image = get_fpga_option(mb.zpu_ctrl);
@@ -362,11 +372,11 @@ void x300_impl::setup_mb(const size_t mb_i, const uhd::device_addr_t& dev_addr)
 
     // The default daughterboard clock rate may have to be overridden. This is due to the
     // limitation on X300 devices where both daughterboards must use the same clock rate.
-    // The daughterboards that require specific clock rates are UBX and TwinRX. TwinRX
-    // requires a clock rate of 100 MHz for the best RF performance. UBX daughterboards
-    // require a clock rate of no more than the max pfd frequency to maintain phase
-    // synchronization. If there is no UBX, the default daughterboard clock rate is half
-    // of the master clock rate for X300.
+    // The daughterboards that require specific clock rates are UBX, OBX, and TwinRX.
+    // TwinRX requires a clock rate of 100 MHz for the best RF performance. UBX and OBX
+    // daughterboards require a clock rate of no more than the max pfd frequency to
+    // maintain phase synchronization. If there is no UBX or OBX, the default
+    // daughterboard clock rate is half of the master clock rate for X300.
     const double x300_dboard_clock_rate = [dev_addr, mb]() -> double {
         // Do not override use-specified dboard clock rates
         if (dev_addr.has_key("dboard_clock_rate")) {
@@ -374,18 +384,20 @@ void x300_impl::setup_mb(const size_t mb_i, const uhd::device_addr_t& dev_addr)
         }
         const double mcr         = mb.args.get_master_clock_rate();
         double dboard_clock_rate = mb.args.get_dboard_clock_rate();
-        // Check for UBX daughterboards
+        // Check for UBX or OBX daughterboards
         std::vector<dboard_id_t> dboard_ids = get_dboard_ids(*mb.zpu_i2c);
         for (dboard_id_t dboard_id : dboard_ids) {
-            if (std::find(
-                    dboard::ubx::ubx_ids.begin(), dboard::ubx::ubx_ids.end(), dboard_id)
-                != dboard::ubx::ubx_ids.end()) {
-                double ubx_clock_rate = mcr;
-                for (int i = 2; ubx_clock_rate > dboard::ubx::get_max_pfd_freq(dboard_id);
-                     i++) {
-                    ubx_clock_rate = mcr / i;
+            bool ubx_db_found = uhd::has(dboard::ubx::ubx_ids, dboard_id);
+            bool obx_db_found = uhd::has(dboard::obx::obx_ids, dboard_id);
+            if (ubx_db_found || obx_db_found) {
+                double dboard_pfd_clock_rate = mcr;
+                double max_pfd_freq          = ubx_db_found
+                                                   ? dboard::ubx::get_max_pfd_freq(dboard_id)
+                                                   : dboard::obx::get_max_pfd_freq(dboard_id);
+                for (int i = 2; dboard_pfd_clock_rate > max_pfd_freq; i++) {
+                    dboard_pfd_clock_rate = mcr / i;
                 }
-                dboard_clock_rate = std::min(dboard_clock_rate, ubx_clock_rate);
+                dboard_clock_rate = std::min(dboard_clock_rate, dboard_pfd_clock_rate);
             }
         }
         return dboard_clock_rate;
@@ -416,13 +428,13 @@ void x300_impl::setup_mb(const size_t mb_i, const uhd::device_addr_t& dev_addr)
     ////////////////////////////////////////////////////////////////////
     // setup properties
     ////////////////////////////////////////////////////////////////////
-    init_prop_tree(mb_i, mb_ctrl.get(), _tree);
+    init_prop_tree(mb_i, mb_ctrl.get(), _tree, fpga_compat);
 
     ////////////////////////////////////////////////////////////////////
     // RFNoC Stuff
     ////////////////////////////////////////////////////////////////////
     // Set the remote device ID
-    mb.zpu_ctrl->poke32(SR_ADDR(SET0_BASE, ZPU_SR_XB_LOCAL), mb.device_id);
+    mb.zpu_ctrl->poke32(SR_ADDR(SET0_BASE, ZPU_SR_DEVICE_ID), mb.device_id);
     // Configure the CHDR port number in the dispatcher
     mb.zpu_ctrl->poke32(SR_ADDR(SET0_BASE, (ZPU_SR_ETHINT0 + 8 + 3)), X300_VITA_UDP_PORT);
     mb.zpu_ctrl->poke32(SR_ADDR(SET0_BASE, (ZPU_SR_ETHINT1 + 8 + 3)), X300_VITA_UDP_PORT);
@@ -433,12 +445,20 @@ void x300_impl::setup_mb(const size_t mb_i, const uhd::device_addr_t& dev_addr)
       // parallel
         std::lock_guard<std::mutex> l(_mb_iface_mutex);
         _mb_ifaces.insert({mb_i,
-            x300_mb_iface(mb.conn_mgr, mb.clock->get_master_clock_rate(), mb.device_id)});
+            x300_mb_iface(mb.conn_mgr,
+                mb.zpu_ctrl,
+                mb.clock->get_master_clock_rate(),
+                mb.device_id,
+                fpga_compat,
+                fw_compat)});
         UHD_LOG_DEBUG("X300", "Motherboard " << mb_i << " has local device IDs: ");
         for (const auto local_dev_id : _mb_ifaces.at(mb_i).get_local_device_ids()) {
             UHD_LOG_DEBUG("X300", "* " << local_dev_id);
         }
     } // End of locked section
+
+    // Now finalize initialization of the mb_iface. This can be done in parallel.
+    _mb_ifaces.at(mb_i).init();
 
     mb_ctrl->set_initialization_done();
 }
@@ -457,14 +477,15 @@ x300_impl::~x300_impl(void)
             }
         }
     } catch (...) {
-        UHD_SAFE_CALL(throw;)
+        UHD_SAFE_CALL(throw)
     }
 }
 
 /***********************************************************************
  * compat checks
  **********************************************************************/
-void x300_impl::check_fw_compat(const fs_path& mb_path, const mboard_members_t& members)
+uhd::compat_num32 x300_impl::check_fw_compat(
+    const fs_path& mb_path, const mboard_members_t& members)
 {
     auto iface = members.zpu_ctrl;
     const uint32_t compat_num =
@@ -473,13 +494,12 @@ void x300_impl::check_fw_compat(const fs_path& mb_path, const mboard_members_t& 
     const uint32_t compat_minor = (compat_num & 0xffff);
 
     if (compat_major != X300_FW_COMPAT_MAJOR) {
-        const std::string image_loader_path =
-            (fs::path(uhd::get_pkg_path()) / "bin" / "uhd_image_loader").string();
-        const std::string image_loader_cmd = str(
+        const std::string image_loader_path = uhd::find_uhd_command("uhd_image_loader");
+        const std::string image_loader_cmd  = str(
             boost::format("\"%s\" --args=\"type=x300,%s=%s\"") % image_loader_path
             % (members.xport_path == xport_path_t::ETH ? "addr" : "resource")
             % (members.xport_path == xport_path_t::ETH ? members.args.get_first_addr()
-                                                       : members.args.get_resource()));
+                                                        : members.args.get_resource()));
 
         throw uhd::runtime_error(
             str(boost::format(
@@ -498,26 +518,28 @@ void x300_impl::check_fw_compat(const fs_path& mb_path, const mboard_members_t& 
     }
     _tree->create<std::string>(mb_path / "fw_version")
         .set(str(boost::format("%u.%u") % compat_major % compat_minor));
+
+    return {static_cast<uint16_t>(compat_major), static_cast<uint16_t>(compat_minor)};
 }
 
-void x300_impl::check_fpga_compat(const fs_path& mb_path, const mboard_members_t& members)
+uhd::compat_num32 x300_impl::check_fpga_compat(
+    const fs_path& mb_path, const mboard_members_t& members)
 {
     uint32_t compat_num = members.zpu_ctrl->peek32(SR_ADDR(SET0_BASE, ZPU_RB_COMPAT_NUM));
     uint32_t compat_major = (compat_num >> 16);
-    uint32_t compat_minor = (compat_num & 0xffff);
+    int64_t compat_minor  = (compat_num & 0xffff);
 
-    if (compat_major != X300_FPGA_COMPAT_MAJOR) {
-        std::string image_loader_path =
-            (fs::path(uhd::get_pkg_path()) / "bin" / "uhd_image_loader").string();
-        std::string image_loader_cmd = str(
+    if (compat_major != X300_FPGA_COMPAT_MAJOR || compat_minor < X300_FPGA_COMPAT_MINOR) {
+        const std::string image_loader_path = uhd::find_uhd_command("uhd_image_loader");
+        const std::string image_loader_cmd  = str(
             boost::format("\"%s\" --args=\"type=x300,%s=%s\"") % image_loader_path
             % (members.xport_path == xport_path_t::ETH ? "addr" : "resource")
             % (members.xport_path == xport_path_t::ETH ? members.args.get_first_addr()
-                                                       : members.args.get_resource()));
+                                                        : members.args.get_resource()));
 
         throw uhd::runtime_error(
             str(boost::format(
-                    "Expected FPGA compatibility number %d, but got %d:\n"
+                    "Expected FPGA compatibility number %d.%d, but got %d.%d:\n"
                     "The FPGA image on your device is not compatible with this host code "
                     "build.\n"
                     "Download the appropriate FPGA images for this version of UHD.\n"
@@ -527,7 +549,8 @@ void x300_impl::check_fpga_compat(const fs_path& mb_path, const mboard_members_t
                     "command:\n\n%s\n\n"
                     "For more information, refer to the UHD manual:\n\n"
                     " http://files.ettus.com/manual/page_usrp_x3x0.html#x3x0_flash")
-                % int(X300_FPGA_COMPAT_MAJOR) % compat_major
+                % int(X300_FPGA_COMPAT_MAJOR) % int(X300_FPGA_COMPAT_MINOR)
+                % int(compat_major) % int(compat_minor)
                 % print_utility_error("uhd_images_downloader.py") % image_loader_cmd));
     }
     _tree->create<std::string>(mb_path / "fpga_version")
@@ -541,4 +564,6 @@ void x300_impl::check_fpga_compat(const fs_path& mb_path, const mboard_members_t
     UHD_LOG_DEBUG("X300",
         "Using FPGA version: " << compat_major << "." << compat_minor
                                << " git hash: " << git_hash_str);
+
+    return {static_cast<uint16_t>(compat_major), static_cast<uint16_t>(compat_minor)};
 }

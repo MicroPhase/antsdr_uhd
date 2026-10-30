@@ -23,6 +23,7 @@ noc_block_base::noc_block_base(make_args_ptr make_args)
     , _block_id(make_args->block_id)
     , _num_input_ports(make_args->num_input_ports)
     , _num_output_ports(make_args->num_output_ports)
+    , _chdr_w(make_args->chdr_w)
     , _ctrlport_clock_iface(make_args->ctrlport_clk_iface)
     , _tb_clock_iface(make_args->tb_clk_iface)
     , _mb_controller(std::move(make_args->mb_control))
@@ -51,7 +52,7 @@ noc_block_base::noc_block_base(make_args_ptr make_args)
     prop_ptrs_t tick_rate_prop_refs;
     tick_rate_prop_refs.reserve(_tick_rate_props.size());
     for (auto& prop : _tick_rate_props) {
-        tick_rate_prop_refs.insert(&prop);
+        tick_rate_prop_refs.push_back(&prop);
         register_property(&prop);
     }
     for (auto& prop : _tick_rate_props) {
@@ -85,7 +86,7 @@ noc_block_base::noc_block_base(make_args_ptr make_args)
     prop_ptrs_t mtu_prop_refs;
     mtu_prop_refs.reserve(_mtu_props.size());
     for (auto& prop : _mtu_props) {
-        mtu_prop_refs.insert(&prop);
+        mtu_prop_refs.push_back(&prop);
         register_property(&prop);
     }
     // If an MTU edge property value changes, this resolver will coerce the
@@ -251,6 +252,7 @@ void noc_block_base::set_mtu_forwarding_policy(const forwarding_policy_t policy)
     for (auto& prop : _mtu_props) {
         const res_source_info src_edge = prop.get_src_info();
         prop_ptrs_t output_props{};
+        output_props.reserve(_mtu_props.size());
         for (auto& other_prop : _mtu_props) {
             const res_source_info dst_edge = other_prop.get_src_info();
             bool add_to_output_props       = false;
@@ -273,7 +275,7 @@ void noc_block_base::set_mtu_forwarding_policy(const forwarding_policy_t policy)
             }
 
             if (add_to_output_props) {
-                output_props.insert(&other_prop);
+                output_props.push_back(&other_prop);
             }
         }
 
@@ -315,6 +317,21 @@ size_t noc_block_base::get_mtu(const res_source_info& edge)
     return _mtu.at(edge);
 }
 
+size_t noc_block_base::get_chdr_hdr_len(const bool account_for_ts) const
+{
+    const size_t header_len_bytes = chdr_w_to_bits(_chdr_w) / 8;
+    // 64-bit CHDR requires two lines for the header if we use a timestamp,
+    // everything else requires one line
+    const size_t num_hdr_lines = (account_for_ts && _chdr_w == CHDR_W_64) ? 2 : 1;
+    return header_len_bytes * num_hdr_lines;
+}
+
+size_t noc_block_base::get_max_payload_size(
+    const res_source_info& edge, const bool account_for_ts)
+{
+    return get_mtu(edge) - get_chdr_hdr_len(account_for_ts);
+}
+
 property_base_t* noc_block_base::get_mtu_prop_ref(const res_source_info& edge)
 {
     for (size_t mtu_prop_idx = 0; mtu_prop_idx < _mtu_props.size(); mtu_prop_idx++) {
@@ -330,8 +347,18 @@ void noc_block_base::shutdown()
 {
     RFNOC_LOG_TRACE("Calling deinit()");
     deinit();
-    RFNOC_LOG_DEBUG("Invalidating register interface");
+    RFNOC_LOG_TRACE("Invalidating register interface");
     update_reg_iface();
+}
+
+void noc_block_base::post_init()
+{
+    // Verify the block set its MTU forwarding policy. If not, set it to the
+    // default value.
+    if (!_mtu_fwd_policy_set) {
+        RFNOC_LOG_INFO("Setting default MTU forward policy.");
+        set_mtu_forwarding_policy(_mtu_fwd_policy);
+    }
 }
 
 std::shared_ptr<mb_controller> noc_block_base::get_mb_controller()
@@ -341,5 +368,5 @@ std::shared_ptr<mb_controller> noc_block_base::get_mb_controller()
 
 void noc_block_base::deinit()
 {
-    RFNOC_LOG_DEBUG("deinit() called, but not implemented.");
+    RFNOC_LOG_TRACE("deinit() called, but not implemented.");
 }

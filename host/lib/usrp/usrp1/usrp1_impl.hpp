@@ -18,7 +18,6 @@
 #include <uhd/usrp/dboard_manager.hpp>
 #include <uhd/usrp/mboard_eeprom.hpp>
 #include <uhd/usrp/subdev_spec.hpp>
-#include <uhd/utils/pimpl.hpp>
 #include <atomic>
 #include <complex>
 #include <memory>
@@ -29,21 +28,21 @@
 static const std::string USRP1_EEPROM_MAP_KEY = "B000";
 static const size_t USRP1_MAX_RATE_USB2       = 32000000; // bytes/s
 
-#    define FR_RB_CAPS 3
-#    define FR_MODE 13
-#    define FR_DEBUG_EN 14
+#    define FR_RB_CAPS         3
+#    define FR_MODE            13
+#    define FR_DEBUG_EN        14
 #    define FR_DC_OFFSET_CL_EN 15
-#    define FR_ADC_OFFSET_0 16
-#    define FR_ADC_OFFSET_1 17
-#    define FR_ADC_OFFSET_2 18
-#    define FR_ADC_OFFSET_3 19
+#    define FR_ADC_OFFSET_0    16
+#    define FR_ADC_OFFSET_1    17
+#    define FR_ADC_OFFSET_2    18
+#    define FR_ADC_OFFSET_3    19
 
 #    define I2C_DEV_EEPROM 0x50
-#    define I2C_ADDR_BOOT (I2C_DEV_EEPROM | 0x0)
-#    define I2C_ADDR_TX_A (I2C_DEV_EEPROM | 0x4)
-#    define I2C_ADDR_RX_A (I2C_DEV_EEPROM | 0x5)
-#    define I2C_ADDR_TX_B (I2C_DEV_EEPROM | 0x6)
-#    define I2C_ADDR_RX_B (I2C_DEV_EEPROM | 0x7)
+#    define I2C_ADDR_BOOT  (I2C_DEV_EEPROM | 0x0)
+#    define I2C_ADDR_TX_A  (I2C_DEV_EEPROM | 0x4)
+#    define I2C_ADDR_RX_A  (I2C_DEV_EEPROM | 0x5)
+#    define I2C_ADDR_TX_B  (I2C_DEV_EEPROM | 0x6)
+#    define I2C_ADDR_RX_B  (I2C_DEV_EEPROM | 0x7)
 
 #    define SPI_ENABLE_CODEC_A 0x02
 #    define SPI_ENABLE_CODEC_B 0x04
@@ -119,7 +118,10 @@ private:
         const uhd::usrp::dboard_id_t&);
 
     // handle io stuff
-    UHD_PIMPL_DECL(io_impl) _io_impl;
+    struct io_impl;
+    // pimpl is shared_ptr because the implementation of the dtor doesn't know
+    // the type of the io_impl, so it can't call the dtor directly.
+    std::shared_ptr<io_impl> _io_impl;
     void io_init(void);
     void rx_stream_on_off(bool);
     void tx_stream_on_off(bool);

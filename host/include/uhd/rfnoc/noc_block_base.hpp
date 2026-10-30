@@ -12,6 +12,7 @@
 #include <uhd/rfnoc/defaults.hpp>
 #include <uhd/rfnoc/node.hpp>
 #include <uhd/rfnoc/register_iface_holder.hpp>
+#include <uhd/rfnoc/rfnoc_types.hpp>
 #include <uhd/types/device_addr.hpp>
 
 //! Shorthand for block constructor
@@ -63,23 +64,25 @@ public:
         return get_block_id().to_string();
     }
 
-    //! Number of input ports. Note: This gets passed into this block from the
-    // information stored in the global register space.
-    //
-    // Note: This may be overridden by the block (e.g., the X300 radio may not
-    // have all ports available if no TwinRX board is plugged in), but the
-    // subclassed version may never report more ports than this.
+    /*! Number of input ports. Note: This gets passed into this block from the
+     * information stored in the global register space.
+     *
+     * Note: This may be overridden by the block (e.g., the X300 radio may not
+     * have all ports available if no TwinRX board is plugged in), but the
+     * subclassed version may never report more ports than this.
+     */
     size_t get_num_input_ports() const override
     {
         return _num_input_ports;
     }
 
-    //! Number of output ports. Note: This gets passed outto this block from the
-    // information stored in the global register space.
-    //
-    // Note: This may be overridden by the block (e.g., the X300 radio may not
-    // have all ports available if no TwinRX board is plugged in), but the
-    // subclassed version may never report more ports than this.
+    /*! Number of output ports. Note: This gets passed into this block from the
+     * information stored in the global register space.
+     *
+     * Note: This may be overridden by the block (e.g., the X300 radio may not
+     * have all ports available if no TwinRX board is plugged in), but the
+     * subclassed version may never report more ports than this.
+     */
     size_t get_num_output_ports() const override
     {
         return _num_output_ports;
@@ -114,6 +117,10 @@ public:
 
     /*! Return the current MTU on a given edge
      *
+     * Note: The MTU is the maximum size of a CHDR packet, including header. In
+     * order to find out the maximum payload size, calling get_max_payload_size()
+     * is the recommended alternative.
+     *
      * The MTU is determined by the block itself (i.e., how big of a packet can
      * this block handle on this edge), but also the neighboring block, and
      * possibly the transport medium between the blocks. This value can thus be
@@ -125,6 +132,51 @@ public:
      * \throws uhd::value_error if edge is not referring to a valid edge
      */
     size_t get_mtu(const res_source_info& edge);
+
+    /*! Return the size of a CHDR packet header, in bytes.
+     *
+     * This helper function factors in the CHDR width for this block.
+     *
+     * \param account_for_ts If true (default), the assumption is that we reserve
+     *                       space for a timestamp. It is possible to increase
+     *                       the payload if no timestamp is used (only for 64
+     *                       bit CHDR widths!), however, this is advanced usage
+     *                       and should only be used in special circumstances,
+     *                       as downstream blocks might not be able to handle
+     *                       such packets.
+     * \returns the length of a CHDR header in bytes
+     */
+    size_t get_chdr_hdr_len(const bool account_for_ts = true) const;
+
+    /*! Return the maximum usable payload size on a given edge, in bytes.
+     *
+     * This is very similar to get_mtu(), except it also accounts for the
+     * header.
+     *
+     * Example: Say the MTU on a given edge is 8192 bytes. The CHDR width is
+     * 64 bits. If we wanted to add a timestamp, we would thus require 16 bytes
+     * for the total header, leaving only 8192-16=8176 bytes for a payload,
+     * which is what this function would return.
+     * The same MTU, with a CHDR width of 512 bits however, would require leaving
+     * 64 bytes for the header (regardless of whether or not a timestamp is
+     * included). In that case, this function would return 8192-64=8128 bytes
+     * max payload size.
+     *
+     * \param edge The edge on which the max payload size is queried. edge.type
+     *             must be INPUT_EDGE or OUTPUT_EDGE! See also get_mtu().
+     * \param account_for_ts If true (default), the assumption is that we reserve
+     *                       space for a timestamp. It is possible to increase
+     *                       the payload if no timestamp is used (only for 64
+     *                       bit CHDR widths!), however, this is advanced usage
+     *                       and should only be used in special circumstances,
+     *                       as downstream blocks might not be able to handle
+     *                       such packets.
+     * \returns the max payload size as determined by the overall graph on this
+     *          edge, as well as the CHDR width.
+     * \throws uhd::value_error if edge is not referring to a valid edge
+     */
+    size_t get_max_payload_size(
+        const res_source_info& edge, const bool account_for_ts = true);
 
     /*! Return the arguments that were passed into this block from the framework
      */
@@ -145,32 +197,47 @@ public:
         return _tree;
     }
 
+    /*! Get access to the motherboard controller for this block's motherboard
+     *
+     * This will return a nullptr if this block doesn't have access to the
+     * motherboard. In order to gain access to the motherboard, the block needs
+     * to have requested access to the motherboard during the registration
+     * procedure. See also registry.hpp.
+     *
+     * Even if this block requested access to the motherboard controller, there
+     * is no guarantee that UHD will honour that request. It is therefore
+     * important to verify that the returned pointer is valid.
+     */
+    std::shared_ptr<mb_controller> get_mb_controller();
+
 protected:
     noc_block_base(make_args_ptr make_args);
 
-    //! Update number of input ports.
-    //
-    // - The new number of ports may not exceed the old number. This can only
-    //   be used to 'decrease' the number of ports.
-    // - This is considered an 'advanced' API and should rarely be called by
-    //   blocks. See also get_num_output_ports().
-    //
-    // \throws uhd::value_error if \p num_ports is larger than the current
-    //         number of ports.
+    /*! Update number of input ports.
+     *
+     * - The new number of ports may not exceed the old number. This can only
+     *   be used to 'decrease' the number of ports.
+     * - This is considered an 'advanced' API and should rarely be called by
+     *   blocks. See also get_num_output_ports().
+     *
+     * \throws uhd::value_error if \p num_ports is larger than the current
+     *         number of ports.
+     */
     void set_num_input_ports(const size_t num_ports);
 
-    //! Update number of output ports.
-    //
-    // - The new number of ports may not exceed the old number. This can only
-    //   be used to 'decrease' the number of ports.
-    // - This is considered an 'advanced' API and should rarely be called by
-    //   blocks. An example of where this is useful is the X310 radio block,
-    //   which has 2 output ports, but only 1 is useful for UBX/SBX/WBX boards
-    //   (i.e., boards with 1 frontend). In that case, software can make a
-    //   determination to 'invalidate' one of the ports.
-    //
-    // \throws uhd::value_error if \p num_ports is larger than the current
-    //         number of ports.
+    /*! Update number of output ports.
+     *
+     * - The new number of ports may not exceed the old number. This can only
+     *   be used to 'decrease' the number of ports.
+     * - This is considered an 'advanced' API and should rarely be called by
+     *   blocks. An example of where this is useful is the X310 radio block,
+     *   which has 2 output ports, but only 1 is useful for UBX/SBX/WBX boards
+     *   (i.e., boards with 1 frontend). In that case, software can make a
+     *   determination to 'invalidate' one of the ports.
+     *
+     * \throws uhd::value_error if \p num_ports is larger than the current
+     *         number of ports.
+     */
     void set_num_output_ports(const size_t num_ports);
 
     /*! Update tick rate for this node and all the connected nodes
@@ -198,15 +265,15 @@ protected:
      *   all opposite side ports. This is an appropriate policy for the
      *   split-stream block.
      *
-     * The default policy is DROP.
+     * The default policy is ONE_TO_ONE.
      *
-     * Note: The MTU forwarding policy can only be set ONCE per instance of a
-     * noc_block_base. If an RFNoC block subclassing noc_block_base wants to
-     * modify the MTU forwarding policy, it would typically call this function
-     * in its constructor. Once set, however, the MTU forwarding policy cannot
-     * be changed. This represents a change in behaviour from UHD 4.0.
-     * Violations of this restriction will result in a uhd::runtime_error being
-     * thrown.
+     * Note: The MTU forwarding policy can only be set once, and only during
+     * construction of a noc_block_base. If an RFNoC block subclassing
+     * noc_block_base wants to modify the MTU forwarding policy, it must call
+     * this function in its constructor. Once set, however, the MTU forwarding
+     * policy cannot be changed. This represents a change in behaviour from UHD
+     * 4.0.  Violations of this restriction will result in a uhd::runtime_error
+     * being thrown.
      */
     void set_mtu_forwarding_policy(const forwarding_policy_t policy);
 
@@ -222,21 +289,11 @@ protected:
      * This can be used to make the MTU an input to a property resolver. For
      * example, blocks that have an spp property, such as the radio, can now
      * trigger a property resolver based on the MTU.
+     *
+     * The reference is guaranteed to remain valid for the lifetime of this
+     * block.
      */
     property_base_t* get_mtu_prop_ref(const res_source_info& edge);
-
-    /*! Get access to the motherboard controller for this block's motherboard
-     *
-     * This will return a nullptr if this block doesn't have access to the
-     * motherboard. In order to gain access to the motherboard, the block needs
-     * to have requested access to the motherboard during the registration
-     * procedure. See also registry.hpp.
-     *
-     * Even if this block requested access to the motherboard controller, there
-     * is no guarantee that UHD will honour that request. It is therefore
-     * important to verify that the returned pointer is valid.
-     */
-    std::shared_ptr<mb_controller> get_mb_controller();
 
     /*! Safely de-initialize the block
      *
@@ -258,6 +315,8 @@ protected:
     virtual void deinit();
 
 private:
+    friend class block_initializer;
+
     /*! Update the tick rate of this block
      *
      * This will make sure that the underlying register_iface is notified of the
@@ -271,6 +330,15 @@ private:
      * - Invalidate regs()
      */
     void shutdown() override;
+
+    /*! Run post-init tasks, i.e., after the constructor concludes.
+     *
+     * The purpose of this method is to make sure the block is in a good state
+     * after the block controller's ctor has concluded. This allows checking
+     * that block configurations follow certain rules, even though they may not
+     * even be part of UHD.
+     */
+    void post_init();
 
     /**************************************************************************
      * Attributes
@@ -294,7 +362,7 @@ private:
     std::vector<property_t<double>> _tick_rate_props;
 
     //! Forwarding policy for the MTU properties
-    forwarding_policy_t _mtu_fwd_policy = forwarding_policy_t::DROP;
+    forwarding_policy_t _mtu_fwd_policy = forwarding_policy_t::ONE_TO_ONE;
 
     //! Flag indicating if MTU forwarding property has been set yet
     bool _mtu_fwd_policy_set = false;
@@ -305,6 +373,9 @@ private:
 
     //! The actual MTU value
     std::unordered_map<res_source_info, size_t> _mtu;
+
+    //! CHDR width of this block
+    chdr_w_t _chdr_w;
 
     //! Reference to the ctrlport clock_iface object shared with the register_iface
     std::shared_ptr<clock_iface> _ctrlport_clock_iface;

@@ -10,15 +10,15 @@
 #include <uhd/types/time_spec.hpp>
 #include <cstdint>
 #include <memory>
-#include <vector>
 #include <string>
+#include <vector>
 
 namespace uhd { namespace rfnoc { namespace x400 {
 
 //! Control class for the RFDC components of a single daughterboard
 //
 // This class controls the NCOs and other RFDC settings. The corresponding FPGA
-// module is rfdc_timing_control.v.
+// module is rfdc_timing_control.sv.
 class rfdc_control
 {
 public:
@@ -32,6 +32,12 @@ public:
         static constexpr uint32_t NCO_RESET_START_MSB = 0;
         //! Bit position of reset-done bit (r)
         static constexpr uint32_t NCO_RESET_DONE_MSB = 1;
+        //! Bit position of nco-sync-failed bit (r)
+        static constexpr uint32_t NCO_SYNC_FAILED_MSB = 8;
+        //! Bit position of sysref wait time register(w)
+        static constexpr uint32_t SYSREF_WAIT_LSB = 16;
+        //! Bit position of sysref-wait-write-enable bit (w)
+        static constexpr uint32_t WRITE_SYSREF_WAIT = 24;
         //! Address of the gearbox reset register
         static constexpr uint32_t GEARBOX_RESET = 4;
         //! Bit position of ADC gearbox reset
@@ -41,7 +47,7 @@ public:
     };
 
     //! Identify the NCOs/ADCs/DACs available to this radio control
-    enum class rfdc_type { RX0, RX1, TX0, TX1 };
+    enum class rfdc_type { RX0, RX1, RX2, RX3, TX0, TX1, TX2, TX3 };
 
     rfdc_control(uhd::memmap32_iface_timed&& iface, const std::string& log_id);
 
@@ -81,5 +87,28 @@ private:
     //! Prefix for log messages
     const std::string _log_id;
 };
+
+constexpr std::initializer_list<rfdc_control::rfdc_type> RX_RFDC = {
+    rfdc_control::rfdc_type::RX0,
+    rfdc_control::rfdc_type::RX1,
+    rfdc_control::rfdc_type::RX2,
+    rfdc_control::rfdc_type::RX3};
+constexpr std::initializer_list<rfdc_control::rfdc_type> TX_RFDC = {
+    rfdc_control::rfdc_type::TX0,
+    rfdc_control::rfdc_type::TX1,
+    rfdc_control::rfdc_type::TX2,
+    rfdc_control::rfdc_type::TX3};
+template <typename T, typename F>
+void indexed_for(const T& range, const size_t limit, F&& func)
+{
+    std::size_t i = 0;
+    for (auto it = std::begin(range); it != std::end(range); ++it) {
+        if (i < limit) {
+            func(*it, i++);
+        } else {
+            break;
+        }
+    }
+}
 
 }}} // namespace uhd::rfnoc::x400

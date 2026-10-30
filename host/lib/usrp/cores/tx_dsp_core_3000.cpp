@@ -15,9 +15,9 @@
 #include <cmath>
 #include <functional>
 
-#define REG_DSP_TX_FREQ _dsp_base + 0
+#define REG_DSP_TX_FREQ     _dsp_base + 0
 #define REG_DSP_TX_SCALE_IQ _dsp_base + 4
-#define REG_DSP_TX_INTERP _dsp_base + 8
+#define REG_DSP_TX_INTERP   _dsp_base + 8
 
 template <class T>
 T ceil_log2(T num)
@@ -92,13 +92,13 @@ public:
 
         if (interp > 1 and hb0 == 0 and hb1 == 0) {
             UHD_LOGGER_WARNING("CORES")
-                << boost::format(
-                       "The requested interpolation is odd; the user should expect CIC "
-                       "rolloff.\n"
-                       "Select an even interpolation to ensure that a halfband filter is "
-                       "enabled.\n"
-                       "interpolation = dsp_rate/samp_rate -> %d = (%f MHz)/(%f MHz)\n")
-                       % interp_rate % (_tick_rate / 1e6) % (rate / 1e6);
+                << "The requested interpolation is odd; the user should expect CIC "
+                   "rolloff.\n"
+                   "Select an even interpolation to ensure that a halfband filter is "
+                   "enabled.\n"
+                   "interpolation = dsp_rate/samp_rate -> "
+                << interp_rate << " = (" << (_tick_rate / 1e6) << " MHz)/("
+                << (rate / 1e6) << " MHz)\n";
         }
 
         // Caclulate algorithmic gain of CIC for a given interpolation

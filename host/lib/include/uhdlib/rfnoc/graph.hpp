@@ -7,11 +7,13 @@
 #pragma once
 
 #include <uhd/rfnoc/actions.hpp>
+#include <uhd/rfnoc/detail/graph.hpp>
 #include <uhd/rfnoc/graph_edge.hpp>
 #include <uhd/rfnoc/node.hpp>
 #include <uhdlib/rfnoc/resolve_context.hpp>
 #include <boost/graph/adjacency_list.hpp>
 #include <deque>
+#include <map>
 #include <memory>
 #include <mutex>
 #include <tuple>
@@ -19,7 +21,7 @@
 namespace uhd { namespace rfnoc { namespace detail {
 
 //! Container for the logical graph within an uhd::rfnoc_graph
-class graph_t
+struct graph_t::impl
 {
 public:
     using uptr = std::unique_ptr<graph_t>;
@@ -88,6 +90,14 @@ public:
      */
     std::vector<graph_edge_t> enumerate_edges();
 
+    /*! Create a dot representation of the current graph
+     *
+     * The graph is represented in the dot language, which can be visualized
+     * using the Graphviz tools. It contains all blocks and their connections.
+     * The connections are drawn between the ports of the blocks.
+     */
+    std::string to_dot();
+
 private:
     friend class graph_accessor_t;
 
@@ -140,7 +150,7 @@ private:
         bool operator()(const Edge& e) const
         {
             graph_edge_t edge_info = boost::get(edge_property_t(), *_graph, e);
-            return edge_info.property_propagation_active == forward_edges_only;
+            return edge_info.is_forward_edge == forward_edges_only;
         }
 
     private:
@@ -166,13 +176,27 @@ private:
     /**************************************************************************
      * The Algorithm
      *************************************************************************/
-    /*! Implementation of the property propagation algorithm
+    /*! These are the functions that do the sanity checks before calling
+     * _resolve_all_properties. Graph mutex must be held before calling.
      */
     void resolve_all_properties(uhd::rfnoc::resolve_context context,
         rfnoc_graph_t::vertex_descriptor initial_node);
 
-    void resolve_all_properties(uhd::rfnoc::resolve_context context,
-        node_ref_t initial_node);
+    void resolve_all_properties(
+        uhd::rfnoc::resolve_context context, node_ref_t initial_node);
+
+    /*! This is the real implementation of the property propagation algorithm.
+     *
+     * This method must only be called from resolve_all_properties(). It assumes
+     * that sanity checks have run, and that the graph mutex is being held.
+     */
+    void _resolve_all_properties(uhd::rfnoc::resolve_context context,
+        rfnoc_graph_t::vertex_descriptor initial_node,
+        const bool forward);
+
+    /*! Returns a reference to the graph mutex.
+     */
+    std::recursive_mutex& get_graph_mutex();
 
     /**************************************************************************
      * Action API
@@ -263,8 +287,9 @@ private:
     /*! Forward all edge properties from this node (\p origin) to the
      * neighbouring ones
      *
+     * \param forward true for forward edges, false for back-edges
      */
-    void _forward_edge_props(rfnoc_graph_t::vertex_descriptor origin);
+    void _forward_edge_props(rfnoc_graph_t::vertex_descriptor origin, const bool forward);
 
     /*! Check that the edge properties on both sides of the edge are equal
      *

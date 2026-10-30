@@ -7,15 +7,17 @@
 #pragma once
 
 #include "x400_dboard_iface.hpp"
+#include <uhd/config.hpp>
 #include <uhd/exception.hpp>
 #include <uhd/property_tree.hpp>
 #include <uhd/types/eeprom.hpp>
 #include <uhdlib/rfnoc/rf_control/dboard_iface.hpp>
+#include <uhdlib/usrp/common/mpmd_mb_controller.hpp>
 #include <string>
 
 #define UHD_LOG_SKIP_CFG() \
     UHD_LOG_TRACE(         \
-        "RFNOC::DEBUG_DB", "Skipping unsupported debug db config for " << __FUNCTION__);
+        "RFNOC::DEBUG_DB", "Skipping unsupported debug db config for " << UHD_FUNCTION);
 
 namespace uhd { namespace rfnoc {
 
@@ -30,32 +32,56 @@ class debug_dboard_common_impl : public uhd::usrp::x400::x400_dboard_iface
 public:
     using sptr = std::shared_ptr<debug_dboard_common_impl>;
 
-    rf_control::gain_profile_iface::sptr get_tx_gain_profile_api() override
+    rf_control::gain_profile_iface::sptr get_tx_gain_profile_api() final
     {
         return rf_control::gain_profile_iface::sptr();
     }
 
-    rf_control::gain_profile_iface::sptr get_rx_gain_profile_api() override
+    rf_control::gain_profile_iface::sptr get_rx_gain_profile_api() final
     {
         return rf_control::gain_profile_iface::sptr();
     }
 
-    bool is_adc_self_cal_supported() override
+    bool is_adc_self_cal_supported() final
     {
         return false;
     }
 
-    uhd::usrp::x400::adc_self_cal_params_t get_adc_self_cal_params(double) override
+    uhd::usrp::x400::adc_self_cal_params_t get_adc_self_cal_params(double) final
     {
         return {
             0.0,
             0.0,
-            0.0,
-            0.0,
+            {0, 0},
+            0,
+            0,
+            0,
+            "calib_mode1",
+            2000,
         };
     }
 
-    size_t get_chan_from_dboard_fe(const std::string& fe, direction_t) const override
+    bool select_adc_self_cal_gain(size_t) final
+    {
+        return true;
+    }
+
+    double get_converter_rate() const override
+    {
+        return 0.0;
+    }
+
+    size_t get_num_rx_channels() const final
+    {
+        return 2;
+    }
+
+    size_t get_num_tx_channels() const final
+    {
+        return 2;
+    }
+
+    size_t get_chan_from_dboard_fe(const std::string& fe, direction_t) const final
     {
         if (fe == "0") {
             return 0;
@@ -66,7 +92,7 @@ public:
         throw uhd::key_error(std::string("[X400] Invalid frontend: ") + fe);
     }
 
-    std::string get_dboard_fe_from_chan(size_t chan, direction_t) const override
+    std::string get_dboard_fe_from_chan(size_t chan, direction_t) const final
     {
         if (chan == 0) {
             return "0";
@@ -78,7 +104,7 @@ public:
             std::string("[X400] Invalid channel: ") + std::to_string(chan));
     }
 
-    std::vector<usrp::pwr_cal_mgr::sptr>& get_pwr_mgr(direction_t) override
+    std::vector<usrp::pwr_cal_mgr::sptr>& get_pwr_mgr(direction_t) final
     {
         static std::vector<usrp::pwr_cal_mgr::sptr> empty_vtr;
         return empty_vtr;
@@ -99,7 +125,10 @@ public:
         return {};
     }
 
-    void set_tx_antenna(const std::string&, const size_t) override{UHD_LOG_SKIP_CFG()}
+    void set_tx_antenna(const std::string&, const size_t) override
+    {
+        UHD_LOG_SKIP_CFG();
+    }
 
     std::string get_rx_antenna(const size_t) const override
     {
@@ -280,12 +309,10 @@ public:
         return meta_range_t(0.0, 0.0);
     }
 
-    void set_rx_lo_source(const std::string&, const std::string&, const size_t) override
-    {
-        UHD_LOG_SKIP_CFG()
-    }
+    void set_rx_lo_source(const std::string&, const std::string&, const size_t) override{
+        UHD_LOG_SKIP_CFG()}
 
-    const std::string get_rx_lo_source(const std::string&, const size_t) override
+    std::string get_rx_lo_source(const std::string&, const size_t) override
     {
         return "";
     }
@@ -316,7 +343,8 @@ public:
         return {};
     }
 
-    std::vector<std::string> get_tx_lo_sources(const std::string&, const size_t) const override
+    std::vector<std::string> get_tx_lo_sources(
+        const std::string&, const size_t) const override
     {
         return {};
     }
@@ -326,12 +354,10 @@ public:
         return meta_range_t(0.0, 0.0);
     }
 
-    void set_tx_lo_source(const std::string&, const std::string&, const size_t) override
-    {
-        UHD_LOG_SKIP_CFG()
-    }
+    void set_tx_lo_source(const std::string&, const std::string&, const size_t) override{
+        UHD_LOG_SKIP_CFG()}
 
-    const std::string get_tx_lo_source(const std::string&, const size_t) override
+    std::string get_tx_lo_source(const std::string&, const size_t) override
     {
         return "";
     }
@@ -357,7 +383,7 @@ public:
         return 0;
     }
 
-    void set_command_time(uhd::time_spec_t, const size_t) override
+    void set_command_time(uhd::time_spec_t, const size_t) final
     {
         // nop
     }
@@ -396,7 +422,7 @@ public:
         , _mb_control(mb_controller)
         , _tree(tree)
     {
-        RFNOC_LOG_TRACE("Entering " << __FUNCTION__);
+        RFNOC_LOG_TRACE("Entering " << UHD_FUNCTION);
         RFNOC_LOG_TRACE("DB ID: " << _db_idx);
         UHD_ASSERT_THROW(_mb_control);
         _rpcc = _mb_control->get_rpc_client();
@@ -404,9 +430,9 @@ public:
         _init_frontend_subtree();
     }
 
-    ~if_test_dboard_impl()
+    ~if_test_dboard_impl() override
     {
-        RFNOC_LOG_TRACE(__FUNCTION__);
+        RFNOC_LOG_TRACE(UHD_FUNCTION);
     }
 
     // The IF Test dboard muxes a single SMA port (for each of RX and TX) like so:
@@ -451,11 +477,15 @@ public:
         return _rpcc->request_with_token<std::string>(_rpc_prefix + "get_rx_path");
     }
 
-    eeprom_map_t get_db_eeprom() override
+    eeprom_map_t get_db_eeprom() final
     {
         return _rpcc->request_with_token<eeprom_map_t>("get_db_eeprom", _db_idx);
     }
 
+    double get_converter_rate() const final
+    {
+        return _rpcc->request_with_token<double>(_rpc_prefix + "get_dboard_sample_rate");
+    }
 
 private:
     //! Used by the RFNOC_LOG_* macros.

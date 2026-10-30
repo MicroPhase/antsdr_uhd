@@ -11,17 +11,26 @@
 #include "ad5623_regs.hpp" //aux dac
 #include "ad7922_regs.hpp" //aux adc
 #include "x300_clock_ctrl.hpp"
+#include <uhd/config.h>
+#include <uhd/rfnoc/register_iface.hpp>
 #include <uhd/types/dict.hpp>
 #include <uhd/usrp/dboard_iface.hpp>
 #include <uhdlib/usrp/cores/gpio_atr_3000.hpp>
 #include <uhdlib/usrp/cores/i2c_core_100_wb32.hpp>
 #include <uhdlib/usrp/cores/rx_frontend_core_3000.hpp>
 #include <uhdlib/usrp/cores/spi_core_3000.hpp>
+#include <uhdlib/usrp/cores/tx_frontend_core_200.hpp>
+
 
 struct x300_dboard_iface_config_t
 {
     uhd::usrp::gpio_atr::db_gpio_atr_3000::sptr gpio;
     spi_core_3000::sptr spi;
+    std::function<void(uint32_t start_addr,
+        uint32_t length,
+        std::function<void(uint32_t, uint32_t)> poke_fn,
+        std::function<uint32_t(uint32_t)> peek_fn)>
+        define_custom_register_space;
     size_t rx_spi_slaveno;
     size_t tx_spi_slaveno;
     uhd::i2c_iface::sptr i2c;
@@ -85,19 +94,25 @@ public:
         const std::string& name,
         const uhd::usrp::fe_connection_t& fe_conn) override;
 
-    // X300 can set the FE connection on the RX side
-    bool has_set_fe_connection(const unit_t unit) override
+    bool has_set_fe_connection(UHD_UNUSED(const unit_t unit)) override
     {
-        return unit == UNIT_RX;
+        return true;
     }
 
     void add_rx_fe(const std::string& fe_name, rx_frontend_core_3000::sptr fe_core);
+    void add_tx_fe(const std::string& fe_name, tx_frontend_core_200::sptr fe_core);
+
+    void define_custom_register_space(const uint32_t start_addr,
+        const uint32_t length,
+        std::function<void(uint32_t, uint32_t)> poke_fn,
+        std::function<uint32_t(uint32_t)> peek_fn) override;
 
 private:
     const x300_dboard_iface_config_t _config;
     uhd::dict<unit_t, ad5623_regs_t> _dac_regs;
     uhd::dict<unit_t, double> _clock_rates;
     uhd::dict<std::string, rx_frontend_core_3000::sptr> _rx_fes;
+    uhd::dict<std::string, tx_frontend_core_200::sptr> _tx_fes;
     void _write_aux_dac(unit_t);
 };
 

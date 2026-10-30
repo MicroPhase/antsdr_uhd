@@ -5,9 +5,10 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 #
 
+import math
 import re
 import sys
-import math
+
 from mako.template import Template
 
 COMMON_TMPL = """<% import time %>\
@@ -65,20 +66,40 @@ public:
         % endfor
     }
 
-    template<typename T> std::set<T> get_changed_addrs(void){
+    % for reg in regs:
+        % if reg.is_array:
+    std::vector<${reg.get_type()}> get_state_${reg.get_name()}(void){
+        if (_state == NULL) throw uhd::runtime_error("no saved state");
+        return _state->${reg.get_name()};
+    }
+
+        % else:
+    ${reg.get_type()} get_state_${reg.get_name()}(void){
+        if (_state == NULL) throw uhd::runtime_error("no saved state");
+        return _state->${reg.get_name()};
+    }
+
+        % endif
+    % endfor
+
+    template<typename T> std::set<T> get_changed_addrs(bool include_ro = false) {
         if (_state == NULL) throw uhd::runtime_error("no saved state");
         //check each register for changes
         std::set<T> addrs;
         % for reg in regs:
             % if reg.is_array:
-        for (size_t i = 0; i < ${reg.get_array_len()}; i++) {
-            if(_state->${reg.get_name()}[i] != this->${reg.get_name()}[i]) {
-                addrs.insert(${reg.get_addr()} + i * ${reg.get_addr_step_size()});
+        if (include_ro || !${str(reg.is_readonly()).lower()}) {
+            for (size_t i = 0; i < ${reg.get_array_len()}; i++) {
+                if(_state->${reg.get_name()}[i] != this->${reg.get_name()}[i]) {
+                    addrs.insert(${reg.get_addr()} + i * ${reg.get_addr_step_size()});
+                }
             }
         }
             % else:
-        if(_state->${reg.get_name()} != this->${reg.get_name()}){
-            addrs.insert(${reg.get_addr()});
+        if (include_ro || !${str(reg.is_readonly()).lower()}) {
+            if(_state->${reg.get_name()} != this->${reg.get_name()}) {
+                addrs.insert(${reg.get_addr()});
+            }
         }
             % endif
         % endfor
@@ -163,19 +184,29 @@ class ${name}_t:
             % endif
         % endfor
 
-    def get_changed_addrs(self):
+    % for reg in regs:
+    def get_state_${reg.get_name()}(self):
         if self._state is None:
             raise RuntimeError("No saved state")
-        #check each register for changes
+        return self._state.${reg.get_name()}
+
+    %endfor
+
+    def get_changed_addrs(self, include_ro=False):
+        if self._state is None:
+            raise RuntimeError("No saved state")
+        # Check each register for changes
         addrs = set()
         % for reg in regs:
         % if reg.is_array:
-        for index, value in enumerate(self.${reg.get_name()}):
-            if self._state.${reg.get_name()}[index] != value:
-                addrs.add(${reg.get_addr()} + index * ${reg.get_addr_step_size()})
+        if include_ro or not ${reg.is_readonly()}:
+            for index, value in enumerate(self.${reg.get_name()}):
+                if self._state.${reg.get_name()}[index] != value:
+                    addrs.add(${reg.get_addr()} + index * ${reg.get_addr_step_size()})
         % else:
-        if self._state.${reg.get_name()} != self.${reg.get_name()}:
-            addrs.add(${reg.get_addr()})
+        if include_ro or not ${reg.is_readonly()}:
+            if self._state.${reg.get_name()} != self.${reg.get_name()}:
+                addrs.add(${reg.get_addr()})
         % endif
         % endfor
         return addrs
@@ -201,8 +232,10 @@ class ${name}_t:
     %endfor
 """
 
+
 def parse_tmpl(_tmpl_text, **kwargs):
     return Template(_tmpl_text).render(**kwargs)
+
 
 def to_num(arg):
     """
@@ -210,6 +243,19 @@ def to_num(arg):
     be a Python representation
     """
     return int(eval(arg))
+
+
+def is_int(arg):
+    """
+    check whether arg is convertable to an integer
+    (including non-decimal representation)
+    """
+    try:
+        to_num(arg)
+        return True
+    except:
+        return False
+
 
 class reg:
     def __init__(self, reg_des):
@@ -219,9 +265,23 @@ class reg:
         try:
             self.parse(reg_des)
         except Exception as e:
-            raise Exception(
-                'Error parsing register description: "{}"\nWhat: {}'
-                .format(reg_des, e))
+            raise Exception('Error parsing register description: "{}"\nWhat: {}'.format(reg_des, e))
+
+    def _parse_options(self, optionstr):
+        """
+        `optionstr` contains additional register information in a
+        comma-separated list as key=value pairs.
+
+        For backward compability a number <x> is converted to
+        `default=<x>,rw`
+        which retains the previous behaviour.
+        """
+        if is_int(optionstr):
+            # convert number into option list for backward compatibility
+            optionstr = "default={},rw".format(optionstr)
+        options = [option.partition("=") for option in optionstr.split(",")]
+        result = {item[0]: item[2] or None for item in options}
+        return result
 
     def parse(self, reg_des):
         """
@@ -243,32 +303,33 @@ class reg:
         super_reg is a 2-bit field in register at address 0x1000. It will be
         initialized to 0. duper_reg is an array of length 128, of 32-bit registers.
         """
-        x = re.match(
-            r'^(\w*)(\[([0-9:]*)\])?\s*(\w*)\[(.*)\]\s*(\w*)\s*(.*)$',
-            reg_des)
-        name, _, addr_range, addr, bit_range, default, enums = x.groups()
-        #store variables
+        x = re.match(r"^(\w*)(\[([0-9:]*)\])?\s*(\w*)\[(.*)\]\s*([=,\w]*)\s*(.*)$", reg_des)
+        name, _, addr_range, addr, bit_range, options, enums = x.groups()
+        # store variables
         self._name = name
         self._addr = to_num(addr)
-        if ':' in bit_range: self._addr_spec = sorted(map(int, bit_range.split(':')))
-        else: self._addr_spec = int(bit_range), int(bit_range)
-        self._default = to_num(default)
-        #extract enum
+        if ":" in bit_range:
+            self._addr_spec = sorted(map(int, bit_range.split(":")))
+        else:
+            self._addr_spec = int(bit_range), int(bit_range)
+        self.options = self._parse_options(options)
+        # extract enum
         self._enums = list()
         if enums:
             enum_val = 0
-            for enum_str_unstripped in enums.split(','):
+            for enum_str_unstripped in enums.split(","):
                 enum_str = enum_str_unstripped.strip()
-                if '=' in enum_str:
-                    enum_name, enum_val = enum_str.split('=')
+                if "=" in enum_str:
+                    enum_name, enum_val = enum_str.split("=")
                     enum_val = to_num(enum_val)
-                else: enum_name = enum_str
+                else:
+                    enum_name = enum_str
                 self._enums.append((enum_name, enum_val))
                 enum_val += 1
         # Extract address range for arrays
         if addr_range is not None:
             self.is_array = True
-            addr_range = addr_range.split(':', 3)
+            addr_range = addr_range.split(":", 3)
             if len(addr_range) == 1:
                 self._array_len = to_num(addr_range[0])
                 self._addr_step = 4
@@ -286,18 +347,32 @@ class reg:
         """
         return self._addr
 
-    def get_enums(self): return self._enums
-    def get_name(self): return self._name
+    def get_enums(self):
+        return self._enums
+
+    def get_name(self):
+        return self._name
+
     def get_default(self):
+        default_val = to_num(self.options.get("default", "0"))
         for key, val in self.get_enums():
-            if val == self._default: return ('%s_%s'%(self.get_name(), key)).upper()
-        return self._default
+            if val == default_val:
+                return ("%s_%s" % (self.get_name(), key)).upper()
+        return default_val
+
     def get_type(self):
-        if self.get_enums(): return '%s_t'%self.get_name()
-        return 'uint%d_t'%max(2**math.ceil(math.log(self.get_bit_width(), 2)), 8)
-    def get_shift(self): return self._addr_spec[0]
-    def get_mask(self): return hex(int('1'*self.get_bit_width(), 2))
-    def get_bit_width(self): return self._addr_spec[1] - self._addr_spec[0] + 1
+        if self.get_enums():
+            return "%s_t" % self.get_name()
+        return "uint%d_t" % max(2 ** math.ceil(math.log(self.get_bit_width(), 2)), 8)
+
+    def get_shift(self):
+        return self._addr_spec[0]
+
+    def get_mask(self):
+        return hex(int("1" * self.get_bit_width(), 2))
+
+    def get_bit_width(self):
+        return self._addr_spec[1] - self._addr_spec[0] + 1
 
     def get_array_len(self):
         """
@@ -311,55 +386,76 @@ class reg:
         """
         return self._addr_step
 
+    def is_readonly(self):
+        """
+        Check whether register is marked as readonly via option string
+        """
+        return "ro" in self.options
+
+
 class mreg:
     def __init__(self, mreg_des, regs):
-        try: self.parse(mreg_des, regs)
+        try:
+            self.parse(mreg_des, regs)
         except Exception as e:
-            raise Exception('Error parsing meta register description: "%s"\nWhat: %s'%(mreg_des, e))
+            raise Exception(
+                'Error parsing meta register description: "%s"\nWhat: %s' % (mreg_des, e)
+            )
 
     def parse(self, mreg_des, regs):
-        x = re.match('^~(\w*)\s+(.*)\s*$', mreg_des)
+        x = re.match(r"^~(\w*)\s+(.*)\s*$", mreg_des)
         self._name, reg_names = x.groups()
         regs_dict = dict([(reg.get_name(), reg) for reg in regs])
-        self._regs = [regs_dict[reg_name.strip()] for reg_name in reg_names.split(',')]
+        self._regs = [regs_dict[reg_name.strip()] for reg_name in reg_names.split(",")]
 
-    def get_name(self): return self._name
-    def get_regs(self): return self._regs
-    def get_bit_width(self): return sum(map(reg.get_bit_width, self._regs))
+    def get_name(self):
+        return self._name
+
+    def get_regs(self):
+        return self._regs
+
+    def get_bit_width(self):
+        return sum(map(reg.get_bit_width, self._regs))
+
     def get_type(self):
-        return 'uint%d_t'%max(2**math.ceil(math.log(self.get_bit_width(), 2)), 8)
+        return "uint%d_t" % max(2 ** math.ceil(math.log(self.get_bit_width(), 2)), 8)
 
-def generate(name, regs_tmpl, body_tmpl='', py_body_tmpl='', file=__file__, append=False):
+
+def generate(name, regs_tmpl, body_tmpl="", py_body_tmpl="", file=__file__, append=False, **kwargs):
     # determine if the destination file is a Python or C++ header file
     out_file = sys.argv[1]
-    if out_file.endswith('.py'): # Write a Python file
+    if out_file.endswith(".py"):  # Write a Python file
         template = COMMON_PY_TMPL
         body_template = py_body_tmpl
-    else: # default to C++ Header
+    else:  # default to C++ Header
         template = COMMON_TMPL
         body_template = body_tmpl
 
-    #evaluate the regs template and parse each line into a register
+    # evaluate the regs template and parse each line into a register
     regs = list()
     mregs = list()
     for entry in parse_tmpl(regs_tmpl).splitlines():
-        if entry.startswith('~'):
+        if entry.startswith("~"):
             mregs.append(mreg(entry, regs))
         else:
             regs.append(reg(entry))
 
-    #evaluate the body template with the list of registers
-    body = '\n    '.join(parse_tmpl(body_template, regs=regs).splitlines())
+    # evaluate the body template with the list of registers
+    body = "\n    ".join(parse_tmpl(body_template, **dict(kwargs, regs=regs)).splitlines())
 
-    #evaluate the code template with the parsed registers and arguments
-    code = parse_tmpl(template,
-        name=name,
-        regs=regs,
-        mregs=mregs,
-        body=body,
-        file=file,
+    # evaluate the code template with the parsed registers and arguments
+    code = parse_tmpl(
+        template,
+        **dict(
+            kwargs,
+            name=name,
+            regs=regs,
+            mregs=mregs,
+            body=body,
+            file=file,
+        )
     )
 
-    #write the generated code to file specified by argv1
-    with open(out_file, 'a' if append else 'w') as f:
+    # write the generated code to file specified by argv1
+    with open(out_file, "a" if append else "w") as f:
         f.write(code)

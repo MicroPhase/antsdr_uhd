@@ -19,7 +19,6 @@ clocks:
     freq: "[]"
 
 control:
-  sw_iface: nocscript
   fpga_iface: ctrlport
   interface_direction: slave
   fifo_depth: 32
@@ -40,7 +39,6 @@ data:
       context_fifo_depth: 2
       payload_fifo_depth: 32
       format: sc16
-      mdata_sig: ~
   outputs:
     out:
       num_ports: NUM_PORTS
@@ -49,8 +47,3 @@ data:
       context_fifo_depth: 2
       payload_fifo_depth: 32
       format: s16
-      mdata_sig: ~
-
-registers:
-
-properties:

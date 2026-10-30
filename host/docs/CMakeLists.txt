@@ -22,16 +22,16 @@ set(ENABLE_MANUAL_OR_DOXYGEN false)
 LIBUHD_REGISTER_COMPONENT("Manual" ENABLE_MANUAL ON "DOXYGEN_FOUND" OFF OFF)
 
 if(ENABLE_MANUAL)
-    set(FPGA_SOURCE_DIR "${CMAKE_SOURCE_DIR}/../fpga")
+    set(FPGA_SOURCE_DIR "${UHD_SOURCE_DIR}/../fpga")
     set(ENABLE_MANUAL_OR_DOXYGEN true)
     file(GLOB manual_sources "*.dox")
     file(GLOB_RECURSE fpga_manual_sources "${FPGA_SOURCE_DIR}/docs/*.md")
     list(APPEND manual_sources ${fpga_manual_sources})
     set(DOXYGEN_DEPENDENCIES ${manual_sources})
-    set(DOXYGEN_INPUT_DIRS "${CMAKE_SOURCE_DIR}/docs ${CMAKE_CURRENT_BINARY_DIR} ${FPGA_SOURCE_DIR}/docs")
+    set(DOXYGEN_INPUT_DIRS "${UHD_SOURCE_DIR}/docs ${CMAKE_CURRENT_BINARY_DIR} ${FPGA_SOURCE_DIR}/docs")
     set(DOXYGEN_DEP_COMPONENT "manual")
     set(DOXYGEN_FPGA_MANUAL_REFERENCE "\\subpage md_fpga \"Part III: FPGA Manual\"")
-    set(DOXYGEN_STRIP_EXTRA "${CMAKE_SOURCE_DIR}/../fpga/docs")
+    set(DOXYGEN_STRIP_EXTRA "${UHD_SOURCE_DIR}/../fpga/docs")
     set(DOXYGEN_EXCLUDE_DIRS "")
 endif(ENABLE_MANUAL)
 
@@ -42,6 +42,10 @@ LIBUHD_REGISTER_COMPONENT("API/Doxygen" ENABLE_DOXYGEN ON "DOXYGEN_FOUND" OFF OF
 option(ENABLE_DOXYGEN_FULL "Use Doxygen to document the entire source tree (not just API)" OFF)
 option(ENABLE_DOXYGEN_DOT "Let Doxygen use dot (requires graphviz)" OFF)
 option(ENABLE_DOXYGEN_SHORTNAMES "Let Doxygen use shorter filenames (helps on Windows)" OFF)
+set(
+    MATHJAX_RELPATH https://cdn.jsdelivr.net/npm/mathjax@2/
+    CACHE STRING "MATHJAX_RELPATH option for Doxygen")
+mark_as_advanced(MATHJAX_RELPATH)
 
 if(LIBUHDDEV_PKG)
     set(PKG_DOC_DIR share/doc/libuhd-dev)
@@ -50,14 +54,14 @@ endif(LIBUHDDEV_PKG)
 if(ENABLE_DOXYGEN)
     set(ENABLE_MANUAL_OR_DOXYGEN true)
     #make doxygen directory depend on the header files
-    file(GLOB_RECURSE header_files ${CMAKE_SOURCE_DIR}/include/*.hpp)
-    file(GLOB_RECURSE h_files ${CMAKE_SOURCE_DIR}/include/*.h)
+    file(GLOB_RECURSE header_files ${UHD_SOURCE_DIR}/include/*.hpp)
+    file(GLOB_RECURSE h_files ${UHD_SOURCE_DIR}/include/*.h)
     list(APPEND header_files ${h_files})
     set(DOXYGEN_DEPENDENCIES ${DOXYGEN_DEPENDENCIES} ${header_files})
     if(ENABLE_DOXYGEN_FULL)
-        set(DOXYGEN_INPUT_DIRS "${DOXYGEN_INPUT_DIRS} ${CMAKE_SOURCE_DIR}/include ${CMAKE_SOURCE_DIR}/lib ${CMAKE_SOURCE_DIR}/python")
+        set(DOXYGEN_INPUT_DIRS "${DOXYGEN_INPUT_DIRS} ${UHD_SOURCE_DIR}/include ${UHD_SOURCE_DIR}/lib ${UHD_SOURCE_DIR}/python")
     else(ENABLE_DOXYGEN_FULL)
-        set(DOXYGEN_INPUT_DIRS "${DOXYGEN_INPUT_DIRS} ${CMAKE_SOURCE_DIR}/include")
+        set(DOXYGEN_INPUT_DIRS "${DOXYGEN_INPUT_DIRS} ${UHD_SOURCE_DIR}/include")
     endif(ENABLE_DOXYGEN_FULL)
 
     set(DOXYGEN_DEP_COMPONENT "doxygen")
@@ -90,7 +94,7 @@ if(ENABLE_MANUAL_OR_DOXYGEN)
     @ONLY)
 
     #make doxygen directory depend on the header files
-    file(GLOB_RECURSE header_files ${CMAKE_SOURCE_DIR}/include/*.hpp)
+    file(GLOB_RECURSE header_files ${UHD_SOURCE_DIR}/include/*.hpp)
     add_custom_command(
         OUTPUT ${CMAKE_CURRENT_BINARY_DIR_DOXYGEN} DEPENDS ${DOXYGEN_DEPENDENCIES}
         COMMAND ${DOXYGEN_EXECUTABLE} ${CMAKE_CURRENT_BINARY_DIR}/Doxyfile
@@ -107,7 +111,7 @@ endif(ENABLE_MANUAL_OR_DOXYGEN)
 ########################################################################
 
 set(man_page_sources
-    octoclock_firmware_burner.1
+    uhd_adc_self_cal.1
     uhd_cal_rx_iq_balance.1
     uhd_cal_tx_dc_offset.1
     uhd_cal_tx_iq_balance.1
@@ -117,9 +121,16 @@ set(man_page_sources
     uhd_images_downloader.1
     uhd_usrp_probe.1
     usrp_n2xx_simple_net_burner.1
-    usrp_x3xx_fpga_burner.1
     usrp2_card_burner.1
+    rfnoc_modtool.1
+    rfnoc_image_builder.1
 )
+
+if (ENABLE_PYTHON_API)
+    list(APPEND man_page_sources
+        usrpctl.1
+    )
+endif(ENABLE_PYTHON_API)
 
 ########################################################################
 # Setup man pages

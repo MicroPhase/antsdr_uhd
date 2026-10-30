@@ -56,7 +56,8 @@ std::vector<graph_edge_t> get_block_chain(const rfnoc_graph::sptr graph,
                 // If the current block is the edge's source, make the edge's
                 // destination the current block
                 next_found = true;
-                UHD_LOG_TRACE("GRAPH_UTILS", "Found next block: " + edge.dst_blockid);
+                UHD_LOG_TRACE(
+                    "GRAPH_UTILS", " --> Found next block: " + edge.dst_blockid);
 
                 block_chain.push_back(edge);
                 current_block = (source_chain) ? edge.dst_blockid : edge.src_blockid;
@@ -83,11 +84,12 @@ std::vector<graph_edge_t> get_block_chain(const rfnoc_graph::sptr graph,
 }
 
 
-void connect_through_blocks(rfnoc_graph::sptr graph,
+std::vector<graph_edge_t> connect_through_blocks(rfnoc_graph::sptr graph,
     const block_id_t src_blk,
     const size_t src_port,
     const block_id_t dst_blk,
-    const size_t dst_port)
+    const size_t dst_port,
+    const bool skip_property_propagation)
 {
     // First, create a chain from the source block to a stream endpoint
     auto block_chain = get_block_chain(graph, src_blk, src_port, true);
@@ -103,12 +105,14 @@ void connect_through_blocks(rfnoc_graph::sptr graph,
                    || (dst_blk.to_string() == edge.dst_blockid
                        && dst_port == edge.dst_port);
         });
-    // If our dst_blk is in the chain already, make sure its the last element and continue
     if (dst_found) {
+        // If our dst_blk is in the chain already, make sure it's the last element
+        // and continue. This means we pop everything from block_chain that comes
+        // after our block.
         UHD_LOG_TRACE(
             "GRAPH_UTILS", "Found dst_blk (" + dst_blk.to_string() + ") in source chain");
-        while (dst_blk.to_string() == block_chain.back().dst_blockid
-               && dst_port == block_chain.back().dst_port) {
+        while (dst_blk.to_string() != block_chain.back().dst_blockid
+               || dst_port != block_chain.back().dst_port) {
             UHD_LOG_TRACE("GRAPH_UTILS",
                 boost::format(
                     "Last block (%s:%d) doesn't match dst_blk (%s:%d); removing.")
@@ -134,6 +138,7 @@ void connect_through_blocks(rfnoc_graph::sptr graph,
     std::string sep_to_dst_id;
     size_t sep_to_dst_port         = 0;
     bool has_sep_to_dst_connection = false;
+    bool skip_pp                   = skip_property_propagation;
 
     for (auto edge : block_chain) {
         if (uhd::rfnoc::block_id_t(edge.dst_blockid).match(uhd::rfnoc::NODE_ID_SEP)) {
@@ -146,16 +151,23 @@ void connect_through_blocks(rfnoc_graph::sptr graph,
             sep_to_dst_id             = edge.dst_blockid;
             sep_to_dst_port           = edge.dst_port;
         } else {
-            graph->connect(
-                edge.src_blockid, edge.src_port, edge.dst_blockid, edge.dst_port);
+            graph->connect(edge.src_blockid,
+                edge.src_port,
+                edge.dst_blockid,
+                edge.dst_port,
+                skip_pp);
+            skip_pp = false;
         }
     }
     if (has_src_to_sep_connection && has_sep_to_dst_connection) {
-        graph->connect(src_to_sep_id, src_to_sep_port, sep_to_dst_id, sep_to_dst_port);
+        graph->connect(
+            src_to_sep_id, src_to_sep_port, sep_to_dst_id, sep_to_dst_port, skip_pp);
     } else if (has_src_to_sep_connection != has_sep_to_dst_connection) {
-        throw uhd::runtime_error(
-            "[graph_utils] Incomplete path. Only one SEP edge found.");
+        const std::string err_msg = "Incomplete path. Only one SEP edge found.";
+        UHD_LOG_TRACE("GRAPH_UTILS", err_msg);
+        throw uhd::runtime_error("[graph_utils] " + err_msg);
     }
+    return block_chain;
 }
 
 }} // namespace uhd::rfnoc

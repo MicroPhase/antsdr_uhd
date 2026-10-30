@@ -26,6 +26,9 @@ Transmit wave frequency in Hz
 \fB\-\-tx_wave_ampl\fR arg (=0.69999999999999996)
 Transmit wave amplitude in counts
 .TP
+\fB\-\-tx_gain\fR arg
+Tx gain in dB (will use default gain if unspecified)
+.TP
 \fB\-\-tx_offset\fR arg (=934400)
 TX LO offset from the RX LO in Hz
 .TP
@@ -55,7 +58,7 @@ uhd_cal_tx_dc_offset(1) uhd_cal_tx_iq_balance(1)
 This manual page was written by Maitland Bottoms and Nicholas Corgan
 for the Debian project (but may be used by others).
 .SH COPYRIGHT
-Copyright (c) 2012 Ettus Research LLC
+Copyright (c) 2012-2022 Ettus Research, A National Instruments Brand
 .LP
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU General Public License as published by

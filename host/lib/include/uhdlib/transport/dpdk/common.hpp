@@ -10,6 +10,17 @@
 #include <uhd/transport/frame_buff.hpp>
 #include <uhd/types/device_addr.hpp>
 #include <uhdlib/transport/adapter_info.hpp>
+
+// DPDK is not fully compliant with more recent compilers and C++20
+#pragma GCC diagnostic push
+#ifdef UHD_HAVE_WDEPRECATED_VOLATILE
+#    pragma GCC diagnostic ignored "-Wdeprecated-volatile"
+#endif
+#ifdef UHD_HAVE_WVOLATILE
+#    pragma GCC diagnostic ignored "-Wvolatile"
+#endif
+
+#include <rte_arp.h>
 #include <rte_ethdev.h>
 #include <rte_ether.h>
 #include <rte_flow.h>
@@ -17,6 +28,9 @@
 #include <rte_mempool.h>
 #include <rte_spinlock.h>
 #include <rte_version.h>
+
+#pragma GCC diagnostic pop
+
 #include <unordered_map>
 #include <array>
 #include <atomic>
@@ -26,6 +40,38 @@
 
 /* NOTE: There are changes to all the network standard fields in 19.x */
 
+/*
+ * Substituting old values to support DPDK 18.11 with the API changes in DPDK 19.
+ * There were no functional changes in the DPDK calls utilized by UHD between
+ * these two API versions.
+ */
+#if RTE_VER_YEAR < 19 || (RTE_VER_YEAR == 19 && RTE_VER_MONTH < 8)
+// 18.11 data types
+#    define rte_ether_addr ether_addr
+#    define rte_ether_hdr  ether_hdr
+#    define rte_arp_hdr    arp_hdr
+#    define arp_hardware   arp_hrd
+#    define arp_protocol   arp_pro
+#    define arp_hlen       arp_hln
+#    define arp_plen       arp_pln
+#    define arp_opcode     arp_op
+#    define rte_ipv4_hdr   ipv4_hdr
+#    define rte_udp_hdr    udp_hdr
+// 18.11 constants
+#    define RTE_ETHER_TYPE_IPV4  ETHER_TYPE_IPv4
+#    define RTE_ETHER_TYPE_ARP   ETHER_TYPE_ARP
+#    define RTE_ETHER_ADDR_LEN   ETHER_ADDR_LEN
+#    define RTE_ETHER_CRC_LEN    ETHER_CRC_LEN
+#    define RTE_ETHER_HDR_LEN    ETHER_HDR_LEN
+#    define RTE_IPV4_HDR_DF_FLAG IPV4_HDR_DF_FLAG
+#    define RTE_ARP_HRD_ETHER    ARP_HRD_ETHER
+#    define RTE_ARP_OP_REPLY     ARP_OP_REPLY
+#    define RTE_ARP_OP_REQUEST   ARP_OP_REQUEST
+// 18.11 functions
+#    define rte_ether_addr_copy    ether_addr_copy
+#    define rte_ether_format_addr  ether_format_addr
+#    define rte_is_zero_ether_addr is_zero_ether_addr
+#endif
 
 namespace uhd { namespace transport {
 
@@ -35,9 +81,9 @@ namespace dpdk {
 
 struct arp_entry;
 
-using queue_id_t = uint16_t;
-using port_id_t  = uint16_t;
-using ipv4_addr  = uint32_t;
+using queue_id_t    = uint16_t;
+using port_id_t     = uint16_t;
+using rte_ipv4_addr = uint32_t;
 
 class dpdk_adapter_info : public adapter_info
 {
@@ -117,7 +163,7 @@ private:
  * structure.
  */
 constexpr size_t DPDK_MBUF_PRIV_SIZE =
-    RTE_ALIGN(sizeof(struct dpdk_frame_buff), RTE_MBUF_PRIV_ALIGN);
+    RTE_ALIGN(sizeof(class dpdk_frame_buff), RTE_MBUF_PRIV_ALIGN);
 
 /*!
  * Class representing a DPDK NIC port
@@ -143,7 +189,7 @@ public:
      * \param num_desc The number of descriptors per DMA queue
      * \param rx_pktbuf_pool A pointer to the port's RX packet buffer pool
      * \param tx_pktbuf_pool A pointer to the port's TX packet buffer pool
-     * \param ipv4_address The IPv4 network address (w/ netmask)
+     * \param rte_ipv4_address The IPv4 network address (w/ netmask)
      * \return A unique_ptr to a dpdk_port object
      */
     static dpdk_port::uptr make(port_id_t port,
@@ -152,7 +198,7 @@ public:
         uint16_t num_desc,
         struct rte_mempool* rx_pktbuf_pool,
         struct rte_mempool* tx_pktbuf_pool,
-        std::string ipv4_address);
+        std::string rte_ipv4_address);
 
     dpdk_port(port_id_t port,
         size_t mtu,
@@ -160,7 +206,7 @@ public:
         uint16_t num_desc,
         struct rte_mempool* rx_pktbuf_pool,
         struct rte_mempool* tx_pktbuf_pool,
-        std::string ipv4_address);
+        std::string rte_ipv4_address);
 
     ~dpdk_port();
 
@@ -180,7 +226,7 @@ public:
     /*! Getter for this port's MAC address
      * \return this port's MAC address
      */
-    inline ether_addr get_mac_addr() const
+    inline rte_ether_addr get_mac_addr() const
     {
         return _mac_addr;
     }
@@ -196,7 +242,7 @@ public:
     /*! Getter for this port's IPv4 address
      * \return this port's IPv4 address (in network order)
      */
-    inline ipv4_addr get_ipv4() const
+    inline rte_ipv4_addr get_ipv4() const
     {
         return _ipv4;
     }
@@ -204,7 +250,7 @@ public:
     /*! Getter for this port's subnet mask
      * \return this port's subnet mask (in network order)
      */
-    inline ipv4_addr get_netmask() const
+    inline rte_ipv4_addr get_netmask() const
     {
         return _netmask;
     }
@@ -238,12 +284,12 @@ public:
     }
 
     /*! Determine if the destination address is a broadcast address for this port
-     * \param dst_ipv4_addr The destination IPv4 address (in network order)
+     * \param dst_rte_ipv4_addr The destination IPv4 address (in network order)
      * \return whether the destination address matches this port's broadcast address
      */
-    inline bool dst_is_broadcast(const ipv4_addr dst_ipv4_addr) const
+    inline bool dst_is_broadcast(const rte_ipv4_addr dst_rte_ipv4_addr) const
     {
-        uint32_t network = _netmask | ((~_netmask) & dst_ipv4_addr);
+        uint32_t network = _netmask | ((~_netmask) & dst_rte_ipv4_addr);
         return (network == 0xffffffff);
     }
 
@@ -261,16 +307,16 @@ private:
     /*!
      * Construct and transmit an ARP reply (for the given ARP request)
      */
-    int _arp_reply(queue_id_t queue_id, struct arp_hdr* arp_req);
+    int _arp_reply(queue_id_t queue_id, struct rte_arp_hdr* arp_req);
 
     port_id_t _port;
     size_t _mtu;
     size_t _num_queues;
     struct rte_mempool* _rx_pktbuf_pool;
     struct rte_mempool* _tx_pktbuf_pool;
-    struct ether_addr _mac_addr;
-    ipv4_addr _ipv4;
-    ipv4_addr _netmask;
+    struct rte_ether_addr _mac_addr;
+    rte_ipv4_addr _ipv4;
+    rte_ipv4_addr _netmask;
 
     // Structures protected by mutex
     std::mutex _mutex;
@@ -279,7 +325,7 @@ private:
 
     // Structures protected by spin lock
     rte_spinlock_t _spinlock = RTE_SPINLOCK_INITIALIZER;
-    std::unordered_map<ipv4_addr, struct arp_entry*> _arp_table;
+    std::unordered_map<rte_ipv4_addr, struct arp_entry*> _arp_table;
 };
 
 
@@ -317,7 +363,7 @@ public:
      * \param mac_addr MAC address
      * \return pointer to port if match found, else nullptr
      */
-    dpdk_port* get_port(struct ether_addr mac_addr) const;
+    dpdk_port* get_port(struct rte_ether_addr mac_addr) const;
 
     /*!
      * Get port structure from provided port ID

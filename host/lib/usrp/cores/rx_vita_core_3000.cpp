@@ -15,9 +15,9 @@
 #include <tuple>
 
 #define REG_FRAMER_MAXLEN _base + 4 * 4 + 0
-#define REG_FRAMER_SID _base + 4 * 4 + 4
+#define REG_FRAMER_SID    _base + 4 * 4 + 4
 
-#define REG_CTRL_CMD _base + 0
+#define REG_CTRL_CMD     _base + 0
 #define REG_CTRL_TIME_HI _base + 4
 #define REG_CTRL_TIME_LO _base + 8
 
@@ -43,7 +43,7 @@ struct rx_vita_core_3000_impl : rx_vita_core_3000
 
     ~rx_vita_core_3000_impl(void) override
     {
-        UHD_SAFE_CALL(this->clear();)
+        UHD_SAFE_CALL(this->clear());
     }
 
     void configure_flow_control(const size_t window_size) override
@@ -83,10 +83,10 @@ struct rx_vita_core_3000_impl : rx_vita_core_3000
             return;
         }
         if (stream_cmd.stream_mode == stream_cmd_t::STREAM_MODE_NUM_SAMPS_AND_DONE
-                || stream_cmd.stream_mode == stream_cmd_t::STREAM_MODE_NUM_SAMPS_AND_MORE)
-        {
+            || stream_cmd.stream_mode == stream_cmd_t::STREAM_MODE_NUM_SAMPS_AND_MORE) {
             if (stream_cmd.num_samps == 0) {
-                UHD_LOGGER_WARNING("CORES") << "Ignoring stream command for finite acquisition of zero samples";
+                UHD_LOGGER_WARNING("CORES")
+                    << "Ignoring stream command for finite acquisition of zero samples";
                 return;
             }
             if (stream_cmd.num_samps > 0x0fffffff) {

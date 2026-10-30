@@ -16,7 +16,8 @@
 #include <uhd/utils/platform.hpp>
 #include <uhd/utils/safe_call.hpp>
 #include <uhd/utils/tasks.hpp>
-#include <boost/asio.hpp> //used for htonl and ntohl
+#include <uhdlib/asio.hpp> //used for htonl and ntohl
+#include <uhdlib/utils/paths.hpp>
 #include <boost/assign/list_of.hpp>
 #include <boost/filesystem.hpp>
 #include <boost/format.hpp>
@@ -26,6 +27,7 @@
 #include <chrono>
 #include <functional>
 #include <iostream>
+#include <mutex>
 #include <thread>
 
 using namespace uhd;
@@ -78,7 +80,7 @@ public:
 
     ~usrp2_iface_impl(void) override
     {
-        UHD_SAFE_CALL(this->lock_device(false);)
+        UHD_SAFE_CALL(this->lock_device(false));
     }
 
     /***********************************************************************
@@ -268,7 +270,7 @@ public:
         uint32_t lo = USRP2_FW_COMPAT_NUM,
         uint32_t hi = USRP2_FW_COMPAT_NUM)
     {
-        boost::mutex::scoped_lock lock(_ctrl_mutex);
+        std::lock_guard<std::mutex> lock(_ctrl_mutex);
 
         for (size_t i = 0; i < CTRL_RECV_RETRIES; i++) {
             try {
@@ -447,7 +449,7 @@ public:
         } else {
             const std::string addr = _ctrl_transport->get_recv_addr();
             const std::string image_loader_path =
-                (fs::path(uhd::get_pkg_path()) / "bin" / "uhd_image_loader").string();
+                uhd::find_uhd_command("uhd_image_loader");
             const std::string image_loader_cmd =
                 str(boost::format(" \"%s\" %s--args=\"type=usrp2,addr=%s\"")
                     % image_loader_path % ml % addr);
@@ -472,7 +474,7 @@ private:
     udp_simple::sptr _ctrl_transport;
 
     // used in send/recv
-    boost::mutex _ctrl_mutex;
+    std::mutex _ctrl_mutex;
     uint32_t _ctrl_seq_num;
     uint32_t _protocol_compat;
 

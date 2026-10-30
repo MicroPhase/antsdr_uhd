@@ -7,22 +7,28 @@
 #pragma once
 
 #include "adc_self_calibration.hpp"
+#include "x400_gpio_control.hpp"
+#include <uhd/features/spi_getter_iface.hpp>
 #include <uhd/rfnoc/noc_block_base.hpp>
 #include <uhd/types/device_addr.hpp>
 #include <uhd/types/direction.hpp>
 #include <uhd/types/ranges.hpp>
 #include <uhdlib/features/fpga_load_notification_iface.hpp>
 #include <uhdlib/rfnoc/radio_control_impl.hpp>
+#include <uhdlib/rfnoc/reg_iface_adapter.hpp>
 #include <uhdlib/rfnoc/rf_control/dboard_iface.hpp>
 #include <uhdlib/usrp/common/mpmd_mb_controller.hpp>
 #include <uhdlib/usrp/common/rpc.hpp>
 #include <uhdlib/usrp/common/x400_rfdc_control.hpp>
+#include <uhdlib/usrp/cores/gpio_atr_3000.hpp>
+#include <uhdlib/usrp/cores/spi_core_4000.hpp>
 #include <uhdlib/utils/rpc.hpp>
 #include <stddef.h>
 #include <memory>
 #include <mutex>
 #include <string>
 #include <vector>
+
 
 namespace uhd { namespace rfnoc {
 
@@ -31,6 +37,25 @@ namespace x400_regs {
 //! Base address for the rf_timing_control module. This controls the NCOs and
 // other things in the RFDC.
 constexpr uint32_t RFDC_CTRL_BASE = radio_control_impl::regmap::PERIPH_BASE + 0x8000;
+
+constexpr uint32_t DIO_REGMAP_OFFSET = 0x2000;
+constexpr uint32_t DIO_WINDOW_OFFSET = 0xC000;
+
+// SPI control registers
+constexpr uint32_t SPI_PERIPH_CFG =
+    DIO_REGMAP_OFFSET + DIO_WINDOW_OFFSET + radio_control_impl::regmap::PERIPH_BASE;
+
+//! Base address for SPI_TRANSACTION_CONFIG Register
+constexpr uint32_t SPI_TRANSACTION_CFG_REG = SPI_PERIPH_CFG + 0x0010;
+
+//! Base address for SPI_TRANSACTION_GO Register
+constexpr uint32_t SPI_TRANSACTION_GO_REG = SPI_PERIPH_CFG + 0x0014;
+
+//! Base address for SPI_STATUS Register
+constexpr uint32_t SPI_STATUS_REG = SPI_PERIPH_CFG + 0x0018;
+
+//! Base address for SPI_CONTROLLER_INFO Register
+constexpr uint32_t SPI_CONTROLLER_INFO_REG = SPI_PERIPH_CFG + 0x001C;
 
 } // namespace x400_regs
 
@@ -54,6 +79,12 @@ public:
     std::string get_dboard_fe_from_chan(size_t chan, uhd::direction_t) const override;
 
     uhd::eeprom_map_t get_db_eeprom() override;
+
+    // GPIO methods
+    std::vector<std::string> get_gpio_banks() const override;
+    uint32_t get_gpio_attr(const std::string& bank, const std::string& attr) override;
+    void set_gpio_attr(
+        const std::string& bank, const std::string& attr, const uint32_t value) override;
 
     // Shim calls for every method in rf_control_core
     double set_rate(const double rate) override;
@@ -104,12 +135,10 @@ public:
         const std::string& name, const size_t chan) const override;
     void set_rx_lo_source(
         const std::string& src, const std::string& name, const size_t chan) override;
-    const std::string get_rx_lo_source(
-        const std::string& name, const size_t chan) override;
+    std::string get_rx_lo_source(const std::string& name, const size_t chan) override;
     void set_rx_lo_export_enabled(
         bool enabled, const std::string& name, const size_t chan) override;
-    bool get_rx_lo_export_enabled(
-        const std::string& name, const size_t chan) override;
+    bool get_rx_lo_export_enabled(const std::string& name, const size_t chan) override;
     double set_rx_lo_freq(
         double freq, const std::string& name, const size_t chan) override;
     double get_rx_lo_freq(const std::string& name, const size_t chan) override;
@@ -120,8 +149,7 @@ public:
         const std::string& name, const size_t chan) override;
     void set_tx_lo_source(
         const std::string& src, const std::string& name, const size_t chan) override;
-    const std::string get_tx_lo_source(
-        const std::string& name, const size_t chan) override;
+    std::string get_tx_lo_source(const std::string& name, const size_t chan) override;
     void set_tx_lo_export_enabled(
         const bool enabled, const std::string& name, const size_t chan) override;
     bool get_tx_lo_export_enabled(const std::string& name, const size_t chan) override;
@@ -171,28 +199,29 @@ private:
 
     uhd::features::adc_self_calibration_iface::sptr _adc_self_calibration;
 
-    class fpga_onload : public uhd::features::fpga_load_notification_iface
+    uhd::features::spi_getter_iface::sptr _spi_getter_iface;
+
+    x400::gpio_control::sptr _gpios;
+
+    class x400_spi_getter : public uhd::features::spi_getter_iface
     {
     public:
-        using sptr = std::shared_ptr<fpga_onload>;
+        using sptr = std::shared_ptr<spi_getter_iface>;
 
-        fpga_onload(size_t num_channels,
-            uhd::features::adc_self_calibration_iface::sptr adc_self_cal,
-            std::string unique_id);
+        x400_spi_getter(uhd::cores::spi_core_4000::sptr _spi) : _spicore(_spi) {}
 
-        void onload() override;
+        uhd::spi_iface::sptr get_spi_ref(
+            const std::vector<uhd::features::spi_periph_config_t>& spi_periph_config)
+            const override
+        {
+            _spicore->set_spi_periph_config(spi_periph_config);
+            return _spicore;
+        }
 
     private:
-        const size_t _num_channels;
-        uhd::features::adc_self_calibration_iface::sptr _adc_self_cal;
-        const std::string _unique_id;
-        std::string get_unique_id() const
-        {
-            return _unique_id;
-        }
+        uhd::cores::spi_core_4000::sptr _spicore;
     };
-
-    fpga_onload::sptr _fpga_onload;
 };
+
 
 }} // namespace uhd::rfnoc

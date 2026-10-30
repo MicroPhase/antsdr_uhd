@@ -14,6 +14,7 @@
 #include <uhdlib/usrp/common/validate_subdev_spec.hpp>
 #include <functional>
 #include <memory>
+#include <numeric>
 #include <set>
 
 using namespace uhd;
@@ -35,19 +36,19 @@ size_t b200_impl::max_chan_count(const std::string& direction /* = "" */)
 {
     size_t max_count = 0;
     for (radio_perifs_t& perif : _radio_perifs) {
-        if ((direction == "RX" or direction.empty())
-            and not perif.rx_streamer.expired()) {
-            std::shared_ptr<sph::recv_packet_streamer> rx_streamer =
-                std::dynamic_pointer_cast<sph::recv_packet_streamer>(
-                    perif.rx_streamer.lock());
-            max_count = std::max(max_count, rx_streamer->get_num_channels());
+        if (direction == "RX" or direction.empty()) {
+            if (auto p = perif.rx_streamer.lock()) {
+                auto rx_streamer =
+                    std::dynamic_pointer_cast<sph::recv_packet_streamer>(p);
+                max_count = std::max(max_count, rx_streamer->get_num_channels());
+            }
         }
-        if ((direction == "TX" or direction.empty())
-            and not perif.tx_streamer.expired()) {
-            std::shared_ptr<sph::send_packet_streamer> tx_streamer =
-                std::dynamic_pointer_cast<sph::send_packet_streamer>(
-                    perif.tx_streamer.lock());
-            max_count = std::max(max_count, tx_streamer->get_num_channels());
+        if (direction == "TX" or direction.empty()) {
+            if (auto p = perif.tx_streamer.lock()) {
+                auto tx_streamer =
+                    std::dynamic_pointer_cast<sph::send_packet_streamer>(p);
+                max_count = std::max(max_count, tx_streamer->get_num_channels());
+            }
         }
     }
     return max_count;
@@ -77,7 +78,7 @@ void b200_impl::set_auto_tick_rate(
     using namespace uhd::math;
     if (rate != 0.0
         and (fp_compare::fp_compare_delta<double>(rate, FREQ_COMPARISON_DELTA_HZ)
-                > max_tick_rate)) {
+             > max_tick_rate)) {
         throw uhd::value_error(str(boost::format("Requested sampling rate (%.2f Msps) "
                                                  "exceeds maximum tick rate of %.2f MHz.")
                                    % (rate / 1e6) % (max_tick_rate / 1e6)));
@@ -110,7 +111,7 @@ void b200_impl::set_auto_tick_rate(
             }
             // Clean up floating point rounding errors if they crept in
             this_dsp_rate = std::min(max_tick_rate, this_dsp_rate);
-            lcm_rate      = uhd::math::lcm<uint32_t>(
+            lcm_rate      = std::lcm<uint32_t>(
                 lcm_rate, static_cast<uint32_t>(floor(this_dsp_rate + 0.5)));
         }
     }
@@ -180,8 +181,8 @@ void b200_impl::update_tx_dsp_tick_rate(
     if (uhd::math::fp_compare::fp_compare_delta<double>(                              \
             rate, uhd::math::FREQ_COMPARISON_DELTA_HZ)                                \
         > uhd::math::fp_compare::fp_compare_delta<double>(                            \
-              ad9361_device_t::AD9361_MAX_CLOCK_RATE,                                 \
-              uhd::math::FREQ_COMPARISON_DELTA_HZ)) {                                 \
+            ad9361_device_t::AD9361_MAX_CLOCK_RATE,                                   \
+            uhd::math::FREQ_COMPARISON_DELTA_HZ)) {                                   \
         throw uhd::value_error(                                                       \
             str(boost::format(                                                        \
                     "Requested sampling rate (%.2f Msps) exceeds maximum tick rate.") \
@@ -256,7 +257,8 @@ uhd::usrp::subdev_spec_t b200_impl::coerce_subdev_spec(
     // Any other spec is probably illegal and will be caught by
     // validate_subdev_spec().
     if (!spec.empty()
-        and (_product == B200 or _product == B200MINI or _product == B205MINI)
+        and (_product == B200 or _product == B200MINI or _product == B205MINI
+             or _product == B206MINI)
         and spec[0].sd_name == "B") {
         spec[0].sd_name = "A";
     }
@@ -327,7 +329,7 @@ boost::optional<uhd::msg_task::msg_type_t> b200_impl::handle_async_task(
         case B200_RESP0_MSG_SID:
         case B200_RESP1_MSG_SID:
         case B200_LOCAL_RESP_SID: {
-            radio_ctrl_core_3000::sptr ctrl;
+            b200_radio_ctrl_core::sptr ctrl;
             if (sid == B200_RESP0_MSG_SID)
                 ctrl = data->radio_ctrl[0].lock();
             if (sid == B200_RESP1_MSG_SID)
@@ -496,11 +498,10 @@ void b200_impl::handle_overflow(const size_t radio_index)
             _radio_perifs[radio_index].framer->in_continuous_streaming_mode();
         // stop streaming
         my_streamer->issue_stream_cmd(stream_cmd_t::STREAM_MODE_STOP_CONTINUOUS);
-        // flush demux
-        _demux->realloc_sid(B200_RX_DATA0_SID);
-        _demux->realloc_sid(B200_RX_DATA1_SID);
-        // flush actual transport
-        while (_data_transport->get_recv_buff(0.001)) {
+        // flush data
+        while (_demux->get_recv_buff(B200_RX_DATA0_SID, 0.001)) {
+        }
+        while (_demux->get_recv_buff(B200_RX_DATA1_SID, 0.001)) {
         }
         // restart streaming
         if (in_continuous_streaming_mode) {
@@ -508,15 +509,14 @@ void b200_impl::handle_overflow(const size_t radio_index)
             stream_cmd.stream_now = false;
             stream_cmd.time_spec =
                 _radio_perifs[radio_index].time64->get_time_now() + time_spec_t(0.01);
-            // FIXME: temporarily remove the start stream command.
-            // This will avoid an issue that gets the b210 in a bad state.
             my_streamer->issue_stream_cmd(stream_cmd);
         }
     } else {
-        // while (_data_transport->get_recv_buff(0.001)) {
-        // }
-        // FIXME: temporarily remove the overflow handling that re-issues a stream
-        //        command. This will avoid an issue that gets the b210 in a bad state.
+        const uint32_t sid = radio_index == 0 ? B200_RX_DATA0_SID : B200_RX_DATA1_SID;
+        // flush data
+        while (_demux->get_recv_buff(sid, 0.001)) {
+        }
+        // restart streaming
         _radio_perifs[radio_index].framer->handle_overflow();
     }
 }

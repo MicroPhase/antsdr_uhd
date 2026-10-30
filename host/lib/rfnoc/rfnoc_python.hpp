@@ -8,7 +8,11 @@
 #define INCLUDED_UHD_RFNOC_PYTHON_HPP
 
 #include "../stream_python.hpp"
+#include <uhd/features/discoverable_feature.hpp>
+#include <uhd/features/gpio_power_iface.hpp>
+#include <uhd/features/gps_iface.hpp>
 #include <uhd/rfnoc/block_id.hpp>
+#include <uhd/rfnoc/filter_node.hpp>
 #include <uhd/rfnoc/graph_edge.hpp>
 #include <uhd/rfnoc/mb_controller.hpp>
 #include <uhd/rfnoc/noc_block_base.hpp>
@@ -17,6 +21,7 @@
 #include <uhd/rfnoc_graph.hpp>
 #include <uhd/transport/adapter_id.hpp>
 #include <uhd/types/device_addr.hpp>
+#include <uhd/utils/graph_utils.hpp>
 #include <pybind11/operators.h>
 #include <pybind11/stl.h>
 #include <memory>
@@ -64,6 +69,21 @@ public:
 
 void export_rfnoc(py::module& m)
 {
+#define RIS_FIELD(name) .def_readwrite(#name, &register_iface_stats::name)
+
+    py::class_<register_iface_stats>(m, "register_iface_stats")
+        // clang-format off
+        RIS_FIELD(ctrl_packets_sent)
+        RIS_FIELD(ack_packets_received)
+        RIS_FIELD(async_packets_received)
+        RIS_FIELD(ack_packets_sent)
+        RIS_FIELD(ctrl_dropped)
+        RIS_FIELD(ctrl_out_of_sequence)
+        RIS_FIELD(buffer_fullness)
+                        // clang-format on
+
+                        .def("__repr__", &register_iface_stats::to_string);
+
     py::class_<block_id_t>(m, "block_id")
         // Constructors
         .def(py::init<>())
@@ -127,8 +147,7 @@ void export_rfnoc(py::module& m)
         .def_readwrite("dst_blockid", &graph_edge_t::dst_blockid)
         .def_readwrite("dst_port", &graph_edge_t::dst_port)
         .def_readwrite("edge", &graph_edge_t::edge)
-        .def_readwrite(
-            "property_propagation_active", &graph_edge_t::property_propagation_active)
+        .def_readwrite("is_forward_edge", &graph_edge_t::is_forward_edge)
 
         // Methods
         .def("__str__", &graph_edge_t::to_string)
@@ -179,7 +198,12 @@ void export_rfnoc(py::module& m)
         .def("is_connectable", &rfnoc_graph::is_connectable)
         .def("connect",
             py::overload_cast<const block_id_t&, size_t, const block_id_t&, size_t, bool>(
-                &rfnoc_graph::connect))
+                &rfnoc_graph::connect),
+            py::arg("src_blk"),
+            py::arg("src_port"),
+            py::arg("dst_blk"),
+            py::arg("dst_port"),
+            py::arg("is_back_edge") = false)
         .def("connect",
             py::overload_cast<uhd::tx_streamer::sptr,
                 size_t,
@@ -189,7 +213,7 @@ void export_rfnoc(py::module& m)
             py::arg("streamer"),
             py::arg("strm_port"),
             py::arg("dst_blk"),
-            py::arg("dst_blk"),
+            py::arg("dst_port"),
             py::arg("adapter_id") = uhd::transport::NULL_ADAPTER_ID)
         .def("connect",
             py::overload_cast<const block_id_t&,
@@ -198,7 +222,7 @@ void export_rfnoc(py::module& m)
                 size_t,
                 uhd::transport::adapter_id_t>(&rfnoc_graph::connect),
             py::arg("src_blk"),
-            py::arg("src_blk"),
+            py::arg("src_port"),
             py::arg("streamer"),
             py::arg("strm_port"),
             py::arg("adapter_id") = uhd::transport::NULL_ADAPTER_ID)
@@ -215,13 +239,39 @@ void export_rfnoc(py::module& m)
         .def("enumerate_active_connections", &rfnoc_graph::enumerate_active_connections)
         .def("commit", &rfnoc_graph::commit)
         .def("release", &rfnoc_graph::release)
+        .def("to_dot", &rfnoc_graph::to_dot)
         .def("create_rx_streamer", &rfnoc_graph::create_rx_streamer)
         .def("create_tx_streamer", &rfnoc_graph::create_tx_streamer)
         .def("get_num_mboards", &rfnoc_graph::get_num_mboards)
         .def(
             "get_mb_controller", &rfnoc_graph::get_mb_controller, py::arg("mb_index") = 0)
         .def("synchronize_devices", &rfnoc_graph::synchronize_devices)
-        .def("get_tree", &rfnoc_graph::get_tree);
+        .def(
+            "get_tree",
+            [](rfnoc_graph& self) { return self.get_tree().get(); },
+            py::return_value_policy::reference_internal);
+
+    py::class_<uhd::features::gpio_power_iface>(m, "gpio_power")
+        .def("get_supported_voltages",
+            &uhd::features::gpio_power_iface::get_supported_voltages)
+        .def("set_port_voltage", &uhd::features::gpio_power_iface::set_port_voltage)
+        .def("get_port_voltage", &uhd::features::gpio_power_iface::get_port_voltage)
+        .def("set_external_power", &uhd::features::gpio_power_iface::set_external_power)
+        .def("get_external_power_status",
+            &uhd::features::gpio_power_iface::get_external_power_status);
+
+    py::class_<uhd::features::gps_iface>(m, "gps")
+        .def("get_sensor", &uhd::features::gps_iface::get_sensor)
+        .def("get_sensors", &uhd::features::gps_iface::get_sensors)
+        .def("send_cmd", &uhd::features::gps_iface::send_cmd);
+
+    py::class_<detail::filter_node>(m, "filter_node")
+        .def("get_rx_filter_names", &detail::filter_node::get_rx_filter_names)
+        .def("get_rx_filter", &detail::filter_node::get_rx_filter)
+        .def("set_rx_filter", &detail::filter_node::set_rx_filter)
+        .def("get_tx_filter_names", &detail::filter_node::get_tx_filter_names)
+        .def("get_tx_filter", &detail::filter_node::get_tx_filter)
+        .def("set_tx_filter", &detail::filter_node::set_tx_filter);
 
     py::class_<mb_controller, mb_controller::sptr>(m, "mb_controller")
         .def("get_num_timekeepers", &mb_controller::get_num_timekeepers)
@@ -245,12 +295,28 @@ void export_rfnoc(py::module& m)
         .def("set_time_source_out", &mb_controller::set_time_source_out)
         .def("get_sensor", &mb_controller::get_sensor)
         .def("get_sensor_names", &mb_controller::get_sensor_names)
-        .def("get_eeprom", &mb_controller::get_eeprom)
+        .def("get_eeprom",
+            [](mb_controller& self) {
+                auto eeprom = self.get_eeprom();
+                return static_cast<std::map<std::string, std::string>>(eeprom);
+            })
         .def("synchronize", &mb_controller::synchronize)
         .def("get_gpio_banks", &mb_controller::get_gpio_banks)
         .def("get_gpio_srcs", &mb_controller::get_gpio_srcs)
         .def("get_gpio_src", &mb_controller::get_gpio_src)
-        .def("set_gpio_src", &mb_controller::set_gpio_src);
+        .def("set_gpio_src", &mb_controller::set_gpio_src)
+        .def(
+            "get_gpio_power",
+            [](mb_controller& self) {
+                return &self.get_feature<uhd::features::gpio_power_iface>();
+            },
+            py::return_value_policy::reference_internal)
+        .def(
+            "get_gps_iface",
+            [](mb_controller& self) {
+                return &self.get_feature<uhd::features::gps_iface>();
+            },
+            py::return_value_policy::reference_internal);
 
     py::class_<timekeeper, PyTimekeeper, timekeeper::sptr>(m, "timekeeper")
         // Methods
@@ -274,139 +340,151 @@ void export_rfnoc(py::module& m)
         .def("get_tick_rate", &noc_block_base::get_tick_rate)
         .def("get_mtu", &noc_block_base::get_mtu)
         .def("get_block_args", &noc_block_base::get_block_args)
+        .def("set_command_time", &noc_block_base::set_command_time)
+        .def("clear_command_time", &noc_block_base::clear_command_time)
         .def("get_tree",
             [](noc_block_base::sptr& self) {
                 // Force the non-const `get_tree`
                 uhd::property_tree::sptr tree = self->get_tree();
                 return tree;
             })
-        .def("poke32",
-            [](noc_block_base::sptr& self, uint32_t addr, uint32_t data) {
-                self->regs().poke32(addr, data);
+        .def(
+            "poke32",
+            [](noc_block_base& self, uint32_t addr, uint32_t data) {
+                self.regs().poke32(addr, data);
             },
             py::arg("addr"),
             py::arg("data"))
-        .def("poke32",
-            [](noc_block_base::sptr& self,
+        .def(
+            "poke32",
+            [](noc_block_base& self,
                 uint32_t addr,
                 uint32_t data,
                 uhd::time_spec_t time,
-                bool ack = false) { self->regs().poke32(addr, data, time, ack); },
+                bool ack = false) { self.regs().poke32(addr, data, time, ack); },
             py::arg("addr"),
             py::arg("data"),
             py::arg("time"),
             py::arg("ack") = false)
-        .def("poke64",
-            [](noc_block_base::sptr& self, uint32_t addr, uint64_t data) {
-                self->regs().poke64(addr, data);
+        .def(
+            "poke64",
+            [](noc_block_base& self, uint32_t addr, uint64_t data) {
+                self.regs().poke64(addr, data);
             },
             py::arg("addr"),
             py::arg("data"))
-        .def("poke64",
-            [](noc_block_base::sptr& self,
+        .def(
+            "poke64",
+            [](noc_block_base& self,
                 uint32_t addr,
                 uint32_t data,
                 uhd::time_spec_t time,
-                bool ack = false) { self->regs().poke64(addr, data, time, ack); },
+                bool ack = false) { self.regs().poke64(addr, data, time, ack); },
             py::arg("addr"),
             py::arg("data"),
             py::arg("time"),
             py::arg("ack") = false)
-        .def("multi_poke32",
-            [](noc_block_base::sptr& self,
+        .def(
+            "multi_poke32",
+            [](noc_block_base& self,
                 std::vector<uint32_t> addr,
-                std::vector<uint32_t> data) { self->regs().multi_poke32(addr, data); },
+                std::vector<uint32_t> data) { self.regs().multi_poke32(addr, data); },
             py::arg("addr"),
             py::arg("data"))
-        .def("multi_poke32",
-            [](noc_block_base::sptr& self,
+        .def(
+            "multi_poke32",
+            [](noc_block_base& self,
                 std::vector<uint32_t> addr,
                 std::vector<uint32_t> data,
                 uhd::time_spec_t time,
-                bool ack = false) { self->regs().multi_poke32(addr, data, time, ack); },
+                bool ack = false) { self.regs().multi_poke32(addr, data, time, ack); },
             py::arg("addr"),
             py::arg("data"),
             py::arg("time"),
             py::arg("ack") = false)
-        .def("block_poke32",
-            [](noc_block_base::sptr& self,
-                uint32_t first_addr,
-                std::vector<uint32_t> data) {
-                self->regs().block_poke32(first_addr, data);
+        .def(
+            "block_poke32",
+            [](noc_block_base& self, uint32_t first_addr, std::vector<uint32_t> data) {
+                self.regs().block_poke32(first_addr, data);
             },
             py::arg("first_addr"),
             py::arg("data"))
-        .def("block_poke32",
-            [](noc_block_base::sptr& self,
+        .def(
+            "block_poke32",
+            [](noc_block_base& self,
                 uint32_t first_addr,
                 std::vector<uint32_t> data,
                 uhd::time_spec_t time,
                 bool ack = false) {
-                self->regs().block_poke32(first_addr, data, time, ack);
+                self.regs().block_poke32(first_addr, data, time, ack);
             },
             py::arg("first_addr"),
             py::arg("data"),
             py::arg("time"),
             py::arg("ack") = false)
-        .def("peek32",
-            [](noc_block_base::sptr& self, uint32_t addr) {
-                return self->regs().peek32(addr);
-            },
+        .def(
+            "peek32",
+            [](noc_block_base& self, uint32_t addr) { return self.regs().peek32(addr); },
             py::arg("addr"))
-        .def("peek32",
-            [](noc_block_base::sptr& self, uint32_t addr, uhd::time_spec_t time) {
-                return self->regs().peek32(addr, time);
+        .def(
+            "peek32",
+            [](noc_block_base& self, uint32_t addr, uhd::time_spec_t time) {
+                return self.regs().peek32(addr, time);
             },
             py::arg("addr"),
             py::arg("time"))
-        .def("peek64",
-            [](noc_block_base::sptr& self, uint32_t addr) {
-                return self->regs().peek64(addr);
-            },
+        .def(
+            "peek64",
+            [](noc_block_base& self, uint32_t addr) { return self.regs().peek64(addr); },
             py::arg("addr"))
-        .def("peek64",
-            [](noc_block_base::sptr& self, uint32_t addr, uhd::time_spec_t time) {
-                return self->regs().peek64(addr, time);
+        .def(
+            "peek64",
+            [](noc_block_base& self, uint32_t addr, uhd::time_spec_t time) {
+                return self.regs().peek64(addr, time);
             },
             py::arg("addr"),
             py::arg("time"))
-        .def("block_peek32",
-            [](noc_block_base::sptr& self, uint32_t first_addr, size_t length) {
-                return self->regs().block_peek32(first_addr, length);
+        .def(
+            "block_peek32",
+            [](noc_block_base& self, uint32_t first_addr, size_t length) {
+                return self.regs().block_peek32(first_addr, length);
             },
             py::arg("first_addr"),
             py::arg("length"))
-        .def("block_peek32",
-            [](noc_block_base::sptr& self,
+        .def(
+            "block_peek32",
+            [](noc_block_base& self,
                 uint32_t first_addr,
                 size_t length,
                 uhd::time_spec_t time) {
-                return self->regs().block_peek32(first_addr, length, time);
+                return self.regs().block_peek32(first_addr, length, time);
             },
             py::arg("first_addr"),
             py::arg("length"),
             py::arg("time"))
-        .def("poll32",
-            [](noc_block_base::sptr& self,
+        .def(
+            "poll32",
+            [](noc_block_base& self,
                 uint32_t addr,
                 uint32_t data,
                 uint32_t mask,
                 uhd::time_spec_t timeout) {
-                return self->regs().poll32(addr, data, mask, timeout);
+                return self.regs().poll32(addr, data, mask, timeout);
             },
             py::arg("addr"),
             py::arg("data"),
             py::arg("mask"),
             py::arg("timeout"))
-        .def("poll32",
-            [](noc_block_base::sptr& self,
+        .def(
+            "poll32",
+            [](noc_block_base& self,
                 uint32_t addr,
                 uint32_t data,
                 uint32_t mask,
                 uhd::time_spec_t timeout,
                 uhd::time_spec_t time,
                 bool ack = false) {
-                return self->regs().poll32(addr, data, mask, timeout, time, ack);
+                return self.regs().poll32(addr, data, mask, timeout, time, ack);
             },
             py::arg("addr"),
             py::arg("data"),
@@ -414,9 +492,14 @@ void export_rfnoc(py::module& m)
             py::arg("timeout"),
             py::arg("time"),
             py::arg("ack") = false)
+        .def("get_src_epid",
+            [](noc_block_base& self) { return self.regs().get_src_epid(); })
+        .def("get_port_num",
+            [](noc_block_base& self) { return self.regs().get_port_num(); })
+        .def("get_stats", [](noc_block_base& self) { return self.regs().get_stats(); })
         .def("__repr__",
-            [](noc_block_base::sptr& self) {
-                return "<NocBlock for block ID '" + self->get_unique_id() + "'>";
+            [](noc_block_base& self) {
+                return "<NocBlock for block ID '" + self.get_unique_id() + "'>";
             })
         // node_t superclass methods--not worth having a separate Py class
         // for them
@@ -424,7 +507,81 @@ void export_rfnoc(py::module& m)
         .def("set_properties",
             &node_t::set_properties,
             py::arg("props"),
+            py::arg("instance") = 0)
+        .def(
+            "get_string_property",
+            [](noc_block_base& self, const std::string& id, const size_t instance) {
+                return self.get_property<std::string>(id, instance);
+            },
+            py::arg("id"),
+            py::arg("instance") = 0)
+        .def(
+            "get_bool_property",
+            [](noc_block_base& self, const std::string& id, const size_t instance) {
+                return self.get_property<bool>(id, instance);
+            },
+            py::arg("id"),
+            py::arg("instance") = 0)
+        .def(
+            "get_int_property",
+            [](noc_block_base& self,
+                const std::string& id,
+                const size_t instance) -> uint64_t {
+                // Try all integer types until we find the right one
+                try {
+                    int value = self.get_property<int>(id, instance);
+                    return (uint64_t)value;
+                } catch (const uhd::type_error&) {
+                    try {
+                        size_t value = self.get_property<size_t>(id, instance);
+                        return (uint64_t)value;
+                    } catch (const uhd::type_error&) {
+                        try {
+                            uint32_t value = self.get_property<uint32_t>(id, instance);
+                            return (uint64_t)value;
+                        } catch (const uhd::type_error&) {
+                            try {
+                                uint64_t value =
+                                    self.get_property<uint64_t>(id, instance);
+                                return (uint64_t)value;
+                            } catch (...) {
+                                throw;
+                            }
+                        }
+                    }
+                }
+            },
+            py::arg("id"),
+            py::arg("instance") = 0)
+        .def(
+            "get_float_property",
+            [](noc_block_base& self,
+                const std::string& id,
+                const size_t instance) -> double {
+                // Try both float types
+                try {
+                    return self.get_property<double>(id, instance);
+                } catch (const uhd::type_error&) {
+                    try {
+                        float value = self.get_property<float>(id, instance);
+                        return static_cast<double>(value);
+                    } catch (...) {
+                        throw;
+                    }
+                }
+            },
+            py::arg("id"),
             py::arg("instance") = 0);
+
+    m.def("get_block_chain", &uhd::rfnoc::get_block_chain);
+    m.def("connect_through_blocks",
+        &uhd::rfnoc::connect_through_blocks,
+        py::arg("graph"),
+        py::arg("src_blk"),
+        py::arg("src_port"),
+        py::arg("dst_blk"),
+        py::arg("dst_port"),
+        py::arg("skip_property_propagation") = false);
 }
 
 #endif /* INCLUDED_UHD_RFNOC_PYTHON_HPP */

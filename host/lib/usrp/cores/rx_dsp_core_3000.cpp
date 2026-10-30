@@ -15,17 +15,17 @@
 #include <cmath>
 #include <functional>
 
-#define REG_DSP_RX_FREQ _dsp_base + 0
+#define REG_DSP_RX_FREQ     _dsp_base + 0
 #define REG_DSP_RX_SCALE_IQ _dsp_base + 4
-#define REG_DSP_RX_DECIM _dsp_base + 8
-#define REG_DSP_RX_MUX _dsp_base + 12
-#define REG_DSP_RX_COEFFS _dsp_base + 16
+#define REG_DSP_RX_DECIM    _dsp_base + 8
+#define REG_DSP_RX_MUX      _dsp_base + 12
+#define REG_DSP_RX_COEFFS   _dsp_base + 16
 // FIXME: Add code to support REG_DSP_RX_COEFFS
 
-#define FLAG_DSP_RX_MUX_SWAP_IQ (1 << 0)
+#define FLAG_DSP_RX_MUX_SWAP_IQ   (1 << 0)
 #define FLAG_DSP_RX_MUX_REAL_MODE (1 << 1)
-#define FLAG_DSP_RX_MUX_INVERT_Q (1 << 2)
-#define FLAG_DSP_RX_MUX_INVERT_I (1 << 3)
+#define FLAG_DSP_RX_MUX_INVERT_Q  (1 << 2)
+#define FLAG_DSP_RX_MUX_INVERT_I  (1 << 3)
 
 template <class T>
 T ceil_log2(T num)
@@ -160,13 +160,12 @@ public:
 
             if (decim > 1 and hb0 == 0 and hb1 == 0) {
                 UHD_LOGGER_WARNING("CORES")
-                    << boost::format(
-                           "The requested decimation is odd; the user should expect CIC "
-                           "rolloff.\n"
-                           "Select an even decimation to ensure that a halfband filter "
-                           "is enabled.\n"
-                           "decimation = dsp_rate/samp_rate -> %d = (%f MHz)/(%f MHz)\n")
-                           % decim_rate % (_tick_rate / 1e6) % (rate / 1e6);
+                    << "The requested decimation is odd; the user should expect CIC "
+                       "rolloff.\n"
+                       "Select an even decimation to ensure that a halfband filter "
+                       "is enabled.\n"
+                    << decim_rate << " = (" << (_tick_rate / 1e6) << " MHz)/("
+                    << (rate / 1e6) << " MHz)\n";
             }
         } else {
             // Encode Halfband config for setting register programming.
@@ -183,15 +182,15 @@ public:
 
             if (decim > 1 and hb0 == 0 and hb1 == 0 and hb2 == 0) {
                 UHD_LOGGER_WARNING("CORES")
-                    << boost::format(
-                           "The requested decimation is odd; the user should expect "
-                           "passband CIC rolloff.\n"
-                           "Select an even decimation to ensure that a halfband filter "
-                           "is enabled.\n"
-                           "Decimations factorable by 4 will enable 2 halfbands, those "
-                           "factorable by 8 will enable 3 halfbands.\n"
-                           "decimation = dsp_rate/samp_rate -> %d = (%f MHz)/(%f MHz)\n")
-                           % decim_rate % (_tick_rate / 1e6) % (rate / 1e6);
+                    << "The requested decimation is odd; the user should expect "
+                       "passband CIC rolloff.\n"
+                       "Select an even decimation to ensure that a halfband filter "
+                       "is enabled.\n"
+                       "Decimations factorable by 4 will enable 2 halfbands, those "
+                       "factorable by 8 will enable 3 halfbands.\n"
+                       "decimation = dsp_rate/samp_rate -> "
+                    << decim_rate << " = (" << (_tick_rate / 1e6) << " MHz)/("
+                    << (rate / 1e6) << " MHz)\n";
             }
         }
 
@@ -260,7 +259,7 @@ public:
     uhd::meta_range_t get_freq_range(void) override
     {
         // Too keep the DSP range symmetric about 0, we use abs(_dsp_freq_offset)
-        const double offset = std::abs<double>(_dsp_freq_offset);
+        const double offset = std::abs(_dsp_freq_offset);
         return uhd::meta_range_t(-(_tick_rate - offset) / 2,
             +(_tick_rate - offset) / 2,
             _tick_rate / std::pow(2.0, 32));

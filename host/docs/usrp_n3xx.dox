@@ -33,8 +33,10 @@ variants of the N3XX series:
 \image html N310isoExplode.png N310 Exploded View
 
 - Supported master clock rates: 122.88 MHz, 125 MHz, 153.6 MHz
-- Tuning range: 10 MHz to 6 GHz (below 300 MHz, additional LOs and mixer stages
-  are used to shift the signal into the frequency range of the AD9371)
+- Tuning range: 10 MHz to 6 GHz
+    - Below 300 MHz, additional LOs and mixer stages
+    are used to shift the signal into the frequency range of the AD9371
+    - Tunable down to 1 MHz in UHD however performance is not guaranteed
 - Support for external LOs
 - 4 RX DDC chains in FPGA (2 for N300)
 - 4 TX DUC chain in FPGA (2 for N300)
@@ -53,8 +55,10 @@ FPGA (XCZ035). Also, it does not have connectors for external LOs.
 \subsection n3xx_feature_list_rh N320/N321 2-channel Transceiver
 
 - Supported master clock rates: 200 MHz, 245.76 MHz, 250 MHz
-- Tuning range: 1 MHz to 6 GHz (below 450 MHz, an additional LO and mixer stage
-  is used to shift the signal into the range of the main LO stage)
+- Tuning range: 3 MHz to 6 GHz
+    - Below 450 MHz, an additional LO and mixer stage
+    is used to shift the signal into the range of the main LO stage
+    - Tunable down to 1 MHz in UHD however performance is not guaranteed
 - Support for external LOs
 - 2 RX DDC chains in FPGA
 - 2 TX DUC chain in FPGA
@@ -119,17 +123,20 @@ system (Linux kernel, libraries) and any user data are stored on this SD card.
 
 The SD card is partitioned into four partitions:
 
-1. Boot partition (contains the bootloader). This partition usually does not
-   require touching.
-2. A data partition, mounted in /data. This is the only partition that is not
-   erased during file system updates.
-2. Two identical system partitions (root file systems). These contain the
-   operating system and the home directory (anything mounted under / that is not
-   the data or boot partition). The reason there are two of these is to enable
-   remote updates: An update running on one partition can update the other one
-   without any effect to the currently running system. Note that the system
-   partitions are erased during updates and are thus unsuitable for permanently
-   storing information.
+- Boot partition (contains the bootloader). This partition usually does not
+  require any modifications.
+- Two system partitions (root file systems). These contain the operating system
+  and the home directory (anything mounted under / that is not the data or boot
+  partition). Up until UHD 4.6/Yocto release zeus, the two rootfs partitions are
+  identical in the .sdimg filesystem image. Starting from UHD4.7/Yocto release
+  kirkstone, only the first partition is populated in the .sdimg filesystem
+  image and the second rootfs partition is empty.
+  The reason there are two of these is to enable remote updates: An update
+  running on one partition can update the other one without any effect to the
+  currently running system. Note that the system partitions are erased during
+  updates and are thus unsuitable for permanently storing information.
+- A data partition, mounted in /data. This is the only partition that is not
+  erased during file system updates.
 
 Note: It is possible to access the currently inactive root file system by
 mounting it. After logging into the device using serial console or SSH (see the
@@ -163,24 +170,33 @@ Checklist:
 
 \subsection n3xx_getting_started_fs_update Updating the file system
 
-Before doing any major work with a newly acquired USRP N300/N310, it is
-recommended to update the file system. Updating the filesystem can be
-accomplished directly on the N300/N310 by using Mender or externally by
-manually writing an image onto a micro SD card and inserting it.  While
-manual updating is faster, Mender requires no direct physical access to the
-device.  For details on using Mender, see Section \ref n3xx_rasm_mender .
+Before doing any major work with a newly acquired USRP N3XX, it is
+recommended to update the file system. There are two methods to accomplish this:
+-# <b>Mender-based method</b> (over the network) 
+	- For detailed instructions on using Mender, refer to Section \ref n3xx_rasm_mender.
+-# <b>External method</b> (writing an image directly onto a micro SD card)  
+	- This method is faster than the Mender-based update. 
+	- It requires physical access to the USRP device. 
 
-Manual updating is simply loading an image on the micro SD card.  The first step
-in that process is to obtain an image.
+The <b>external method</b> is recommended for updating devices from the 
+factory-default file system version 3.x to file system versions greater than v4.6. 
 
-To obtain the default micro SD card image for a specific version of UHD, install
-that version of UHD (3.11.0.1 or later) on a host system with Internet access and run:
+The first step of the external method is to obtain the necessary file system image. To acquire
+the default micro SD card image for a specific version of UHD, follow these steps:
+- Install the desired version of UHD on a host system with internet access.
+- Run the following command:
+
 
     $ uhd_images_downloader -t n3xx_common_sdimg_default
 
    The image will be downloaded to
    `<UHD_INSTALL_DIR>/share/uhd/images/usrp_n3xx_fs.sdimg`,
    where `<UHD_INSTALL_DIR>` is the UHD installation directory.
+
+\note  In case the uhd_images_downloader operation fails due to missing write access: 
+use the  `-i` option to specify a download folder where you have write access. 
+
+\subsubsection n3xx_fs_update_linux The External Method on Linux
 
 To load an image onto the micro SD card, connect the card to the host and run:
 
@@ -192,6 +208,23 @@ To load an image onto the micro SD card, connect the card to the host and run:
    The `<YOUR_SD_CARD>` device node depends on your operating system and which
    other devices are plugged in. Typical values are `sdb` or `mmcblk0`.<br>
    CAUTION:  Operating on the wrong device can cause damage to that device.
+
+\subsubsection n3xx_fs_update_windows The External Method on Windows
+
+Manual loading a file system image on to micro SD card is straight forward
+on Windows with the use of 3rd party utilities available online.
+One is the open source, cross-platform utility
+[Etcher](https://etcher.balena.io/), that is also available for macOS and
+X86 Linux. Follow the steps to load image on the micro SD card:
+
+- Download and install Etcher on your Windows PC
+(https://etcher.balena.io/).
+- Insert the micro SD card into your PC.
+- Run the Etcher tool and follow the steps:
+	1. Click the "Flash from file" button and choose the downloaded file
+  usrp_n3xx_fs.sdimg.
+	2. Click the "Select target" and choose the drive having the micro SD card mounted.
+	3. Click the "Flash" button and wait for loading to complete.
 
 The micro SD card used can be the original SD card shipped with the device or
 another one that is at least 16 GB in size.
@@ -279,8 +312,8 @@ Of course, you can also connect to the IP address directly if you know it (or
 set it manually using the serial console).
 
 Note: The device's hostname is derived from its serial number by default
-(`ni-n3xx-$SERIAL`). You can change the hostname by modifying the `/etc/hostname`
-file and rebooting.
+(`ni-n3xx-$SERIAL`). You can change the hostname by creating the file
+`/data/network/hostname`, saving the desired hostname in it, then rebooting.
 
 On Microsoft Windows, the connection can be established using a tool such as
 Putty, by selecting a username of root without password.
@@ -301,7 +334,7 @@ and 192.168.20.2/24, respectively. Their default MTU value is 9000. These
 settings are independent of the image type (HG vs. XG), i.e., the defaults are
 the same for 1 GigE and 10 GigE (unlike the X310!).
 
-The configuration for the sfpX port is stored in /etc/systemd/network/sfpX.network.
+The configuration for the `sfpX` port is stored in `/data/network/sfpX.network`.
 
 For configuration please refer to the
 <a href=https://www.freedesktop.org/software/systemd/man/systemd.network.html>systemd-networkd manual pages</a>
@@ -346,7 +379,7 @@ Additional notes on networking:
 
 - Care needs to be taken when editing these files on the device, since
   vi / vim sometimes generates undo files (e.g.
-  `/etc/systemd/network/sfp0.network~`), that systemd-networkd might
+  `/data/network/sfp0.network~`), that systemd-networkd might
   accidentally pick up.
 - Temporarily setting the IP addresses or MTU sizes via `ifconfig` or other
   command line tools will only change the value until the next reboot or reload
@@ -438,10 +471,7 @@ For a list of which arguments can be passed into make(), see Section
  force_reinit          | Force full reinitialization of all subsystems. Will increase init time.      | N310              | force_reinit=1
  master_clock_rate     | Master Clock Rate in Hz                                                      | N310              | master_clock_rate=125e6
  identify              | Causes front-panel LEDs to blink. The duration is variable.                  | N310              | identify=5 (will blink for about 5 seconds)
- serialize_init        | Force serial initialization of daughterboards.                               | All N3xx          | serialize_init=1
- skip_dram             | Ignore DRAM FIFO block. Connect TX streamers straight into DUC or radio.     | All N3xx          | skip_dram=1
- skip_ddc              | Ignore DDC block. Connect Rx streamers straight into radio.                  | All N3xx          | skip_ddc=1
- skip_duc              | Ignore DUC block. Connect Rx streamers or DRAM straight into radio.          | All N3xx          | skip_duc=1
+ serialize_init        | Force serial initialization of motherboards.                                 | All N3xx          | serialize_init=1
  skip_init             | Skip the initialization process for the device.                              | All N3xx          | skip_init=1
  time_source           | Specify the time (PPS) source.                                               | All N3xx          | time_source=internal
  clock_source          | Specify the reference clock source.                                          | All N3xx          | clock_source=internal
@@ -454,6 +484,10 @@ For a list of which arguments can be passed into make(), see Section
  rx_lo_source          | Initialize the source for the RX LO.                                         | N310              | rx_lo_source=external
  tx_lo_source          | Initialize the source for the TX LO.                                         | N310              | tx_lo_source=external
  rfic_digital_loopback | Digital data loopback inside the RFIC.                                       | N310              | rfic_digital_loopback=1
+ tx_gain_profile       | Initialize device with a specific TX gain profile.                           | N310              | tx_gain_profile=manual
+ rx_gain_profile       | Initialize device with a specific RX gain profile.                           | N310              | rx_gain_profile=manual
+ tx_band_map           | Semicolon-separated list of TX band edges.                                   | N310              | tx_band_map=0.0;723.18e6;1623.18e6;3323.18e6
+ rx_band_map           | Semicolon-separated list of RX band edges.                                   | N310              | rx_band_map=0.0;431e6;601e6;1051e6;1601e6;2101e6;2701e6
 
 \subsection n3xx_usage_init Device Initialization
 
@@ -473,6 +507,8 @@ clock_source=external
 
 If you prefer not to have the device initialize on boot, but rather have a fast
 boot time, add the line `skip_boot_init=1` to your `/etc/uhd/mpm.conf` file.
+This will force a full initialization of the device the first time a UHD session
+is started, rather than during device boot.
 
 For more details on the initialization sequence, see the corresponding section
 for the specific N3XX device:
@@ -536,7 +572,7 @@ The following motherboard sensors are always available:
   external reference.
 - `temp`: The temperature of the die itself
 - `fan`: The current fan speed
-- `gps_lock`: GPS lock
+- `gps_locked`: GPS lock
 - `gps_time`: GPS time in seconds sin ce the epch
 - `gps_tpv`: A TPV report from GPSd serialized as JSON
 - `gps_sky`: A SKY report from GPSd serialized as JSON
@@ -566,6 +602,12 @@ a working state). Another update can be launched now to correct the previous,
 failed update, until it works.
 See also Section \ref n3xx_sdcard.
 
+\note Updating devices from the factory-default file system version 3.x to 
+file system versions greater than v4.6: The Mender-based method requires 
+an initial update from the factory-default file system version v3.x to any 
+file system version between v4.0 and v4.5, followed by a second update to file 
+system versions greater than v4.6. 
+
 To initiate an update from the device itself, download a Mender artifact
 containing the update itself. These are files with a `.mender` suffix.
 
@@ -587,10 +629,10 @@ the boot loader knows to permanently boot into this partition:
 
     $ mender commit
 
-To identify the currently installed Mender artifact from the command line, the
-following file can be queried:
+To identify the currently installed Mender artifact from the command line, run
+the following command:
 
-    $ cat /etc/mender/artifact_info
+    $ mender show-artifact
 
 If you are running a hosted server, the updates can be initiated from a web
 dashboard. From there, you can start the updates without having to log into the
@@ -663,6 +705,28 @@ will look like this:
 
 
 \section n3xx_synchronization Clock/Time Synchronization
+
+\subsection n3xx_synchronization_overview Overview
+
+To choose a source for clock (frequency) and PPS (time), use the `clock_source`
+and `time_source` device arguments just like with any other USRP (see also
+\ref page_sync). The following combinations are supported:
+
+`clock_source`  | `time_source`  | Notes
+----------------|----------------|---------------------------------------------
+`internal`      | `internal`     | Default value
+`external`      | `internal`     | The PPS will be generated from the reference signal, but this does not allow time synchronization between devices.
+`external`      | `external`     | The device assumes that the external reference clock and PPS are synchronized.
+`gpsdo`         | `gpsdo`        | This will work even without GPS reception (see below).
+
+The combination of `clock_source=external,time_source=gpsdo` is not available
+out of the box, but can be enabled by patching the MPM source code (n3xx.py).
+This is considered an advanced and unsupported use case. Read the appropriate
+source code for a description of drawbacks. Using this mode will cause unreliable
+phase alignment.
+
+See the following sections for more details on the individual synchronization
+options.
 
 \subsection n3xx_synchronization_internal Internal references
 
@@ -1062,6 +1126,11 @@ clock_source=external
 If you prefer not to have the device initialize on boot, but rather have a fast
 boot time, add the line `skip_boot_init=1` to your `/etc/uhd/mpm.conf` file.
 
+If there are multiple N3x0 devices in a single UHD session, they will be
+initialized in parallel. Note that this behaviour can be changed serial
+initialization by adding `serialize_init=1` to the device args
+(see \ref n3xx_usage_device_args).
+
 \subsection n3xx_mg_calibrations RF Calibrations
 
 The onboard RFIC (AD9371) has built-in calibrations which can be enabled from
@@ -1336,6 +1405,138 @@ where FLAGS is the hex number that you can construct with the following table of
 For example, to set your device to auto-boot, with TPM, the flag value is 0x1, so
 
     $ eeprom-set-flags 0x1
+
+\subsection n3xx_mg_gain_profiles Gain Profiles
+
+The N310 supports four gain profiles: `default`, `manual`,
+`default_rf_filter_bypass_always_on`, and `default_rf_filter_bypass_always_off`.
+
+Usually, UHD will program individual gain components to create an overall gain
+that is selected. The N310 daughterboards have three gain stages per path (two
+digital step attenuators (DSAs), and one amplifier).  When using the `manual`
+profile, the DSAs and amplifiers can be programmed directly. In the other gain
+profiles, a single, overall gain can be given, and UHD will attempt to program
+the gain stages based on hard-coded gain tables. The difference between the
+three "default" profiles is how the amplifier is used: Either it is always on,
+always off, or it is switched on and off to optimize linearity.
+
+\subsection n3xx_mg_custom_band_edges Custom Band Edges
+
+\b Note: This is a highly advanced feature. Most users will not have to use this!
+
+The N310 daughterboard splits the TX and RX paths into 4 and 7 different bands,
+respectively, to hardware-optimize the RF fidelity at all available frequencies.
+
+See the [schematics](https://kb.ettus.com/N300/N310#Schematics) for more details.
+
+Using the `rx_band_map` and `tx_band_map` device args, it is possible to move
+the band edges in software. This may be useful if the hardware was modified to
+use different filters, for example, because a signal of interest always falls
+onto a band edge. Using the `tx_band_map` or `rx_band_map` device arguments,
+you can provide a list of lower band edges for every band. Make sure to provide
+4 (for Tx) or 7 (for Rx) floating-point values. The first value should always be
+zero (0.0). It may make sense to encode these values in your `uhd.conf` file:
+
+~~~{.ini}
+[type=n3xx]
+rx_gain_profile=default_rf_filter_bypass_always_off
+tx_gain_profile=default_rf_filter_bypass_always_on
+rx_band_map=0.0;431e6;601e6;1051e6;1601e6;2101e6;2701e6
+tx_band_map=0.0;723.18e6;1623.18e6;3323.18e6
+~~~
+
+In this example, the second Rx band would start at 431 MHz.
+=======
+\subsection n3xx_filter_api Filter API
+
+The N300/N310 utilize the Analog Devices AD9371 AFE which contain programmable
+FIR filters in both the transmit and receive paths for each of the RF channels.
+These filters are available using the Digital Filter API in UHD.
+
+| Filter Name | AD9371 Channel | Max Taps |
+|-------------|----------------|----------|
+| RX1_FIR     | 1              | 48       |
+| RX2_FIR     | 2              | 48       |
+| RX1RX2_FIR  | 1 and 2        | 48       |
+| TX1_FIR     | 1              | 32       |
+| TX2_FIR     | 2              | 32       |
+| TX1TX2_FIR  | 1 and 2        | 32       |
+
+Each filter is applied at 2x the `master_clock_rate`, or 250 MHz by default.
+
+The Filter API also allows to set some 3 dB analog filters on the AD9371 through
+the `set_tx_bandwidth` and `set_rx_bandwidth` UHD functions.
+
+This is a small example on how to set the TX FIR and TX bandwidth.
+~~~{.cpp}
+// Create my USRP object
+auto usrp = uhd::usrp::multi_usrp::make(args);
+
+// Set to use channel 3
+auto chan = 3;
+
+// Set the Analog Bandwidth to be 20 MHz wide
+auto bw = 20e6;
+
+// Get the names of the filters
+auto tx_names = usrp->get_tx_filter_names(chan);
+
+// Get the first filter and print out the filter properties
+auto filt = usrp->get_tx_filter(tx_names[0], chan);
+
+// Some taps for our coefficients
+const std::vector<int16_t> taps{
+           0,
+          42,
+         169,
+         374,
+         650,
+         987,
+        1371,
+        1786,
+        2215,
+        2641,
+        3045,
+        3412,
+        3726,
+        3973,
+        4144,
+        4232,
+        4232,
+        4144,
+        3973,
+        3726,
+        3412,
+        3045,
+        2641,
+        2215,
+        1786,
+        1371,
+         987,
+         650,
+         374,
+         169,
+          42,
+           0
+};
+
+// Create a custom filter with taps as our coefficients
+auto filter(std::make_shared<uhd::digital_filter_fir<int16_t>>(
+     uhd::filter_info_base::filter_type::DIGITAL_FIR_I16,
+     false,
+     0,
+     1.0,
+     1,
+     1,
+     32767,
+     32,
+     taps)
+);
+
+// Apply the filter to the channel
+usrp->set_tx_bandwidth(bw, chan);
+usrp->set_tx_filter(tx_names[0], filter, chan);
+~~~
 
 \section n3xx_rh N32x-specific Features
 

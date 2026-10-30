@@ -7,13 +7,13 @@
 #include <uhd/exception.hpp>
 #include <uhd/rfnoc/constants.hpp>
 #include <uhd/rfnoc/defaults.hpp>
+#include <uhd/rfnoc/detail/graph.hpp>
 #include <uhd/rfnoc/mb_controller.hpp>
 #include <uhd/rfnoc/noc_block_make_args.hpp>
 #include <uhd/rfnoc/node.hpp>
 #include <uhd/rfnoc_graph.hpp>
 #include <uhdlib/rfnoc/block_container.hpp>
 #include <uhdlib/rfnoc/factory.hpp>
-#include <uhdlib/rfnoc/graph.hpp>
 #include <uhdlib/rfnoc/graph_stream_manager.hpp>
 #include <uhdlib/rfnoc/rfnoc_device.hpp>
 #include <uhdlib/rfnoc/rfnoc_rx_streamer.hpp>
@@ -58,7 +58,24 @@ struct route_info_t
     graph_edge_t src_static_edge;
     graph_edge_t dst_static_edge;
 };
+
 } // namespace
+
+// Define an attorney to limit access to noc_block_base internals
+class rfnoc_graph_impl;
+namespace uhd { namespace rfnoc {
+
+class block_initializer
+{
+    static void post_init(noc_block_base::sptr block)
+    {
+        block->post_init();
+    }
+    friend rfnoc_graph_impl;
+};
+
+}} // namespace uhd::rfnoc
+
 
 class rfnoc_graph_impl : public rfnoc_graph
 {
@@ -66,13 +83,11 @@ public:
     /**************************************************************************
      * Structors
      *************************************************************************/
-    rfnoc_graph_impl(
-        detail::rfnoc_device::sptr dev, const uhd::device_addr_t& dev_addr) try
-        : _device(dev),
-          _tree(_device->get_tree()),
-          _num_mboards(_tree->list("/mboards").size()),
-          _block_registry(std::make_unique<detail::block_container_t>()),
-          _graph(std::make_unique<uhd::rfnoc::detail::graph_t>()) {
+    rfnoc_graph_impl(detail::rfnoc_device::sptr dev, const uhd::device_addr_t& dev_addr)
+    try : _device(dev), _tree(_device->get_tree()),
+        _num_mboards(_tree->list("/mboards").size()),
+        _block_registry(std::make_unique<detail::block_container_t>()),
+        _graph(std::make_unique<uhd::rfnoc::detail::graph_t>()) {
         _mb_controllers.reserve(_num_mboards);
         // Now initialize all subsystems:
         _init_io_srv_mgr(dev_addr); // Global I/O Service Manager
@@ -211,7 +226,7 @@ public:
         size_t src_port,
         const block_id_t& dst_blk,
         size_t dst_port,
-        bool skip_property_propagation) override
+        bool is_back_edge) override
     {
         if (!has_block(src_blk)) {
             throw uhd::lookup_error(
@@ -229,7 +244,7 @@ public:
             get_block(dst_blk),
             dst_port,
             edge_type,
-            skip_property_propagation);
+            is_back_edge);
     }
 
     void disconnect(const block_id_t& src_blk,
@@ -435,16 +450,24 @@ public:
         const size_t num_ports, const uhd::stream_args_t& args) override
     {
         auto this_graph = shared_from_this();
-        return std::make_shared<rfnoc_rx_streamer>(
-            num_ports, args, [this_graph](const std::string& id) { this_graph->disconnect(id); });
+        auto args_copy  = args;
+        args_copy.args["__chdr_width"] =
+            std::to_string(chdr_w_to_bits(_device->get_mb_iface(0).get_chdr_w()));
+        return std::make_shared<rfnoc_rx_streamer>(num_ports,
+            args_copy,
+            [this_graph](const std::string& id) { this_graph->disconnect(id); });
     }
 
     uhd::tx_streamer::sptr create_tx_streamer(
         const size_t num_ports, const uhd::stream_args_t& args) override
     {
         auto this_graph = shared_from_this();
-        return std::make_shared<rfnoc_tx_streamer>(
-            num_ports, args, [this_graph](const std::string& id) { this_graph->disconnect(id); });
+        auto args_copy  = args;
+        args_copy.args["__chdr_width"] =
+            std::to_string(chdr_w_to_bits(_device->get_mb_iface(0).get_chdr_w()));
+        return std::make_shared<rfnoc_tx_streamer>(num_ports,
+            args_copy,
+            [this_graph](const std::string& id) { this_graph->disconnect(id); });
     }
 
     size_t get_num_mboards() const override
@@ -561,11 +584,23 @@ public:
     void commit() override
     {
         _graph->commit();
+        UHD_LOG_TRACE(LOG_ID, "new graph committed" << std::endl << _graph->to_dot());
     }
 
     void release() override
     {
         _graph->release();
+    }
+
+    std::string to_dot() override
+    {
+        return _graph->to_dot();
+    }
+
+    chdr_w_t get_chdr_width(const size_t mb_index) const override
+    {
+        UHD_ASSERT_THROW(mb_index < _num_mboards);
+        return _device->get_mb_iface(mb_index).get_chdr_w();
     }
 
 private:
@@ -603,7 +638,7 @@ private:
                     + std::to_string(chdr_w_to_bits(chdr_w)) + " but device "
                     + std::to_string(mb_idx) + " has CHDR width of "
                     + std::to_string(
-                          chdr_w_to_bits(_device->get_mb_iface(mb_idx).get_chdr_w()))
+                        chdr_w_to_bits(_device->get_mb_iface(mb_idx).get_chdr_w()))
                     + " bits!");
             }
             if (_device->get_mb_iface(mb_idx).get_endianness() != endianness) {
@@ -701,16 +736,19 @@ private:
             //   object on the fly here.
             // - In all other cases, the BSP must provide us that clock
             //   iface object through the mb_iface
-            auto ctrlport_clk_iface = mb.get_clock_iface(block_factory_info.ctrlport_clk);
-            auto tb_clk_iface       = (block_factory_info.timebase_clk == CLOCK_KEY_GRAPH)
+            auto ctrlport_clk_iface = mb.get_clock_iface(
+                block_factory_info.ctrlport_clk, block_info.ctrl_clk_idx);
+            auto tb_clk_iface = (block_factory_info.timebase_clk == CLOCK_KEY_GRAPH)
                                     ? std::make_shared<clock_iface>(CLOCK_KEY_GRAPH)
-                                    : mb.get_clock_iface(block_factory_info.timebase_clk);
+                                    : mb.get_clock_iface(block_factory_info.timebase_clk,
+                                        block_info.tb_clk_idx);
             // A "graph" clock is always "running"
             if (block_factory_info.timebase_clk == CLOCK_KEY_GRAPH) {
                 tb_clk_iface->set_running(true);
             }
             auto block_reg_iface = _gsm->get_block_register_iface(
                 ctrl_sep_addr, portno, *ctrlport_clk_iface.get(), *tb_clk_iface.get());
+            block_reg_iface->set_block_id(block_id.to_string());
             auto make_args_uptr      = std::make_unique<noc_block_base::make_args_t>();
             make_args_uptr->noc_id   = noc_id;
             make_args_uptr->block_id = block_id;
@@ -718,6 +756,7 @@ private:
             make_args_uptr->num_output_ports = block_info.num_outputs;
             make_args_uptr->mtu =
                 (1 << block_info.data_mtu) * chdr_w_to_bits(mb.get_chdr_w()) / 8;
+            make_args_uptr->chdr_w             = mb.get_chdr_w();
             make_args_uptr->reg_iface          = block_reg_iface;
             make_args_uptr->tb_clk_iface       = tb_clk_iface;
             make_args_uptr->ctrlport_clk_iface = ctrlport_clk_iface;
@@ -730,6 +769,7 @@ private:
             try {
                 _block_registry->register_block(
                     block_factory_info.factory_fn(std::move(make_args_uptr)));
+                block_initializer::post_init(_block_registry->get_block(block_id));
             } catch (...) {
                 UHD_LOG_ERROR(
                     LOG_ID, "Error during initialization of block " << block_id << "!");
@@ -804,10 +844,9 @@ private:
         std::shared_ptr<node_t> dst_blk,
         size_t dst_port,
         graph_edge_t::edge_t edge_type,
-        bool skip_property_propagation)
+        bool is_back_edge)
     {
-        graph_edge_t edge_info(
-            src_port, dst_port, edge_type, not skip_property_propagation);
+        graph_edge_t edge_info(src_port, dst_port, edge_type, not is_back_edge);
         edge_info.src_blockid = src_blk->get_unique_id();
         edge_info.dst_blockid = dst_blk->get_unique_id();
         _graph->connect(src_blk.get(), dst_blk.get(), edge_info);
@@ -1063,10 +1102,9 @@ rfnoc_graph::sptr make_rfnoc_graph(
 
     // Check if a graph was already created for this device
     std::lock_guard<std::mutex> lock(_map_mutex);
-    if (dev_to_graph.count(dev) and not dev_to_graph[dev].expired()) {
-        graph = dev_to_graph[dev].lock();
-        if (graph != nullptr) {
-            return graph;
+    if (dev_to_graph.count(dev)) {
+        if (rfnoc_graph::sptr p = dev_to_graph[dev].lock()) {
+            return p;
         }
     }
 
@@ -1088,5 +1126,5 @@ rfnoc_graph::sptr rfnoc_graph::make(const uhd::device_addr_t& device_addr)
         throw uhd::key_error(std::string("No RFNoC devices found for ----->\n")
                              + device_addr.to_pp_string());
     }
-    return std::make_shared<rfnoc_graph_impl>(dev, device_addr);
+    return detail::make_rfnoc_graph(dev, device_addr);
 }

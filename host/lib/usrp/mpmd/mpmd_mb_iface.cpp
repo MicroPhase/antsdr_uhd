@@ -8,11 +8,19 @@
 #include "mpmd_mb_iface.hpp"
 #include "mpmd_link_if_mgr.hpp"
 #include <uhd/exception.hpp>
+#include <uhd/rfnoc/defaults.hpp>
+#include <uhd/utils/compat_check.hpp>
 #include <uhd/utils/log.hpp>
 #include <uhdlib/rfnoc/device_id.hpp>
 
 using namespace uhd::rfnoc;
 using namespace uhd::mpmd;
+
+namespace {
+
+constexpr uhd::compat_num<size_t, size_t> REMOTE_XPORT_CAP_MIN{4, 3};
+
+}
 
 static uhd::usrp::io_service_args_t get_default_io_srv_args()
 {
@@ -31,6 +39,12 @@ mpmd_mboard_impl::mpmd_mb_iface::mpmd_mb_iface(
     _remote_device_id = allocate_device_id();
     UHD_LOG_TRACE("MPMD::MB_IFACE", "Assigning device_id " << _remote_device_id);
     _rpc->notify_with_token("set_device_id", _remote_device_id);
+
+    // Check for remote streaming capabilities
+    auto compat_num = rpc->request<std::vector<size_t>>("get_mpm_compat_num");
+    _has_remote_xport_capability =
+        uhd::compat_num<size_t, size_t>(compat_num[0], compat_num[1])
+        >= REMOTE_XPORT_CAP_MIN;
 }
 
 /******************************************************************************
@@ -143,14 +157,36 @@ void mpmd_mboard_impl::mpmd_mb_iface::reset_network()
 }
 
 uhd::rfnoc::clock_iface::sptr mpmd_mboard_impl::mpmd_mb_iface::get_clock_iface(
-    const std::string& clock_name)
+    const std::string& clock_name, const uint8_t clock_idx)
 {
-    if (_clock_ifaces.count(clock_name)) {
-        return _clock_ifaces.at(clock_name);
+    // In MPM, get_clocks() only provides clocks by a string index. For any clock
+    // that is not known by name (i.e., the standard clocks such as radio_clk),
+    // we simply pretend the index number as a string is its name.
+    const bool auto_clk_idx   = clock_name == CLOCK_KEY_AUTO;
+    const std::string clk_key = auto_clk_idx ? std::to_string(int(clock_idx))
+                                             : clock_name;
+    // clock_idx is a 6-bit value. If the clock index is 0, but we want to
+    // auto-derive the clock attributes, then that means we have an old bitfile
+    // where the clock ID bits are not populated.  (0 is the default value for
+    // these bits prior to these changes). If we read back 0x3F (0b111111),
+    // then that's the new default value for the clock ID. This means we have
+    // built a bitfile off of up-to-date HDL, but the block never set the clock
+    // info.
+    if (auto_clk_idx && (clock_idx == 0x00 || clock_idx == 0x3F)) {
+        UHD_LOG_THROW(uhd::not_implemented_error,
+            "MPMD::MB_IFACE",
+            "Automatic clock detection requested, but no valid clock index given ("
+                << std::hex << clk_key << "). Make sure FPGA bitfile is up to date!");
+    }
+    if (_clock_ifaces.count(clk_key)) {
+        UHD_LOG_TRACE(
+            "MPMD::MB_IFACE", "Looking up clock info for clock ID '" << clk_key << "'");
+        return _clock_ifaces.at(clk_key);
     } else {
-        UHD_LOG_ERROR("MPMD::MB_IFACE", "Invalid timebase clock name: " + clock_name);
-        throw uhd::key_error(
-            "[MPMD_MB::IFACE] Invalid timebase clock name: " + clock_name);
+        UHD_LOG_THROW(uhd::key_error,
+            "MPMD::MB_IFACE",
+            "Unable to look up clock '" << clk_key << "'. Invalid "
+                                        << (auto_clk_idx ? "index" : "clock name"));
     }
 }
 
@@ -182,7 +218,7 @@ uhd::rfnoc::chdr_ctrl_xport::sptr mpmd_mboard_impl::mpmd_mb_iface::make_ctrl_tra
         recv_link, send_link, transport::link_type_t::CTRL);
 
     auto pkt_factory = _link_if_mgr->get_packet_factory(link_idx);
-    auto io_srv_mgr = this->get_io_srv_mgr();
+    auto io_srv_mgr  = this->get_io_srv_mgr();
     auto xport       = uhd::rfnoc::chdr_ctrl_xport::make(io_srv,
         send_link,
         recv_link,
@@ -260,7 +296,7 @@ mpmd_mboard_impl::mpmd_mb_iface::make_rx_data_transport(
 
     // Create the data transport
     auto pkt_factory = _link_if_mgr->get_packet_factory(link_idx);
-    auto io_srv_mgr = this->get_io_srv_mgr();
+    auto io_srv_mgr  = this->get_io_srv_mgr();
     auto fc_params   = chdr_rx_data_xport::configure_sep(cfg_io_srv,
         recv_link,
         send_link,
@@ -273,6 +309,7 @@ mpmd_mboard_impl::mpmd_mb_iface::make_rx_data_transport(
         fc_freq,
         fc_headroom,
         lossy_xport,
+        xport_args,
         [io_srv_mgr, recv_link, send_link]() {
             io_srv_mgr->disconnect_links(recv_link, send_link);
         });
@@ -343,9 +380,9 @@ mpmd_mboard_impl::mpmd_mb_iface::make_tx_data_transport(
     auto cfg_io_srv = get_io_srv_mgr()->connect_links(
         recv_link, send_link, transport::link_type_t::CTRL);
 
-    auto pkt_factory         = _link_if_mgr->get_packet_factory(link_idx);
-    auto io_srv_mgr = this->get_io_srv_mgr();
-    const auto buff_capacity = chdr_tx_data_xport::configure_sep(cfg_io_srv,
+    auto pkt_factory                  = _link_if_mgr->get_packet_factory(link_idx);
+    auto io_srv_mgr                   = this->get_io_srv_mgr();
+    const auto [fc_params, strc_pyld] = chdr_tx_data_xport::configure_sep(cfg_io_srv,
         recv_link,
         send_link,
         pkt_factory,
@@ -353,6 +390,7 @@ mpmd_mboard_impl::mpmd_mb_iface::make_tx_data_transport(
         epids,
         pyld_buff_fmt,
         mdata_buff_fmt,
+        xport_args,
         fc_freq_ratio,
         fc_headroom_ratio,
         [io_srv_mgr, recv_link, send_link]() {
@@ -376,10 +414,53 @@ mpmd_mboard_impl::mpmd_mb_iface::make_tx_data_transport(
         pkt_factory,
         epids,
         send_link->get_num_send_frames(),
-        buff_capacity,
+        fc_params,
+        strc_pyld,
         [io_srv_mgr, recv_link, send_link]() {
             io_srv_mgr->disconnect_links(recv_link, send_link);
         });
 
     return tx_xport;
+}
+
+std::map<std::string, uhd::device_addr_t>
+mpmd_mboard_impl::mpmd_mb_iface::get_chdr_xport_adapters()
+{
+    if (!_has_remote_xport_capability) {
+        return {};
+    }
+
+    // Note: If MPM is capable, but the FPGA is not, then MPM will return an
+    // empty list here.
+    const auto xport_adapters = _rpc->request_with_token<
+        std::map<std::string, std::map<std::string, std::string>>>(
+        "get_chdr_xport_adapters");
+
+    // Convert to UHD data type and return
+    std::map<std::string, uhd::device_addr_t> return_val;
+    for (auto& adapter_info : xport_adapters) {
+        return_val.insert({adapter_info.first, uhd::device_addr_t(adapter_info.second)});
+    }
+    return return_val;
+}
+
+int mpmd_mboard_impl::mpmd_mb_iface::add_remote_chdr_route(const std::string& adapter_id,
+    const uhd::rfnoc::sep_id_t epid,
+    const uhd::device_addr_t& route_args)
+{
+    if (!_has_remote_xport_capability) {
+        throw uhd::not_implemented_error("This version of MPM does not have the "
+                                         "capability to add remote CHDR routes!");
+    }
+    const auto adapters = get_chdr_xport_adapters();
+    if (!adapters.count(adapter_id)) {
+        throw uhd::value_error(
+            "Invalid adapter for creating a remote route: " + adapter_id);
+    }
+    std::map<std::string, std::string> route_args_map;
+    for (const auto& key : route_args.keys()) {
+        route_args_map[key] = route_args.get(key);
+    }
+    return _rpc->request_with_token<int>(
+        "add_remote_chdr_route", adapter_id, epid, route_args_map);
 }

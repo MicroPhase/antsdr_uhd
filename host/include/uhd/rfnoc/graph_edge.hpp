@@ -33,11 +33,8 @@ struct UHD_API graph_edge_t
     graph_edge_t(const size_t src_port_,
         const size_t dst_port_,
         const edge_t edge_,
-        const bool ppa)
-        : src_port(src_port_)
-        , dst_port(dst_port_)
-        , edge(edge_)
-        , property_propagation_active(ppa)
+        const bool fwd_edge)
+        : src_port(src_port_), dst_port(dst_port_), edge(edge_), is_forward_edge(fwd_edge)
     {
     }
 
@@ -51,23 +48,34 @@ struct UHD_API graph_edge_t
     size_t dst_port = 0;
     //! The type of edge
     edge_t edge = DYNAMIC;
-    //! When true, the framework will use this edge for property propagation
-    bool property_propagation_active = true;
+    //! When false, the framework will assume this is a back-edge. Back-edges
+    // are not used for sorting the graph as a DAG.
+    bool is_forward_edge = true;
 
+    //! Equality operator: Compare two edges if they match, including edge
+    // properties.
     bool operator==(const graph_edge_t& rhs) const
     {
-        return std::tie(src_blockid,
-                   src_port,
-                   dst_blockid,
-                   dst_port,
-                   edge,
-                   property_propagation_active)
-               == std::tie(rhs.src_blockid,
-                      rhs.src_port,
-                      rhs.dst_blockid,
-                      rhs.dst_port,
-                      rhs.edge,
-                      rhs.property_propagation_active);
+        return is_equal(rhs, true);
+    }
+
+    /*! Equality comparison of two edges.
+     *
+     * If \p match_properties is false, this compares two edges to test if they
+     * have the same direction, source port, and destination port.
+     * If \p match_properties is true, then it also tests if all the edge
+     * properties match (edge type, back-edge).
+     *
+     * \returns true if edges match.
+     */
+    bool is_equal(const graph_edge_t& rhs, const bool match_properties = false) const
+    {
+        return (std::tie(src_blockid, src_port, dst_blockid, dst_port)
+                   == std::tie(
+                       rhs.src_blockid, rhs.src_port, rhs.dst_blockid, rhs.dst_port))
+               && (match_properties ? (std::tie(edge, is_forward_edge)
+                                       == std::tie(rhs.edge, rhs.is_forward_edge))
+                                    : true);
     }
 
     //! Return a string representation of the connection

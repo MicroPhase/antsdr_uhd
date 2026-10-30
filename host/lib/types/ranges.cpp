@@ -44,7 +44,7 @@ double range_t::step(void) const
     return _step;
 }
 
-const std::string range_t::to_pp_string(void) const
+std::string range_t::to_pp_string(void) const
 {
     std::stringstream ss;
     ss << "(" << this->start();
@@ -90,6 +90,40 @@ meta_range_t::meta_range_t(double start, double stop, double step)
     : std::vector<range_t>(1, range_t(start, stop, step))
 {
     /* NOP */
+}
+
+meta_range_t meta_range_t::as_monotonic() const
+{
+    try {
+        check_meta_range_monotonic(*this);
+    } catch (const uhd::value_error& e) {
+        meta_range_t result;
+        for (const auto& range : *this) {
+            if (range.step() != 0.0) {
+                throw uhd::value_error("Cannot monotonize meta_range which contains "
+                                       "non-continuous subranges");
+            }
+            result.push_back(range);
+        }
+
+        std::sort(result.begin(), result.end(), [](const range_t& a, const range_t& b) {
+            return a.start() < b.start();
+        });
+
+        // Merge overlapping
+        size_t i = 1;
+        while (i < result.size()) {
+            if (result[i - 1].stop() > result[i].start()) {
+                const auto new_stop = std::max(result[i - 1].stop(), result[i].stop());
+                result[i - 1]       = range_t(result[i - 1].start(), new_stop, 0.0);
+                result.erase(result.begin() + i);
+            } else {
+                i++;
+            }
+        }
+        return result;
+    }
+    return *this;
 }
 
 double meta_range_t::start(void) const
@@ -156,7 +190,7 @@ double meta_range_t::clip(double value, bool clip_step) const
     return last_stop;
 }
 
-const std::string meta_range_t::to_pp_string(void) const
+std::string meta_range_t::to_pp_string(void) const
 {
     std::stringstream ss;
     for (const range_t& r : (*this)) {

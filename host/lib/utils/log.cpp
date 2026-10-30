@@ -21,19 +21,22 @@
 #include <memory>
 #include <mutex>
 #include <thread>
+#ifdef HAVE_DPDK
+#    include <uhdlib/transport/dpdk/common.hpp>
+#endif
 
 namespace pt = boost::posix_time;
 
 // Don't make these static const std::string -- we need their lifetime guaranteed!
-#define PURPLE "\033[0;35m" // purple
-#define BLUE "\033[1;34m" // blue
-#define GREEN "\033[0;32m" // green
-#define YELLOW "\033[0;33m" // yellow
-#define BYELLOW "\033[1;33m" // yellow
-#define RED "\033[0;31m" // red
-#define BRED "\033[1;31m" // bright red
+#define PURPLE        "\033[0;35m" // purple
+#define BLUE          "\033[1;34m" // blue
+#define GREEN         "\033[0;32m" // green
+#define YELLOW        "\033[0;33m" // yellow
+#define BYELLOW       "\033[1;33m" // yellow
+#define RED           "\033[0;31m" // red
+#define BRED          "\033[1;31m" // bright red
 #define RED_ON_YELLOW "\033[0;31;43m" // bright red
-#define RESET_COLORS "\033[0;39m" // reset colors
+#define RESET_COLORS  "\033[0;39m" // reset colors
 
 /***********************************************************************
  * Helpers
@@ -99,6 +102,35 @@ inline std::string path_to_filename(std::string path)
 }
 
 } // namespace
+
+namespace uhd { namespace log {
+
+boost::optional<uhd::log::severity_level> parse_log_level_from_string(
+    const std::string& log_level_str)
+{
+    if (std::isdigit(log_level_str[0])) {
+        const uhd::log::severity_level log_level_num =
+            uhd::log::severity_level(std::stoi(log_level_str));
+        if (log_level_num >= uhd::log::trace && log_level_num <= uhd::log::fatal) {
+            return log_level_num;
+        } else {
+            std::cerr << "[LOG] Failed to set log level to: " << log_level_str;
+            return boost::none;
+        }
+    }
+
+#define if_loglevel_equal(name) else if (log_level_str == #name) return uhd::log::name
+    if_loglevel_equal(trace);
+    if_loglevel_equal(debug);
+    if_loglevel_equal(info);
+    if_loglevel_equal(warning);
+    if_loglevel_equal(error);
+    if_loglevel_equal(fatal);
+    if_loglevel_equal(off);
+    return boost::none;
+}
+
+}} // namespace uhd::log
 
 /***********************************************************************
  * Logger backends
@@ -178,7 +210,7 @@ private:
  **********************************************************************/
 
 #define UHD_CONSOLE_LOGGER_KEY "console"
-#define UHD_FILE_LOGGER_KEY "file"
+#define UHD_FILE_LOGGER_KEY    "file"
 
 class log_resource
 {
@@ -214,8 +246,11 @@ public:
         {
             std::ostringstream sys_info;
             sys_info << BOOST_PLATFORM << "; " << BOOST_COMPILER << "; "
-                     << "Boost_" << BOOST_VERSION << "; " << uhd::get_component() << "_"
-                     << uhd::get_version_string();
+                     << "Boost_" << BOOST_VERSION << "; "
+#ifdef HAVE_DPDK
+                     << "DPDK_" << RTE_VER_YEAR << "." << RTE_VER_MONTH << "; "
+#endif
+                     << uhd::get_component() << "_" << uhd::get_version_string();
             _publish_log_msg(sys_info.str(), uhd::log::info, "UHD");
         }
 
@@ -266,7 +301,7 @@ public:
             __FILE__,
             __LINE__,
             "LOGGING",
-            boost::this_thread::get_id());
+            std::this_thread::get_id());
         final_message.message = "";
         push(final_message);
 #    ifndef UHD_LOG_FASTPATH_DISABLE
@@ -407,26 +442,13 @@ private:
     uhd::log::severity_level _get_log_level(
         const std::string& log_level_str, const uhd::log::severity_level& previous_level)
     {
-        if (std::isdigit(log_level_str[0])) {
-            const uhd::log::severity_level log_level_num =
-                uhd::log::severity_level(std::stoi(log_level_str));
-            if (log_level_num >= uhd::log::trace and log_level_num <= uhd::log::fatal) {
-                return log_level_num;
-            } else {
-                std::cerr << "[LOG] Failed to set log level to: " << log_level_str;
-                return previous_level;
-            }
+        boost::optional<uhd::log::severity_level> parsed_level =
+            uhd::log::parse_log_level_from_string(log_level_str);
+        if (parsed_level) {
+            return *parsed_level;
+        } else {
+            return previous_level;
         }
-
-#define if_loglevel_equal(name) else if (log_level_str == #name) return uhd::log::name
-        if_loglevel_equal(trace);
-        if_loglevel_equal(debug);
-        if_loglevel_equal(info);
-        if_loglevel_equal(warning);
-        if_loglevel_equal(error);
-        if_loglevel_equal(fatal);
-        if_loglevel_equal(off);
-        return previous_level;
     }
 
     void _setup_console_logging()
@@ -482,7 +504,7 @@ private:
             __FILE__,
             __LINE__,
             component,
-            boost::this_thread::get_id());
+            std::this_thread::get_id());
         log_msg.message = msg;
         _log_queue.push_with_timed_wait(log_msg, 0.25);
     }
@@ -506,7 +528,7 @@ uhd::_log::log::log(const uhd::log::severity_level verbosity,
     const std::string& file,
     const unsigned int line,
     const std::string& component,
-    const boost::thread::id thread_id)
+    const std::thread::id thread_id)
     : _log_it(verbosity >= log_rs().global_level)
 {
     if (_log_it) {

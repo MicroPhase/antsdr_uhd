@@ -1,0 +1,4 @@
+*~
+*.pyc
+*.pyo
+examples/grc/*.py

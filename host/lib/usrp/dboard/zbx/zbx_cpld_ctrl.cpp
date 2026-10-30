@@ -273,7 +273,10 @@ void zbx_cpld_ctrl::set_tx_antenna_switches(
                 {tx_amp::HIGHBAND, {zbx_cpld_regs_t::TX0_ANT_11_HIGHBAND_AMP, zbx_cpld_regs_t::TX0_ANT_10_HIGHBAND_AMP}}
             };
             // clang-format on
-            std::tie(_regs.TX0_ANT_11[idx], _regs.TX0_ANT_10[idx]) = amp_map.at(amp);
+            if (idx == ATR_ADDR_TX || idx == ATR_ADDR_XX) {
+                _regs.TX0_ANT_11[idx] = std::get<0>(amp_map.at(amp));
+            }
+            _regs.TX0_ANT_10[idx] = std::get<1>(amp_map.at(amp));
         } else if (antenna == ANTENNA_CAL_LOOPBACK) {
             _regs.TX0_ANT_10[idx] = zbx_cpld_regs_t::TX0_ANT_10_CAL_LOOPBACK;
             _regs.RX0_ANT_1[idx]  = zbx_cpld_regs_t::RX0_ANT_1_CAL_LOOPBACK;
@@ -294,7 +297,10 @@ void zbx_cpld_ctrl::set_tx_antenna_switches(
                 {tx_amp::HIGHBAND, {zbx_cpld_regs_t::TX1_ANT_11_HIGHBAND_AMP, zbx_cpld_regs_t::TX1_ANT_10_HIGHBAND_AMP}}
             };
             // clang-format on
-            std::tie(_regs.TX1_ANT_11[idx], _regs.TX1_ANT_10[idx]) = amp_map.at(amp);
+            if (idx == ATR_ADDR_TX || idx == ATR_ADDR_XX) {
+                _regs.TX1_ANT_11[idx] = std::get<0>(amp_map.at(amp));
+            }
+            _regs.TX1_ANT_10[idx] = std::get<1>(amp_map.at(amp));
         } else if (antenna == ANTENNA_CAL_LOOPBACK) {
             _regs.TX1_ANT_10[idx] = zbx_cpld_regs_t::TX1_ANT_10_CAL_LOOPBACK;
             _regs.RX1_ANT_1[idx]  = zbx_cpld_regs_t::RX1_ANT_1_CAL_LOOPBACK;
@@ -616,15 +622,15 @@ void zbx_cpld_ctrl::set_leds(const size_t channel,
 {
     UHD_ASSERT_THROW(channel < ZBX_NUM_CHANS);
     if (channel == 0) {
-        _regs.RX0_RX_LED[idx] = rx ? zbx_cpld_regs_t::RX0_RX_LED_ENABLE
-                                   : zbx_cpld_regs_t::RX0_RX_LED_DISABLE;
+        _regs.RX0_RX_LED[idx]  = rx ? zbx_cpld_regs_t::RX0_RX_LED_ENABLE
+                                    : zbx_cpld_regs_t::RX0_RX_LED_DISABLE;
         _regs.RX0_TRX_LED[idx] = trx_rx ? zbx_cpld_regs_t::RX0_TRX_LED_ENABLE
                                         : zbx_cpld_regs_t::RX0_TRX_LED_DISABLE;
         _regs.TX0_TRX_LED[idx] = trx_tx ? zbx_cpld_regs_t::TX0_TRX_LED_ENABLE
                                         : zbx_cpld_regs_t::TX0_TRX_LED_DISABLE;
     } else {
-        _regs.RX1_RX_LED[idx] = rx ? zbx_cpld_regs_t::RX1_RX_LED_ENABLE
-                                   : zbx_cpld_regs_t::RX1_RX_LED_DISABLE;
+        _regs.RX1_RX_LED[idx]  = rx ? zbx_cpld_regs_t::RX1_RX_LED_ENABLE
+                                    : zbx_cpld_regs_t::RX1_RX_LED_DISABLE;
         _regs.RX1_TRX_LED[idx] = trx_rx ? zbx_cpld_regs_t::RX1_TRX_LED_ENABLE
                                         : zbx_cpld_regs_t::RX1_TRX_LED_DISABLE;
         _regs.TX1_TRX_LED[idx] = trx_tx ? zbx_cpld_regs_t::TX1_TRX_LED_ENABLE
@@ -858,7 +864,7 @@ void zbx_cpld_ctrl::_lo_spi_transact(const zbx_lo_t lo,
     _regs.DATA      = data;
     _regs.READ_FLAG = (xact_type == spi_xact_t::WRITE) ? zbx_cpld_regs_t::READ_FLAG_WRITE
                                                        : zbx_cpld_regs_t::READ_FLAG_READ;
-    _regs.LO_SELECT         = zbx_cpld_regs_t::LO_SELECT_t(lo);
+    _regs.LO_SELECT = zbx_cpld_regs_t::LO_SELECT_t(lo);
     _regs.START_TRANSACTION = zbx_cpld_regs_t::START_TRANSACTION_ENABLE;
     _poke32(_lo_spi_offset, _regs.get_reg(_lo_spi_offset), chan);
     _regs.START_TRANSACTION = zbx_cpld_regs_t::START_TRANSACTION_DISABLE;
@@ -894,7 +900,7 @@ void zbx_cpld_ctrl::commit(const chan_t chan, const bool save_all)
     UHD_LOG_TRACE(_log_id,
         "Storing register cache " << (save_all ? "completely" : "selectively")
                                   << " to CPLD...");
-    const auto changed_addrs = save_all ? _regs.get_all_addrs()
+    const auto changed_addrs = save_all ? _regs.get_all_addrs<size_t>()
                                         : _regs.get_changed_addrs<size_t>();
     for (const auto addr : changed_addrs) {
         _poke32(addr, _regs.get_reg(addr), save_all ? NO_CHAN : chan);

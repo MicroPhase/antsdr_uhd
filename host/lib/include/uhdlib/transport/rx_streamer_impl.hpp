@@ -13,6 +13,7 @@
 #include <uhd/types/endianness.hpp>
 #include <uhd/utils/log.hpp>
 #include <uhdlib/transport/rx_streamer_zero_copy.hpp>
+#include <algorithm>
 #include <limits>
 #include <vector>
 
@@ -74,7 +75,9 @@ class rx_streamer_impl : public rx_streamer
 public:
     //! Constructor
     rx_streamer_impl(const size_t num_ports, const uhd::stream_args_t stream_args)
-        : _zero_copy_streamer(num_ports), _in_buffs(num_ports)
+        : _zero_copy_streamer(num_ports)
+        , _in_buffs(num_ports)
+        , _chans_connected(num_ports, false)
     {
         if (stream_args.cpu_format.empty()) {
             throw uhd::value_error("[rx_stream] Must provide a cpu_format!");
@@ -88,7 +91,6 @@ public:
 
         if (stream_args.args.has_key("spp")) {
             _spp = stream_args.args.cast<size_t>("spp", _spp);
-            _mtu = _spp * _convert_info.bytes_per_otw_item;
         }
     }
 
@@ -97,8 +99,14 @@ public:
     // them
     virtual void connect_channel(const size_t channel, typename transport_t::uptr xport)
     {
-        const size_t mtu = xport->get_max_payload_size();
+        const size_t mtu = xport->get_mtu();
+        _hdr_len         = std::max(_hdr_len, xport->get_chdr_hdr_len());
         _zero_copy_streamer.connect_channel(channel, std::move(xport));
+        // Note: The previous call also checks if the channel index was valid.
+        _chans_connected[channel] = true;
+        _all_chans_connected      = std::all_of(_chans_connected.cbegin(),
+            _chans_connected.cend(),
+            [](const bool connected) { return connected; });
 
         if (mtu < _mtu) {
             set_mtu(mtu);
@@ -132,6 +140,11 @@ public:
         const double timeout,
         const bool one_packet) override
     {
+        if (!_all_chans_connected) {
+            throw uhd::runtime_error("[rx_stream] Attempting to call recv() before all "
+                                     "channels are connected!");
+        }
+
         if (_error_metadata_cache.check(metadata)) {
             return 0;
         }
@@ -195,17 +208,27 @@ protected:
         _converters[chan]->set_scalar(scale_factor);
     }
 
+    //! set maximum number of sample (per packet)
+    void set_max_num_samps(const size_t value)
+    {
+        _spp = value;
+    }
+
     //! Returns the maximum payload size
     size_t get_mtu() const
     {
         return _mtu;
     }
 
-    //! Sets the MTU and calculates spp
+    //! Sets the MTU and checks spp. If spp would exceed the new MTU, it is
+    // reduced accordingly.
     void set_mtu(const size_t mtu)
     {
-        _mtu = mtu;
-        _spp = _mtu / _convert_info.bytes_per_otw_item;
+        _mtu                      = mtu;
+        const size_t spp_from_mtu = (_mtu - _hdr_len) / _convert_info.bytes_per_otw_item;
+        if (spp_from_mtu < _spp) {
+            _spp = spp_from_mtu;
+        }
     }
 
     //! Configures sample rate for conversion of timestamp
@@ -257,6 +280,37 @@ private:
         const int32_t timeout_ms,
         const size_t buffer_offset_bytes = 0)
     {
+        // A request to read zero samples should effectively be a no-op.
+        // However, in a2f10ee, a change was made to increase the probability
+        // but not guarantee that calling recv() after a radio overflow event
+        // would return the overflow condition to the user. That change
+        // introduced a side effect that a read of zero samples (assuming there
+        // were no samples available) would block for the entirety of the
+        // timeout period and then return ERROR_CODE_TIMEOUT in the RX metadata
+        // for the read. (Prior to this change, there was an explicit check for
+        // a read of zero samples, which would return to the caller
+        // immediately).
+        //
+        // Now, if nsamps_per_buff is zero, we still honour the timeout, but
+        // will not process any outstanding packets, nor will we return an
+        // ERROR_CODE_TIMEOUT. If we did get a timeout, we make it look like
+        // an ERROR_CODE_NONE.
+        //
+        // The reason we still honour the timeout (even if we don't want to
+        // consume any streaming data) is to allow the user to detect stream
+        // errors. It is also fine to call recv() with a timeout of zero and
+        // nsamps_per_buff also set to zero, but then it's possible that we
+        // return ERROR_CODE_NONE because we just miss the stream error. If the
+        // application is polling recv(), then that is the expected behavior.
+        if (nsamps_per_buff == 0) {
+            _zero_copy_streamer.get_recv_buffs(
+                _in_buffs, metadata, eov_positions, timeout_ms);
+            if (metadata.error_code == rx_metadata_t::ERROR_CODE_TIMEOUT) {
+                metadata.error_code = rx_metadata_t::ERROR_CODE_NONE;
+            }
+            return 0;
+        }
+
         if (_buff_samps_remaining == 0) {
             // Current set of buffers has expired, get the next one
             _buff_samps_remaining = _zero_copy_streamer.get_recv_buffs(
@@ -369,7 +423,12 @@ private:
     // MTU, determined when xport is connected and modifiable by subclass
     size_t _mtu = std::numeric_limits<std::size_t>::max();
 
-    // Maximum number of samples per packet
+    // Size of CHDR header in bytes
+    size_t _hdr_len = 0;
+
+    // Maximum number of samples per packet. Note that this is not necessarily
+    // related to the MTU, it is a user-chosen value. However, it is always
+    // bounded by the MTU.
     size_t _spp = std::numeric_limits<std::size_t>::max();
 
     // Num samps remaining in buffer currently held by zero copy streamer
@@ -381,6 +440,13 @@ private:
     // Fragment (partially read packet) information
     size_t _fragment_offset_in_samps = 0;
     rx_metadata_t _last_fragment_metadata;
+
+    // Store a list of channels that are already connected
+    std::vector<bool> _chans_connected;
+
+    // Flag to store if all channels are connected. This is to speed up the lookup
+    // of all channels' connected-status.
+    bool _all_chans_connected = false;
 };
 
 }} // namespace uhd::transport

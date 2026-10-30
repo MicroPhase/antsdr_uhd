@@ -10,6 +10,7 @@
 #include <uhd/config.hpp>
 #include <uhd/types/dict.hpp>
 #include <boost/lexical_cast.hpp>
+#include <algorithm>
 #include <map>
 #include <stdexcept>
 #include <string>
@@ -42,6 +43,12 @@ public:
      * \param args the arguments string
      */
     device_addr_t(const std::string& args = "");
+
+    /*!
+     * Create a device address from an args string.
+     * \param args the arguments string
+     */
+    device_addr_t(const char* args);
 
     /*!
      * Create a device address from a std::map

@@ -10,6 +10,7 @@
 
 #include "b200_cores.hpp"
 #include "b200_iface.hpp"
+#include "b200_radio_ctrl_core.hpp"
 #include "b200_uart.hpp"
 #include <uhd/device.hpp>
 #include <uhd/property_tree.hpp>
@@ -18,33 +19,31 @@
 #include <uhd/types/dict.hpp>
 #include <uhd/types/sensors.hpp>
 #include <uhd/types/stream_cmd.hpp>
-#include <uhd/usrp/gps_ctrl.hpp>
 #include <uhd/usrp/mboard_eeprom.hpp>
 #include <uhd/usrp/subdev_spec.hpp>
-#include <uhd/utils/pimpl.hpp>
 #include <uhd/utils/tasks.hpp>
 #include <uhdlib/usrp/common/ad9361_ctrl.hpp>
 #include <uhdlib/usrp/common/ad936x_manager.hpp>
 #include <uhdlib/usrp/common/adf4001_ctrl.hpp>
+#include <uhdlib/usrp/common/pwr_cal_mgr.hpp>
 #include <uhdlib/usrp/common/recv_packet_demuxer_3000.hpp>
 #include <uhdlib/usrp/cores/gpio_atr_3000.hpp>
-#include <uhdlib/usrp/cores/radio_ctrl_core_3000.hpp>
 #include <uhdlib/usrp/cores/rx_dsp_core_3000.hpp>
 #include <uhdlib/usrp/cores/rx_vita_core_3000.hpp>
 #include <uhdlib/usrp/cores/time_core_3000.hpp>
 #include <uhdlib/usrp/cores/tx_dsp_core_3000.hpp>
 #include <uhdlib/usrp/cores/tx_vita_core_3000.hpp>
 #include <uhdlib/usrp/cores/user_settings_core_3000.hpp>
-#include <uhdlib/usrp/common/pwr_cal_mgr.hpp>
+#include <uhdlib/usrp/gps_ctrl.hpp>
+#include <unordered_map>
 #include <boost/assign.hpp>
 #include <memory>
 #include <mutex>
-#include <unordered_map>
 
 static const uint8_t B200_FW_COMPAT_NUM_MAJOR = 8;
 static const uint8_t B200_FW_COMPAT_NUM_MINOR = 0;
 static const uint16_t B200_FPGA_COMPAT_NUM    = 16;
-static const uint16_t B205_FPGA_COMPAT_NUM    = 7;
+static const uint16_t B205_FPGA_COMPAT_NUM    = 7; // applies to all B2xxminis
 static const double B200_BUS_CLOCK_RATE       = 100e6;
 static const uint32_t B200_GPSDO_ST_NONE      = 0x83;
 static constexpr double B200_MAX_RATE_USB2    = 53248000; // bytes/s
@@ -100,6 +99,8 @@ static std::vector<uhd::transport::usb_device_handle::vid_pid_pair_t> b200_vid_p
         uhd::transport::usb_device_handle::vid_pid_pair_t(
             B200_VENDOR_ID, B205MINI_PRODUCT_ID))(
         uhd::transport::usb_device_handle::vid_pid_pair_t(
+            B200_VENDOR_ID, B206MINI_PRODUCT_ID))(
+        uhd::transport::usb_device_handle::vid_pid_pair_t(
             B200_VENDOR_NI_ID, B200_PRODUCT_NI_ID))(
         uhd::transport::usb_device_handle::vid_pid_pair_t(
             B200_VENDOR_NI_ID, B210_PRODUCT_NI_ID));
@@ -143,7 +144,7 @@ private:
 
     // controllers
     b200_iface::sptr _iface;
-    radio_ctrl_core_3000::sptr _local_ctrl;
+    b200_radio_ctrl_core::sptr _local_ctrl;
     uhd::usrp::ad9361_ctrl::sptr _codec_ctrl;
     uhd::usrp::ad936x_manager::sptr _codec_mgr;
     b200_local_spi_core::sptr _spi_iface;
@@ -166,8 +167,8 @@ private:
     struct AsyncTaskData
     {
         std::shared_ptr<async_md_type> async_md;
-        std::weak_ptr<radio_ctrl_core_3000> local_ctrl;
-        std::weak_ptr<radio_ctrl_core_3000> radio_ctrl[2];
+        std::weak_ptr<b200_radio_ctrl_core> local_ctrl;
+        std::weak_ptr<b200_radio_ctrl_core> radio_ctrl[2];
         b200_uart::sptr gpsdo_uart;
     };
     std::shared_ptr<AsyncTaskData> _async_task_data;
@@ -182,6 +183,7 @@ private:
     void update_subdev_spec(const std::string& tx_rx, const uhd::usrp::subdev_spec_t&);
     void update_time_source(const std::string&);
     void set_time(const uhd::time_spec_t&);
+    void set_time_next_pps(const uhd::time_spec_t&);
     void sync_times(void);
     void update_clock_source(const std::string&);
     void update_bandsel(const std::string& which, double freq);
@@ -193,7 +195,7 @@ private:
     // perifs in the radio core
     struct radio_perifs_t
     {
-        radio_ctrl_core_3000::sptr ctrl;
+        b200_radio_ctrl_core::sptr ctrl;
         uhd::usrp::gpio_atr::gpio_atr_3000::sptr atr;
         uhd::usrp::gpio_atr::gpio_atr_3000::sptr fp_gpio;
         time_core_3000::sptr time64;
@@ -248,6 +250,7 @@ private:
         NONE     = 3,
         UNKNOWN  = 4
     } _time_source;
+    bool _time_set_with_pps;
 
     void update_gpio_state(void);
 

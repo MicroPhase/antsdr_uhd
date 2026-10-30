@@ -19,32 +19,52 @@ clocks:
 
 io_ports:
   ctrlport_radio0:
-    type: ctrl_port
+    type: ctrlport
     drive: slave
     rename:
       pattern: (ctrlport_)(.*)
       repl: m_\1radio0_\2
   ctrlport_radio1:
-    type: ctrl_port
+    type: ctrlport
     drive: slave
     rename:
       pattern: (ctrlport_)(.*)
       repl: m_\1radio1_\2
-  time_keeper:
-    type: time_keeper
+  time:
+    type: timekeeper
     drive: broadcaster
-  x300_radio0:
-    type: x300_radio
+  radio0:
+    type: radio
     drive: master
+    parameters:
+      spc: 1
+      num_ports: 2
     rename:
       pattern: (.*)
       repl: \1_radio0
-  x300_radio1:
-    type: x300_radio
+  radio1:
+    type: radio
     drive: master
+    parameters:
+      spc: 1
+      num_ports: 2
     rename:
       pattern: (.*)
       repl: \1_radio1
   dram:
-    type: axi4_mm_4x64_4g
+    type: axi4_mm
     drive: slave
+  serial:
+    type: device_dna
+    drive: listener
+    parameters:
+      width: 64
+
+default_secure_image_core:
+    modules:
+      device_dna:
+        block_desc: 'device_dna.yml'
+        parameters:
+          device_type: "7SERIES"
+    connections:
+    - { srcblk: device_dna, srcport: device_dna, dstblk: _device_, dstport: serial}

@@ -13,6 +13,7 @@
 #include <uhdlib/usrp/common/io_service_mgr.hpp>
 #include <unordered_map>
 #include <map>
+#include <string>
 
 namespace uhd { namespace mpmd {
 
@@ -38,7 +39,8 @@ public:
     uhd::transport::adapter_id_t get_adapter_id(
         const uhd::rfnoc::device_id_t local_device_id) override;
     void reset_network() override;
-    uhd::rfnoc::clock_iface::sptr get_clock_iface(const std::string& clock_name) override;
+    uhd::rfnoc::clock_iface::sptr get_clock_iface(
+        const std::string& clock_name, const uint8_t clock_idx) override;
     uhd::rfnoc::chdr_ctrl_xport::sptr make_ctrl_transport(
         uhd::rfnoc::device_id_t local_device_id,
         const uhd::rfnoc::sep_id_t& local_epid) override;
@@ -58,6 +60,10 @@ public:
         const uhd::rfnoc::sw_buff_t mdata_buff_fmt,
         const uhd::device_addr_t& xport_args,
         const std::string& streamer_id) override;
+    std::map<std::string, uhd::device_addr_t> get_chdr_xport_adapters() override;
+    int add_remote_chdr_route(const std::string& adapter_id,
+        const uhd::rfnoc::sep_id_t epid,
+        const uhd::device_addr_t& route_args) override;
 
 private:
     uhd::device_addr_t _mb_args;
@@ -69,6 +75,8 @@ private:
         _adapter_map;
     std::map<std::string, uhd::rfnoc::clock_iface::sptr> _clock_ifaces;
     uhd::usrp::io_service_mgr::sptr _io_srv_mgr;
+
+    bool _has_remote_xport_capability = false;
 };
 
 }} /* namespace uhd::mpmd */

@@ -64,7 +64,7 @@ UHD_INLINE std::string string_vector_to_string(
     throw uhd::exception::runtime_error(                                         \
         (boost::format(                                                          \
              "%s: gain \"%s\" not found for channel %d.\nAvailable gains: %s\n") \
-            % __FUNCTION__ % name % chan                                         \
+            % UHD_FUNCTION % name % chan                                         \
             % string_vector_to_string(get_##dir##_gain_names(chan)))             \
             .str());
 
@@ -84,111 +84,6 @@ static void do_samp_rate_warning_message(
                    % xx % (target_rate / 1e6) % (actual_rate / 1e6);
     }
 }
-
-/*static void do_tune_freq_results_message(
-    const tune_request_t &tune_req,
-    const tune_result_t &tune_result,
-    double actual_freq,
-    const std::string &xx
-){
-    const double target_freq = tune_req.target_freq;
-    const double clipped_target_freq = tune_result.clipped_rf_freq;
-    const double target_rf_freq = tune_result.target_rf_freq;
-    const double actual_rf_freq = tune_result.actual_rf_freq;
-    const double target_dsp_freq = tune_result.target_dsp_freq;
-    const double actual_dsp_freq = tune_result.actual_dsp_freq;
-
-    if (tune_req.rf_freq_policy == tune_request_t::POLICY_MANUAL) return;
-    if (tune_req.dsp_freq_policy == tune_request_t::POLICY_MANUAL) return;
-
-    bool requested_freq_success = uhd::math::frequencies_are_equal(target_freq,
-clipped_target_freq); bool target_freq_success =
-uhd::math::frequencies_are_equal(clipped_target_freq, actual_freq); bool
-rf_lo_tune_success = uhd::math::frequencies_are_equal(target_rf_freq, actual_rf_freq);
-    bool dsp_tune_success = uhd::math::frequencies_are_equal(target_dsp_freq,
-actual_dsp_freq);
-
-    if(requested_freq_success and target_freq_success and rf_lo_tune_success
-            and dsp_tune_success) {
-        UHD_LOGGER_INFO("MULTI_USRP") << boost::format(
-                "Successfully tuned to %f MHz\n\n")
-                % (actual_freq / 1e6);
-    } else {
-        boost::format base_message ("Tune Request: %f MHz\n");
-        base_message % (target_freq / 1e6);
-        std::string results_string = base_message.str();
-
-        if(requested_freq_success and (not rf_lo_tune_success)) {
-            boost::format rf_lo_message(
-                "  The RF LO does not support the requested frequency:\n"
-                "    Requested LO Frequency: %f MHz\n"
-                "    RF LO Result: %f MHz\n"
-                "  Attempted to use the DSP to reach the requested frequency:\n"
-                "    Desired DSP Frequency: %f MHz\n"
-                "    DSP Result: %f MHz\n"
-                "  Successfully tuned to %f MHz\n\n");
-            rf_lo_message % (target_rf_freq / 1e6) % (actual_rf_freq / 1e6)
-                % (target_dsp_freq / 1e6) % (actual_dsp_freq / 1e6)
-                % (actual_freq / 1e6);
-
-            results_string += rf_lo_message.str();
-
-            UHD_LOGGER_INFO("MULTI_USRP") << results_string;
-
-            return;
-        }
-
-        if(not requested_freq_success) {
-            boost::format failure_message(
-                "  The requested %s frequency is outside of the system range, and has been
-clipped:\n" "    Target Frequency: %f MHz\n" "    Clipped Target Frequency: %f MHz\n");
-            failure_message % xx % (target_freq / 1e6) % (clipped_target_freq / 1e6);
-
-            results_string += failure_message.str();
-        }
-
-        if(not rf_lo_tune_success) {
-            boost::format rf_lo_message(
-                "  The RF LO does not support the requested frequency:\n"
-                "    Requested LO Frequency: %f MHz\n"
-                "    RF LO Result: %f MHz\n"
-                "  Attempted to use the DSP to reach the requested frequency:\n"
-                "    Desired DSP Frequency: %f MHz\n"
-                "    DSP Result: %f MHz\n");
-            rf_lo_message % (target_rf_freq / 1e6) % (actual_rf_freq / 1e6)
-                % (target_dsp_freq / 1e6) % (actual_dsp_freq / 1e6);
-
-            results_string += rf_lo_message.str();
-
-        } else if(not dsp_tune_success) {
-            boost::format dsp_message(
-                "  The DSP does not support the requested frequency:\n"
-                "    Requested DSP Frequency: %f MHz\n"
-                "    DSP Result: %f MHz\n");
-            dsp_message % (target_dsp_freq / 1e6) % (actual_dsp_freq / 1e6);
-
-            results_string += dsp_message.str();
-        }
-
-        if(target_freq_success) {
-            boost::format success_message(
-                "  Successfully tuned to %f MHz\n\n");
-            success_message % (actual_freq / 1e6);
-
-            results_string += success_message.str();
-        } else {
-            boost::format failure_message(
-                "  Failed to tune to target frequency\n"
-                "    Target Frequency: %f MHz\n"
-                "    Actual Frequency: %f MHz\n\n");
-            failure_message % (clipped_target_freq / 1e6) % (actual_freq / 1e6);
-
-            results_string += failure_message.str();
-        }
-
-        UHD_LOGGER_WARNING("MULTI_USRP") << results_string ;
-    }
-}*/
 
 /***********************************************************************
  * Gain helper functions
@@ -401,6 +296,8 @@ public:
         dict<std::string, std::string> usrp_info;
         const auto mb_eeprom =
             _tree->access<mboard_eeprom_t>(mb_root(mcp.mboard) / "eeprom").get();
+        usrp_info["module_serial"] =
+            mb_eeprom.get("module_serial", mb_eeprom.get("serial", "n/a"));
         usrp_info["mboard_id"] =
             _tree->access<std::string>(mb_root(mcp.mboard) / "name").get();
         usrp_info["mboard_name"]   = mb_eeprom.get("name", "n/a");
@@ -429,7 +326,8 @@ public:
         }
         if (_tree->exists(rx_rf_fe_root(chan) / "ref_power/serial")) {
             usrp_info["rx_ref_power_serial"] =
-                _tree->access<std::string>(rx_rf_fe_root(chan) / "ref_power/serial").get();
+                _tree->access<std::string>(rx_rf_fe_root(chan) / "ref_power/serial")
+                    .get();
         }
         return usrp_info;
     }
@@ -440,6 +338,8 @@ public:
         dict<std::string, std::string> usrp_info;
         const auto mb_eeprom =
             _tree->access<mboard_eeprom_t>(mb_root(mcp.mboard) / "eeprom").get();
+        usrp_info["module_serial"] =
+            mb_eeprom.get("module_serial", mb_eeprom.get("serial", "n/a"));
         usrp_info["mboard_id"] =
             _tree->access<std::string>(mb_root(mcp.mboard) / "name").get();
         usrp_info["mboard_name"]   = mb_eeprom.get("name", "n/a");
@@ -468,7 +368,8 @@ public:
         }
         if (_tree->exists(tx_rf_fe_root(chan) / "ref_power/serial")) {
             usrp_info["tx_ref_power_serial"] =
-                _tree->access<std::string>(tx_rf_fe_root(chan) / "ref_power/serial").get();
+                _tree->access<std::string>(tx_rf_fe_root(chan) / "ref_power/serial")
+                    .get();
         }
         return usrp_info;
     }
@@ -934,6 +835,12 @@ public:
     {
         throw uhd::not_implemented_error(
             "get_radio_control() not supported on this device!");
+    }
+
+    uhd::extension::extension::sptr get_extension(
+        const direction_t, const size_t) override
+    {
+        throw uhd::not_implemented_error("get_extension() not supported on this device!");
     }
 
     /*******************************************************************
@@ -1546,37 +1453,27 @@ public:
      *************************************************************************/
     void set_rx_gain(double gain, const std::string& name, size_t chan) override
     {
-        /* Check if any AGC mode is enable and if so warn the user */
-        if (chan != ALL_CHANS) {
-            if (_tree->exists(rx_rf_fe_root(chan) / "gain" / "agc")) {
+        /* Check if any AGC mode is enabled and if so warn the user */
+        for (size_t c = 0; c < get_rx_num_channels(); c++) {
+            if (chan != ALL_CHANS && c != chan) {
+                continue;
+            }
+            if (_tree->exists(rx_rf_fe_root(c) / "gain" / "agc")) {
                 bool agc =
-                    _tree->access<bool>(rx_rf_fe_root(chan) / "gain" / "agc" / "enable")
+                    _tree->access<bool>(rx_rf_fe_root(c) / "gain" / "agc" / "enable")
                         .get();
                 if (agc) {
-                    UHD_LOGGER_WARNING("MULTI_USRP")
-                        << "AGC enabled for this channel. Setting will be ignored.";
+                    UHD_LOGGER_WARNING("MULTI_USRP") << "AGC enabled for channel " << c
+                                                     << ". Setting will be ignored.";
                 }
             }
-        } else {
-            for (size_t c = 0; c < get_rx_num_channels(); c++) {
-                if (_tree->exists(rx_rf_fe_root(c) / "gain" / "agc")) {
-                    bool agc = _tree
-                                   ->access<bool>(
-                                       rx_rf_fe_root(chan) / "gain" / "agc" / "enable")
-                                   .get();
-                    if (agc) {
-                        UHD_LOGGER_WARNING("MULTI_USRP")
-                            << "AGC enabled for this channel. Setting will be ignored.";
-                    }
-                }
+            /* Apply gain settings to all channels.
+             * If device is in AGC mode it will ignore the setting. */
+            try {
+                rx_gain_group(c)->set_value(gain, name);
+            } catch (uhd::key_error&) {
+                THROW_GAIN_NAME_ERROR(name, c, rx);
             }
-        }
-        /* Apply gain setting.
-         * If device is in AGC mode it will ignore the setting. */
-        try {
-            return rx_gain_group(chan)->set_value(gain, name);
-        } catch (uhd::key_error&) {
-            THROW_GAIN_NAME_ERROR(name, chan, rx);
         }
     }
 
@@ -1737,7 +1634,6 @@ public:
                 "get_rx_power_range() not available for this device and channel");
         }
         return _tree->access<meta_range_t>(power_ref_path).get();
-
     }
 
     void set_rx_antenna(const std::string& ant, size_t chan) override
@@ -1847,7 +1743,7 @@ public:
         } else {
             UHD_LOGGER_WARNING("MULTI_USRP")
                 << "This device does not support querying the RX DC offset range.";
-            return meta_range_t(0, 0);
+            return meta_range_t(0.0, 0.0);
         }
     }
 
@@ -2105,10 +2001,15 @@ public:
 
     void set_tx_gain(double gain, const std::string& name, size_t chan) override
     {
-        try {
-            return tx_gain_group(chan)->set_value(gain, name);
-        } catch (uhd::key_error&) {
-            THROW_GAIN_NAME_ERROR(name, chan, tx);
+        for (size_t c = 0; c < get_tx_num_channels(); c++) {
+            if (chan != ALL_CHANS && c != chan) {
+                continue;
+            }
+            try {
+                tx_gain_group(c)->set_value(gain, name);
+            } catch (uhd::key_error&) {
+                THROW_GAIN_NAME_ERROR(name, c, tx);
+            }
         }
     }
 
@@ -2306,7 +2207,7 @@ public:
     std::vector<std::string> get_tx_sensor_names(size_t chan) override
     {
         std::vector<std::string> sensor_names;
-        if (_tree->exists(rx_rf_fe_root(chan) / "sensors")) {
+        if (_tree->exists(tx_rf_fe_root(chan) / "sensors")) {
             sensor_names = _tree->list(tx_rf_fe_root(chan) / "sensors");
         }
         return sensor_names;
@@ -2340,7 +2241,7 @@ public:
         } else {
             UHD_LOGGER_WARNING("MULTI_USRP")
                 << "This device does not support querying the TX DC offset range.";
-            return meta_range_t(0, 0);
+            return meta_range_t(0.0, 0.0);
         }
     }
 
@@ -2436,7 +2337,7 @@ public:
             const std::string name          = bank.substr(2);
             const dboard_iface::unit_t unit = (bank[0] == 'R') ? dboard_iface::UNIT_RX
                                                                : dboard_iface::UNIT_TX;
-            auto iface = _tree
+            auto iface                      = _tree
                              ->access<dboard_iface::sptr>(
                                  mb_root(mboard) / "dboards" / name / "iface")
                              .get();
@@ -2510,7 +2411,7 @@ public:
             const std::string name          = bank.substr(2);
             const dboard_iface::unit_t unit = (bank[0] == 'R') ? dboard_iface::UNIT_RX
                                                                : dboard_iface::UNIT_TX;
-            auto iface = _tree
+            auto iface                      = _tree
                              ->access<dboard_iface::sptr>(
                                  mb_root(mboard) / "dboards" / name / "iface")
                              .get();

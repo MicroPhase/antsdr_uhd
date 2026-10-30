@@ -12,6 +12,7 @@
 #include <uhdlib/usrp/common/adf435x.hpp>
 #include <uhdlib/usrp/common/adf535x.hpp>
 #include <uhdlib/utils/narrow.hpp>
+#include <boost/format.hpp>
 #include <chrono>
 #include <cmath>
 #include <thread>
@@ -120,7 +121,7 @@ public:
                         _write_lo_spi(dboard_iface::UNIT_TX, regs);
                     },
                     [this](uint32_t microseconds) {
-                        _db_iface->sleep(boost::chrono::microseconds(microseconds));
+                        _db_iface->sleep(std::chrono::microseconds(microseconds));
                     });
                 _lo1_pfd_freq = TWINRX_REV_C_PFD_FREQ;
             } else {
@@ -129,7 +130,7 @@ public:
                         _write_lo_spi(dboard_iface::UNIT_TX, regs);
                     },
                     [this](uint32_t microseconds) {
-                        _db_iface->sleep(boost::chrono::microseconds(microseconds));
+                        _db_iface->sleep(std::chrono::microseconds(microseconds));
                     });
                 _lo1_pfd_freq = TWINRX_REV_AB_PFD_FREQ;
             }
@@ -158,19 +159,19 @@ public:
 
     ~twinrx_ctrl_impl() override
     {
-        UHD_SAFE_CALL(boost::lock_guard<boost::mutex> lock(_mutex);
+        UHD_SAFE_CALL(std::lock_guard<std::mutex> lock(_mutex);
                       _gpio_iface->set_field(twinrx_gpio::FIELD_SWPS_EN, 0);)
     }
 
     void commit() override
     {
-        boost::lock_guard<boost::mutex> lock(_mutex);
+        std::lock_guard<std::mutex> lock(_mutex);
         _commit();
     }
 
     void set_chan_enabled(channel_t ch, bool enabled, bool commit = true) override
     {
-        boost::lock_guard<boost::mutex> lock(_mutex);
+        std::lock_guard<std::mutex> lock(_mutex);
         if (ch == CH1 or ch == BOTH) {
             _cpld_regs->if0_reg3.set(rm::if0_reg3_t::IF1_IF2_EN_CH1, bool2bin(enabled));
             _cpld_regs->if0_reg0.set(rm::if0_reg0_t::AMP_LO2_EN_CH1, bool2bin(enabled));
@@ -191,7 +192,7 @@ public:
 
     void set_preamp1(channel_t ch, preamp_state_t value, bool commit = true) override
     {
-        boost::lock_guard<boost::mutex> lock(_mutex);
+        std::lock_guard<std::mutex> lock(_mutex);
         if (ch == CH1 or ch == BOTH) {
             _cpld_regs->rf0_reg1.set(
                 rm::rf0_reg1_t::SWPA1_CTL_CH1, bool2bin(value == PREAMP_HIGHBAND));
@@ -218,7 +219,7 @@ public:
 
     void set_preamp2(channel_t ch, bool enabled, bool commit = true) override
     {
-        boost::lock_guard<boost::mutex> lock(_mutex);
+        std::lock_guard<std::mutex> lock(_mutex);
         if (ch == CH1 or ch == BOTH) {
             _cpld_regs->rf2_reg7.set(
                 rm::rf2_reg7_t::SWPA4_CTRL_CH1, bool2bin(not enabled));
@@ -236,7 +237,7 @@ public:
     void set_lb_preamp_preselector(
         channel_t ch, bool enabled, bool commit = true) override
     {
-        boost::lock_guard<boost::mutex> lock(_mutex);
+        std::lock_guard<std::mutex> lock(_mutex);
         if (ch == CH1 or ch == BOTH) {
             _cpld_regs->rf0_reg7.set(
                 rm::rf0_reg7_t::SWPA3_CTRL_CH1, bool2bin(not enabled));
@@ -251,7 +252,7 @@ public:
 
     void set_signal_path(channel_t ch, signal_path_t path, bool commit = true) override
     {
-        boost::lock_guard<boost::mutex> lock(_mutex);
+        std::lock_guard<std::mutex> lock(_mutex);
         if (ch == CH1 or ch == BOTH) {
             _cpld_regs->rf2_reg2.set(
                 rm::rf2_reg2_t::SW11_CTRL_CH1, bool2bin(path == PATH_LOWBAND));
@@ -299,7 +300,7 @@ public:
     void set_lb_preselector(
         channel_t ch, preselector_path_t path, bool commit = true) override
     {
-        boost::lock_guard<boost::mutex> lock(_mutex);
+        std::lock_guard<std::mutex> lock(_mutex);
         uint32_t sw7val = 0, sw8val = 0;
         switch (path) {
             case PRESEL_PATH1:
@@ -336,7 +337,7 @@ public:
     void set_hb_preselector(
         channel_t ch, preselector_path_t path, bool commit = true) override
     {
-        boost::lock_guard<boost::mutex> lock(_mutex);
+        std::lock_guard<std::mutex> lock(_mutex);
         uint32_t sw9ch1val = 0, sw10ch1val = 0, sw9ch2val = 0, sw10ch2val = 0;
         switch (path) {
             case PRESEL_PATH1:
@@ -380,7 +381,7 @@ public:
 
     void set_input_atten(channel_t ch, uint8_t atten, bool commit = true) override
     {
-        boost::lock_guard<boost::mutex> lock(_mutex);
+        std::lock_guard<std::mutex> lock(_mutex);
         if (ch == CH1 or ch == BOTH) {
             _cpld_regs->rf0_reg0.set(rm::rf0_reg0_t::ATTEN_IN_CH1, atten & 0x1F);
         }
@@ -393,7 +394,7 @@ public:
 
     void set_lb_atten(channel_t ch, uint8_t atten, bool commit = true) override
     {
-        boost::lock_guard<boost::mutex> lock(_mutex);
+        std::lock_guard<std::mutex> lock(_mutex);
         if (ch == CH1 or ch == BOTH) {
             _cpld_regs->rf2_reg0.set(rm::rf2_reg0_t::ATTEN_LB_CH1, atten & 0x1F);
         }
@@ -406,7 +407,7 @@ public:
 
     void set_hb_atten(channel_t ch, uint8_t atten, bool commit = true) override
     {
-        boost::lock_guard<boost::mutex> lock(_mutex);
+        std::lock_guard<std::mutex> lock(_mutex);
         if (ch == CH1 or ch == BOTH) {
             _cpld_regs->rf1_reg0.set(rm::rf1_reg0_t::ATTEN_HB_CH1, atten & 0x1F);
         }
@@ -419,7 +420,7 @@ public:
 
     void set_lo1_source(channel_t ch, lo_source_t source, bool commit = true) override
     {
-        boost::lock_guard<boost::mutex> lock(_mutex);
+        std::lock_guard<std::mutex> lock(_mutex);
         if (ch == CH1 or ch == BOTH) {
             _cpld_regs->rf1_reg5.set(
                 rm::rf1_reg5_t::SW14_CTRL_CH2, bool2bin(source != LO_COMPANION));
@@ -447,7 +448,7 @@ public:
 
     void set_lo2_source(channel_t ch, lo_source_t source, bool commit = true) override
     {
-        boost::lock_guard<boost::mutex> lock(_mutex);
+        std::lock_guard<std::mutex> lock(_mutex);
         if (ch == CH1 or ch == BOTH) {
             _cpld_regs->if0_reg0.set(
                 rm::if0_reg0_t::SW19_CTRL_CH2, bool2bin(source == LO_COMPANION));
@@ -472,7 +473,7 @@ public:
 
     void set_lo1_export_source(lo_export_source_t source, bool commit = true) override
     {
-        boost::lock_guard<boost::mutex> lock(_mutex);
+        std::lock_guard<std::mutex> lock(_mutex);
         // SW22 may conflict with the cal switch but this attr takes priority and we
         // assume that the cal switch is disabled (by disabling it!)
         _set_cal_mode(CAL_DISABLED, source);
@@ -486,7 +487,7 @@ public:
 
     void set_lo2_export_source(lo_export_source_t source, bool commit = true) override
     {
-        boost::lock_guard<boost::mutex> lock(_mutex);
+        std::lock_guard<std::mutex> lock(_mutex);
         _cpld_regs->if0_reg7.set(
             rm::if0_reg7_t::SW24_CTRL_CH2, bool2bin(source == LO_CH2_SYNTH));
         _cpld_regs->if0_reg4.set(
@@ -501,7 +502,7 @@ public:
 
     void set_antenna_mapping(antenna_mapping_t mapping, bool commit = true) override
     {
-        boost::lock_guard<boost::mutex> lock(_mutex);
+        std::lock_guard<std::mutex> lock(_mutex);
 
         enum switch_path_t { CONNECT, TERM, EXPORT, IMPORT, SWAP };
         switch_path_t path1, path2;
@@ -548,7 +549,7 @@ public:
 
     void set_crossover_cal_mode(cal_mode_t cal_mode, bool commit = true) override
     {
-        boost::lock_guard<boost::mutex> lock(_mutex);
+        std::lock_guard<std::mutex> lock(_mutex);
         if (_lo1_export == LO_CH1_SYNTH && cal_mode == CAL_CH2) {
             throw uhd::runtime_error(
                 "cannot enable cal crossover on CH2 when LO1 in CH1 is exported");
@@ -565,7 +566,7 @@ public:
 
     double set_lo1_synth_freq(channel_t ch, double freq, bool commit = true) override
     {
-        boost::lock_guard<boost::mutex> lock(_mutex);
+        std::lock_guard<std::mutex> lock(_mutex);
 
         double coerced_freq = 0.0;
         if (ch == CH1 or ch == BOTH) {
@@ -586,7 +587,7 @@ public:
 
     double set_lo2_synth_freq(channel_t ch, double freq, bool commit = true) override
     {
-        boost::lock_guard<boost::mutex> lock(_mutex);
+        std::lock_guard<std::mutex> lock(_mutex);
 
         double coerced_freq = 0.0;
         if (ch == CH1 or ch == BOTH) {
@@ -605,7 +606,7 @@ public:
 
     double set_lo1_charge_pump(channel_t ch, double current, bool commit = true) override
     {
-        boost::lock_guard<boost::mutex> lock(_mutex);
+        std::lock_guard<std::mutex> lock(_mutex);
         double coerced_current = 0.0;
         if (ch == CH1 or ch == BOTH) {
             coerced_current =
@@ -624,7 +625,7 @@ public:
 
     double set_lo2_charge_pump(channel_t ch, double current, bool commit = true) override
     {
-        boost::lock_guard<boost::mutex> lock(_mutex);
+        std::lock_guard<std::mutex> lock(_mutex);
         double coerced_current = 0.0;
         if (ch == CH1 or ch == BOTH) {
             coerced_current =
@@ -655,7 +656,7 @@ public:
 
     bool read_lo1_locked(channel_t ch) override
     {
-        boost::lock_guard<boost::mutex> lock(_mutex);
+        std::lock_guard<std::mutex> lock(_mutex);
 
         bool locked = true;
         if (ch == CH1 or ch == BOTH) {
@@ -671,7 +672,7 @@ public:
 
     bool read_lo2_locked(channel_t ch) override
     {
-        boost::lock_guard<boost::mutex> lock(_mutex);
+        std::lock_guard<std::mutex> lock(_mutex);
 
         bool locked = true;
         if (ch == CH1 or ch == BOTH) {
@@ -707,10 +708,9 @@ private: // Functions
         // AMP_LO1_EN_CH1 also controls the amp for the external LO1 port,
         // which could be in use by ch2
         _cpld_regs->rf1_reg1.set(rm::rf1_reg1_t::AMP_LO1_EN_CH1,
-            bool2bin(
-                ch1_enabled
-                || (ch2_enabled
-                       && (ch2_lo1_src == LO_EXTERNAL || ch2_lo1_src == LO_REIMPORT))));
+            bool2bin(ch1_enabled
+                     || (ch2_enabled
+                         && (ch2_lo1_src == LO_EXTERNAL || ch2_lo1_src == LO_REIMPORT))));
     }
 
     void _config_lo_route(lo_t lo, channel_t channel)
@@ -840,18 +840,18 @@ private: // Members
     {
         tune_freq_t()
             : uhd::math::fp_compare::fp_compare_delta<double>(
-                  0.0, uhd::math::FREQ_COMPARISON_DELTA_HZ)
+                0.0, uhd::math::FREQ_COMPARISON_DELTA_HZ)
         {
         }
 
         tune_freq_t(double freq)
             : uhd::math::fp_compare::fp_compare_delta<double>(
-                  freq, uhd::math::FREQ_COMPARISON_DELTA_HZ)
+                freq, uhd::math::FREQ_COMPARISON_DELTA_HZ)
         {
         }
     };
 
-    boost::mutex _mutex;
+    std::mutex _mutex;
     dboard_iface::sptr _db_iface;
     twinrx_gpio::sptr _gpio_iface;
     twinrx_cpld_regmap::sptr _cpld_regs;

@@ -8,58 +8,29 @@
 #include <uhd/rfnoc/mb_controller.hpp>
 #include <uhd/rfnoc/multichan_register_iface.hpp>
 #include <uhd/rfnoc/register_iface.hpp>
+#include <uhd/utils/compat_check.hpp>
 #include <uhd/utils/log.hpp>
 #include <uhdlib/rfnoc/radio_control_impl.hpp>
-#include <uhdlib/utils/compat_check.hpp>
 #include <map>
+#include <numeric>
 #include <tuple>
 
 using namespace uhd::rfnoc;
-
-namespace {
-
-const std::string DEFAULT_GAIN_PROFILE("default");
-
-} // namespace
 
 const std::string radio_control::ALL_LOS   = "all";
 const std::string radio_control::ALL_GAINS = "";
 
 const uint16_t radio_control_impl::MAJOR_COMPAT = 0;
-const uint16_t radio_control_impl::MINOR_COMPAT = 0;
-
-const uint32_t radio_control_impl::regmap::REG_COMPAT_NUM;
-const uint32_t radio_control_impl::regmap::REG_RADIO_WIDTH;
-const uint32_t radio_control_impl::regmap::RADIO_BASE_ADDR;
-const uint32_t radio_control_impl::regmap::REG_CHAN_OFFSET;
-const uint32_t radio_control_impl::regmap::RADIO_ADDR_W;
-const uint32_t radio_control_impl::regmap::REG_LOOPBACK_EN;
-const uint32_t radio_control_impl::regmap::REG_RX_STATUS;
-const uint32_t radio_control_impl::regmap::REG_RX_CMD;
-const uint32_t radio_control_impl::regmap::REG_RX_CMD_NUM_WORDS_LO;
-const uint32_t radio_control_impl::regmap::REG_RX_CMD_NUM_WORDS_HI;
-const uint32_t radio_control_impl::regmap::REG_RX_CMD_TIME_LO;
-const uint32_t radio_control_impl::regmap::REG_RX_CMD_TIME_HI;
-const uint32_t radio_control_impl::regmap::REG_RX_MAX_WORDS_PER_PKT;
-const uint32_t radio_control_impl::regmap::REG_RX_ERR_PORT;
-const uint32_t radio_control_impl::regmap::REG_RX_ERR_REM_PORT;
-const uint32_t radio_control_impl::regmap::REG_RX_ERR_REM_EPID;
-const uint32_t radio_control_impl::regmap::REG_RX_ERR_ADDR;
-const uint32_t radio_control_impl::regmap::REG_TX_IDLE_VALUE;
-const uint32_t radio_control_impl::regmap::REG_TX_ERROR_POLICY;
-const uint32_t radio_control_impl::regmap::REG_TX_ERR_PORT;
-const uint32_t radio_control_impl::regmap::REG_TX_ERR_REM_PORT;
-const uint32_t radio_control_impl::regmap::REG_TX_ERR_REM_EPID;
-const uint32_t radio_control_impl::regmap::REG_TX_ERR_ADDR;
-const uint32_t radio_control_impl::regmap::RX_CMD_STOP;
-const uint32_t radio_control_impl::regmap::RX_CMD_FINITE;
-const uint32_t radio_control_impl::regmap::RX_CMD_CONTINUOUS;
-const uint32_t radio_control_impl::regmap::RX_CMD_TIMED_POS;
+const uint16_t radio_control_impl::MINOR_COMPAT = 1;
 
 const uhd::fs_path radio_control_impl::DB_PATH("dboard");
 const uhd::fs_path radio_control_impl::FE_PATH("frontends");
 
 static constexpr double OVERRUN_RESTART_DELAY = 0.05;
+
+// Default byte multiple to round the payload size down to. This is
+// conservatively set to to ensure compatibility with most blocks by default.
+static constexpr uint32_t DEFAULT_MULT = 64;
 
 /****************************************************************************
  * Structors
@@ -88,6 +59,7 @@ radio_control_impl::radio_control_impl(make_args_ptr make_args)
                                   << ", num_outputs=" << get_num_output_ports());
     set_prop_forwarding_policy(forwarding_policy_t::DROP);
     set_action_forwarding_policy(forwarding_policy_t::DROP);
+    set_mtu_forwarding_policy(forwarding_policy_t::DROP);
     register_action_handler(ACTION_KEY_STREAM_CMD,
         [this](const res_source_info& src, action_info::sptr action) {
             stream_cmd_action_info::sptr stream_cmd_action =
@@ -105,7 +77,7 @@ radio_control_impl::radio_control_impl(make_args_ptr make_args)
                 return;
             }
             const size_t port = src.instance;
-            if (port > get_num_output_ports()) {
+            if (port >= get_num_output_ports()) {
                 RFNOC_LOG_WARNING("Received stream command to invalid output port!");
                 return;
             }
@@ -123,24 +95,56 @@ radio_control_impl::radio_control_impl(make_args_ptr make_args)
                 uhd::stream_cmd_t::STREAM_MODE_START_CONTINUOUS);
             stream_cmd_action->stream_cmd.stream_now = false;
             stream_cmd_action->stream_cmd.time_spec =
-                get_mb_controller()->get_timekeeper(0)->get_time_now()
-                + uhd::time_spec_t(OVERRUN_RESTART_DELAY);
+                this->get_time_now() + uhd::time_spec_t(OVERRUN_RESTART_DELAY);
             const size_t port = src.instance;
-            if (port > get_num_output_ports()) {
+            if (port >= get_num_output_ports()) {
                 RFNOC_LOG_WARNING("Received stream command to invalid output port!");
                 return;
             }
             post_action({res_source_info::OUTPUT_EDGE, port}, stream_cmd_action);
         });
+
+    register_action_handler(ACTION_KEY_TUNE_REQUEST,
+        [this](const res_source_info& src, action_info::sptr action) {
+            tune_request_action_info::sptr tune_request_action =
+                std::dynamic_pointer_cast<tune_request_action_info>(action);
+
+            if (!tune_request_action) {
+                RFNOC_LOG_WARNING("Received invalid Tune request command!");
+                return;
+            }
+            const size_t port = src.instance;
+            if (port >= get_num_output_ports()) {
+                RFNOC_LOG_WARNING("Received tune_request to invalid output port!");
+                return;
+            }
+            _tune_request_action_handler(tune_request_action, src);
+        });
+
     // Register spp properties and resolvers
     _spp_prop.reserve(get_num_output_ports());
+    _atomic_item_size_in.reserve(get_num_input_ports());
+    _atomic_item_size_out.reserve(get_num_output_ports());
     _samp_rate_in.reserve(get_num_input_ports());
     _samp_rate_out.reserve(get_num_output_ports());
     _type_in.reserve(get_num_input_ports());
     _type_out.reserve(get_num_output_ports());
     for (size_t chan = 0; chan < get_num_output_ports(); ++chan) {
+        const uint32_t max_payload_size =
+            get_max_payload_size({res_source_info::OUTPUT_EDGE, chan});
+        // Default SPP is the maximum value we can fit through the edge, given
+        // our MTU, rounded down to the nearest CHDR word.
+        const int default_spp =
+            get_max_spp(max_payload_size - (max_payload_size % DEFAULT_MULT));
+        UHD_ASSERT_THROW(default_spp > 0);
         _spp_prop.push_back(
-            property_t<int>(PROP_KEY_SPP, DEFAULT_SPP, {res_source_info::USER, chan}));
+            property_t<int>(PROP_KEY_SPP, default_spp, {res_source_info::USER, chan}));
+        _atomic_item_size_in.push_back(property_t<size_t>(PROP_KEY_ATOMIC_ITEM_SIZE,
+            get_atomic_item_size(),
+            {res_source_info::INPUT_EDGE, chan}));
+        _atomic_item_size_out.push_back(property_t<size_t>(PROP_KEY_ATOMIC_ITEM_SIZE,
+            get_atomic_item_size(),
+            {res_source_info::OUTPUT_EDGE, chan}));
         _samp_rate_in.push_back(property_t<double>(
             PROP_KEY_SAMP_RATE, get_tick_rate(), {res_source_info::INPUT_EDGE, chan}));
         _samp_rate_out.push_back(property_t<double>(
@@ -150,6 +154,8 @@ radio_control_impl::radio_control_impl(make_args_ptr make_args)
         _type_out.push_back(property_t<io_type_t>(
             PROP_KEY_TYPE, IO_TYPE_SC16, {res_source_info::OUTPUT_EDGE, chan}));
 
+        register_property(&_atomic_item_size_in.back());
+        register_property(&_atomic_item_size_out.back());
         register_property(&_spp_prop.back(), [this, chan, &spp = _spp_prop.back()]() {
             const uint32_t words_per_pkt = spp.get() / _spc;
             RFNOC_LOG_TRACE(
@@ -161,34 +167,77 @@ radio_control_impl::radio_control_impl(make_args_ptr make_args)
         register_property(&_samp_rate_out.back());
         register_property(&_type_in.back());
         register_property(&_type_out.back());
-        add_property_resolver(
-            {&_spp_prop.back(), get_mtu_prop_ref({res_source_info::OUTPUT_EDGE, chan})},
-            {&_spp_prop.back()},
-            [this, chan, &spp = _spp_prop.back()]() {
-                RFNOC_LOG_TRACE("Calling resolver for spp@" << chan);
-                // MTU is max payload size, header with timestamp is already
-                // accounted for
-                const int mtu =
-                    static_cast<int>(get_mtu({res_source_info::OUTPUT_EDGE, chan}));
-                const int mtu_samps       = mtu / (_samp_width / 8);
-                const int max_spp_per_mtu = mtu_samps - (mtu_samps % _spc);
-                if (spp.get() > max_spp_per_mtu) {
-                    RFNOC_LOG_DEBUG("spp value " << spp.get() << " exceeds MTU of "
-                                                   << mtu << "! Coercing to "
-                                                   << max_spp_per_mtu);
-                    spp = max_spp_per_mtu;
+        // Add AIS resolvers first, they are used as inputs to other resolvers
+        add_property_resolver({&_atomic_item_size_in.back(),
+                                  get_mtu_prop_ref({res_source_info::INPUT_EDGE, chan})},
+            {&_atomic_item_size_in.back()},
+            [this, chan, &ais_in = _atomic_item_size_in.back()]() {
+                RFNOC_LOG_TRACE("Calling resolver for atomic_item_size in@" << chan);
+                ais_in = std::lcm<size_t>(ais_in, get_atomic_item_size());
+                ais_in = std::min<size_t>(
+                    ais_in, get_mtu({res_source_info::INPUT_EDGE, chan}));
+                if ((ais_in % get_atomic_item_size()) > 0) {
+                    ais_in = ais_in - (ais_in % get_atomic_item_size());
                 }
-                if (spp.get() % _spc) {
-                    spp = spp.get() - (spp.get() % _spc);
-                    RFNOC_LOG_WARNING(
-                        "spp must be a multiple of the block bus width! Coercing to "
-                        << spp.get());
+                RFNOC_LOG_TRACE("Resolving_atomic_item size in to " << ais_in);
+            });
+        add_property_resolver({&_atomic_item_size_out.back(),
+                                  get_mtu_prop_ref({res_source_info::OUTPUT_EDGE, chan})},
+            {&_atomic_item_size_out.back()},
+            [this, chan, &ais_out = _atomic_item_size_out.back()]() {
+                RFNOC_LOG_TRACE("Calling resolver for atomic_item_size out@" << chan);
+                ais_out = std::lcm<size_t>(ais_out, get_atomic_item_size());
+                ais_out = std::min<size_t>(
+                    ais_out, get_mtu({res_source_info::OUTPUT_EDGE, chan}));
+                if ((ais_out % get_atomic_item_size()) > 0) {
+                    ais_out = ais_out - (ais_out % get_atomic_item_size());
+                }
+                RFNOC_LOG_TRACE("Resolving atomic_item_size out to " << ais_out);
+            });
+        add_property_resolver({&_spp_prop.back(),
+                                  &_atomic_item_size_out.back(),
+                                  get_mtu_prop_ref({res_source_info::OUTPUT_EDGE, chan})},
+            {&_spp_prop.back()},
+            [this,
+                chan,
+                &spp     = _spp_prop.back(),
+                &ais_out = _atomic_item_size_out.back()]() {
+                RFNOC_LOG_TRACE("Calling resolver for spp@" << chan);
+                const size_t max_pyld =
+                    get_max_payload_size({res_source_info::OUTPUT_EDGE, chan});
+                const int max_spp = get_max_spp(max_pyld - max_pyld % ais_out.get());
+                if (spp.get() > max_spp) {
+                    RFNOC_LOG_DEBUG("spp value "
+                                    << spp.get() << " exceeds MTU of "
+                                    << get_mtu({res_source_info::OUTPUT_EDGE, chan})
+                                    << "! Coercing to " << max_spp);
+                    spp = max_spp;
                 }
                 if (spp.get() <= 0) {
-                    spp = DEFAULT_SPP;
+                    spp = max_spp;
                     RFNOC_LOG_WARNING(
                         "spp must be greater than zero! Coercing to " << spp.get());
                 }
+
+                // spp must be a multiple of the output atomic item size divided
+                // by bytes-per-sample
+                const int spp_multiple = ais_out.get() / (_samp_width / 8);
+                if (spp_multiple > max_spp) {
+                    RFNOC_LOG_ERROR("Cannot resolve spp! Must be a multiple of "
+                                    << spp_multiple << " but max value is " << max_spp);
+                    throw uhd::resolve_error("Cannot resolve spp!");
+                }
+                if (spp.get() % spp_multiple) {
+                    if (spp.get() < spp_multiple) {
+                        spp = spp_multiple;
+                    } else {
+                        spp = spp.get() - (spp.get() % spp_multiple);
+                    }
+                    RFNOC_LOG_WARNING("spp must be a multiple of "
+                                      << spp_multiple << "! Coercing to " << spp.get());
+                }
+                RFNOC_LOG_TRACE("Exiting resolver for spp@"
+                                << chan << " (new value: " << spp.get() << ")");
             });
         // Note: The following resolver calls coerce_rate(), which is virtual.
         // At run time, it will use the implementation by the child class.
@@ -198,25 +247,25 @@ radio_control_impl::radio_control_impl(make_args_ptr make_args)
                 chan,
                 &samp_rate_in  = _samp_rate_in.at(chan),
                 &samp_rate_out = _samp_rate_out.at(chan)]() {
-                const auto UHD_UNUSED(log_chan) = chan;
-                RFNOC_LOG_TRACE("Calling resolver for samp_rate@" << chan);
+                UHD_LOGGER_TRACE(this->get_unique_id())
+                    << "Calling resolver for samp_rate@" << chan;
                 samp_rate_in  = coerce_rate(samp_rate_in.get());
                 samp_rate_out = samp_rate_in.get();
             });
         // Resolvers for type: These are constants
         add_property_resolver({&_type_in.back()},
             {&_type_in.back()},
-            [& type_in = _type_in.back()]() { type_in.set(IO_TYPE_SC16); });
+            [&type_in = _type_in.back()]() { type_in.set(IO_TYPE_SC16); });
         add_property_resolver({&_type_out.back()},
             {&_type_out.back()},
-            [& type_out = _type_out.back()]() { type_out.set(IO_TYPE_SC16); });
+            [&type_out = _type_out.back()]() { type_out.set(IO_TYPE_SC16); });
     }
     // Enable async messages coming from the radio
     const uint32_t xbar_port = 1; // FIXME: Find a better way to figure this out
     RFNOC_LOG_TRACE("Sending async messages to EPID "
                     << regs().get_src_epid() << ", remote port " << regs().get_port_num()
                     << ", xbar port " << xbar_port);
-    for (size_t tx_chan = 0; tx_chan < get_num_output_ports(); tx_chan++) {
+    for (size_t tx_chan = 0; tx_chan < get_num_input_ports(); tx_chan++) {
         // Set the EPID and port of our regs() object (all async messages go to
         // the same location)
         _radio_reg_iface.poke32(
@@ -230,7 +279,7 @@ radio_control_impl::radio_control_impl(make_args_ptr make_args)
             regmap::SWREG_TX_ERR + regmap::SWREG_CHAN_OFFSET * tx_chan,
             tx_chan);
     }
-    for (size_t rx_chan = 0; rx_chan < get_num_input_ports(); rx_chan++) {
+    for (size_t rx_chan = 0; rx_chan < get_num_output_ports(); rx_chan++) {
         // Set the EPID and port of our regs() object (all async messages go to
         // the same location)
         _radio_reg_iface.poke32(
@@ -292,6 +341,29 @@ uhd::meta_range_t radio_control_impl::get_rate_range() const
 size_t radio_control_impl::get_spc() const
 {
     return _spc;
+}
+
+
+/******************************************************************************
+ * Time-Related API Calls
+ *****************************************************************************/
+uint64_t radio_control_impl::get_ticks_now()
+{
+    // Time registers added in 0.1
+    if (_fpga_compat < 1) {
+        // Note that it's not guaranteed that timekeeper 0 is the one assigned
+        // to this radio, but this if-clause is just for handling older FPGA
+        // images, where we have always connected TK 0 to the radios.
+        return get_mb_controller()->get_timekeeper(0)->get_ticks_now();
+    }
+    // Applying the command time here allows for testing of timed commands,
+    // but all register accesses should use the command time by default.
+    return regs().peek64(regmap::REG_TIME_LO, get_command_time(0));
+}
+
+uhd::time_spec_t radio_control_impl::get_time_now()
+{
+    return uhd::time_spec_t::from_ticks(get_ticks_now(), get_rate());
 }
 
 /****************************************************************************
@@ -446,22 +518,26 @@ void radio_control_impl::set_rx_agc(const bool, const size_t)
     throw uhd::not_implemented_error("set_rx_agc() is not supported on this radio!");
 }
 
-void radio_control_impl::set_tx_gain_profile(const std::string& profile, const size_t chan)
+void radio_control_impl::set_tx_gain_profile(
+    const std::string& profile, const size_t chan)
 {
     _tx_gain_profile_api->set_gain_profile(profile, chan);
 }
 
-void radio_control_impl::set_rx_gain_profile(const std::string& profile, const size_t chan)
+void radio_control_impl::set_rx_gain_profile(
+    const std::string& profile, const size_t chan)
 {
     _rx_gain_profile_api->set_gain_profile(profile, chan);
 }
 
-std::vector<std::string> radio_control_impl::get_tx_gain_profile_names(const size_t chan) const
+std::vector<std::string> radio_control_impl::get_tx_gain_profile_names(
+    const size_t chan) const
 {
     return _tx_gain_profile_api->get_gain_profile_names(chan);
 }
 
-std::vector<std::string> radio_control_impl::get_rx_gain_profile_names(const size_t chan) const
+std::vector<std::string> radio_control_impl::get_rx_gain_profile_names(
+    const size_t chan) const
 {
     return _rx_gain_profile_api->get_gain_profile_names(chan);
 }
@@ -656,6 +732,86 @@ uhd::meta_range_t radio_control_impl::get_tx_power_range(const size_t chan)
     return _tx_pwr_mgr.at(chan)->get_power_range();
 }
 
+static uhd::meta_range_t make_overall_tune_range(const uhd::meta_range_t& fe_range,
+    const uhd::meta_range_t& dsp_range,
+    const double bw)
+{
+    uhd::meta_range_t range;
+    for (const uhd::range_t& sub_range : fe_range) {
+        range.push_back(uhd::range_t(
+            std::max(0.0, sub_range.start() + std::max(dsp_range.start(), -bw / 2)),
+            sub_range.stop() + std::min(dsp_range.stop(), bw / 2),
+            dsp_range.step()));
+    }
+    return range;
+}
+
+void radio_control_impl::apply_and_update_tune_request(
+    tune_request_action_info::sptr tune_request_action,
+    std::function<void(double)> set_rf_freq,
+    std::function<double()> get_rf_freq)
+{
+    uhd::tune_request_t tune_request = tune_request_action->tune_request;
+    const double clipped_requested_freq =
+        tune_request_action->overall_freq_range.clip(tune_request.target_freq);
+
+    RFNOC_LOG_TRACE(str(boost::format("Frequency Range %.3fMHz->%.3fMHz")
+                        % (tune_request_action->overall_freq_range.start() / 1e6)
+                        % (tune_request_action->overall_freq_range.stop() / 1e6)));
+
+    RFNOC_LOG_TRACE(str(boost::format("Clipped frequency requested: %.3fMHz")
+                        % (clipped_requested_freq / 1e6)));
+
+    //------------------------------------------------------------------
+    //-- set the RF frequency depending upon the policy
+    //------------------------------------------------------------------
+    double target_rf_freq = 0.0;
+    switch (tune_request.rf_freq_policy) {
+        case uhd::tune_request_t::POLICY_AUTO:
+            target_rf_freq = clipped_requested_freq;
+            break;
+
+        case uhd::tune_request_t::POLICY_MANUAL:
+            if ((tune_request.dsp_freq_policy == uhd::tune_request_t::POLICY_AUTO)
+                && (tune_request_action->dsp_range.size() == 1)
+                && tune_request_action->dsp_range.stop() == 0) {
+                /* Hardware does not incl. DSP chain
+                 * (dsp_freq_range only has single item, with value 0),
+                 * requested dsp frequency will be combined with rf frequency.
+                 * The case to handle uses MANUAL rf_freq_policy and
+                 * AUTOMATIC dsp_freq_policy */
+                RFNOC_LOG_DEBUG(
+                    str(boost::format("No DSP capabilities detected. Combining offset "
+                                      "into target frequency of %.3fMHz")
+                        % (clipped_requested_freq / 1e6)));
+
+                target_rf_freq = clipped_requested_freq;
+            } else {
+                /* Normal manual mode observing individual tune requests*/
+                target_rf_freq = tune_request_action->rf_range.clip(tune_request.rf_freq);
+            }
+
+        case uhd::tune_request_t::POLICY_NONE:
+            break;
+    }
+    RFNOC_LOG_TRACE(
+        str(boost::format("Target RF Freq: %.3fMHz") % (target_rf_freq / 1e6)));
+
+    //------------------------------------------------------------------
+    //-- Tune the RF frontend
+    //------------------------------------------------------------------
+    if (tune_request.rf_freq_policy != uhd::tune_request_t::POLICY_NONE) {
+        set_rf_freq(target_rf_freq);
+    }
+    const double actual_rf_freq = get_rf_freq();
+
+    RFNOC_LOG_TRACE(
+        str(boost::format("RADIO Actual RF Freq: %.3fMHz") % (actual_rf_freq / 1e6)));
+
+    tune_request_action->tune_result.clipped_rf_freq = clipped_requested_freq;
+    tune_request_action->tune_result.target_rf_freq  = target_rf_freq;
+    tune_request_action->tune_result.actual_rf_freq  = actual_rf_freq;
+}
 
 /******************************************************************************
  * LO Default API
@@ -683,7 +839,7 @@ void radio_control_impl::set_rx_lo_source(
     throw uhd::not_implemented_error("set_rx_lo_source is not supported on this radio");
 }
 
-const std::string radio_control_impl::get_rx_lo_source(const std::string&, const size_t)
+std::string radio_control_impl::get_rx_lo_source(const std::string&, const size_t)
 {
     return "internal";
 }
@@ -730,7 +886,7 @@ void radio_control_impl::set_tx_lo_source(
 {
     throw uhd::not_implemented_error("set_tx_lo_source is not supported on this radio");
 }
-const std::string radio_control_impl::get_tx_lo_source(const std::string&, const size_t)
+std::string radio_control_impl::get_tx_lo_source(const std::string&, const size_t)
 {
     return "internal";
 }
@@ -767,7 +923,7 @@ void radio_control_impl::set_tx_dc_offset(const std::complex<double>&, size_t)
 
 uhd::meta_range_t radio_control_impl::get_tx_dc_offset_range(size_t) const
 {
-    return uhd::meta_range_t(0, 0);
+    return uhd::meta_range_t(0.0, 0.0);
 }
 
 void radio_control_impl::set_tx_iq_balance(const std::complex<double>&, size_t)
@@ -781,18 +937,19 @@ void radio_control_impl::set_rx_dc_offset(const bool enb, size_t)
     RFNOC_LOG_DEBUG("set_rx_dc_offset() has no effect on this radio");
     if (enb) {
         throw uhd::not_implemented_error(
-            "set_rx_dc_offset() is not supported on this radio");
+            "set_rx_dc_offset(bool) is not supported on this radio");
     }
 }
 
 void radio_control_impl::set_rx_dc_offset(const std::complex<double>&, size_t)
 {
-    throw uhd::not_implemented_error("set_rx_dc_offset() is not supported on this radio");
+    throw uhd::not_implemented_error(
+        "set_rx_dc_offset(complex) is not supported on this radio");
 }
 
 uhd::meta_range_t radio_control_impl::get_rx_dc_offset_range(size_t) const
 {
-    return uhd::meta_range_t(0, 0);
+    return uhd::meta_range_t(0.0, 0.0);
 }
 
 void radio_control_impl::set_rx_iq_balance(const bool enb, size_t)
@@ -800,7 +957,7 @@ void radio_control_impl::set_rx_iq_balance(const bool enb, size_t)
     RFNOC_LOG_DEBUG("set_rx_iq_balance() has no effect on this radio");
     if (enb) {
         throw uhd::not_implemented_error(
-            "set_rx_iq_balance() is not supported on this radio");
+            "set_rx_iq_balance(bool) is not supported on this radio");
     }
 }
 
@@ -894,15 +1051,14 @@ void radio_control_impl::issue_stream_cmd(
                               "zero samples");
             return;
         }
-        uint64_t num_words = stream_cmd.num_samps / _spc;
+        uint64_t num_words               = stream_cmd.num_samps / _spc;
         constexpr uint64_t max_num_words = 0x00FFFFFFFFFFFF; // 48 bits
         if (stream_cmd.num_samps % _spc != 0) {
             num_words++;
-            RFNOC_LOG_WARNING("The requested "
-                + std::to_string(stream_cmd.num_samps)
-                + " samples is not a multiple of the samples per cycle ("
-                + std::to_string(_spc) + "); returning "
-                + std::to_string(num_words * _spc) + " samples.");
+            RFNOC_LOG_WARNING("The requested " + std::to_string(stream_cmd.num_samps)
+                              + " samples is not a multiple of the samples per cycle ("
+                              + std::to_string(_spc) + "); returning "
+                              + std::to_string(num_words * _spc) + " samples.");
         }
         if (num_words > max_num_words) {
             RFNOC_LOG_ERROR("Requesting too many samples in a single burst! "
@@ -935,6 +1091,67 @@ void radio_control_impl::enable_rx_timestamps(const bool enable, const size_t ch
     _radio_reg_iface.poke32(regmap::REG_RX_HAS_TIME, enable ? 0x1 : 0x0, chan);
 }
 
+/****************************************************************************
+ * Tune Request API
+ ***************************************************************************/
+void radio_control_impl::_tune_request_action_handler(
+    tune_request_action_info::sptr tune_request_action, const res_source_info& src)
+{
+    RFNOC_LOG_TRACE("Received tune request on " << src.to_string());
+
+    res_source_info dst_edge{res_source_info::invert_edge(src.type), src.instance};
+    const size_t chan = src.instance;
+    freq_range_t tune_range_nonmono;
+    uhd::tune_request_t tune_request = tune_request_action->tune_request;
+
+    if (src.type == res_source_info::OUTPUT_EDGE) {
+        set_rx_tune_args(tune_request.args, chan);
+
+        tune_range_nonmono = (tune_request_action->dsp_range.empty())
+                                 ? get_rx_frequency_range(chan)
+                                 : make_overall_tune_range(get_rx_frequency_range(chan),
+                                     tune_request_action->dsp_range,
+                                     get_rx_bandwidth(chan));
+
+        tune_request_action->overall_freq_range = tune_range_nonmono.as_monotonic();
+        tune_request_action->rf_range           = get_rx_frequency_range(chan);
+
+        auto set_rf_freq = [this, chan](double freq) { set_rx_frequency(freq, chan); };
+        auto get_rf_freq = [this, chan]() { return get_rx_frequency(chan); };
+
+        apply_and_update_tune_request(tune_request_action, set_rf_freq, get_rf_freq);
+
+    } else if (src.type == res_source_info::INPUT_EDGE) {
+        set_tx_tune_args(tune_request.args, chan);
+
+        tune_range_nonmono = (tune_request_action->dsp_range.empty())
+                                 ? get_tx_frequency_range(chan)
+                                 : make_overall_tune_range(get_tx_frequency_range(chan),
+                                     tune_request_action->dsp_range,
+                                     get_tx_bandwidth(chan));
+
+        tune_request_action->overall_freq_range = tune_range_nonmono.as_monotonic();
+        tune_request_action->rf_range           = get_tx_frequency_range(chan);
+
+        auto set_rf_freq = [this, chan](double freq) { set_tx_frequency(freq, chan); };
+        auto get_rf_freq = [this, chan]() { return get_tx_frequency(chan); };
+
+        apply_and_update_tune_request(tune_request_action, set_rf_freq, get_rf_freq);
+    }
+
+    RFNOC_LOG_TRACE(
+        "Tune_result details radio_control.cpp : target_rf_frq = "
+        << tune_request_action->tune_result.target_rf_freq
+        << " target dsp freq = " << tune_request_action->tune_result.target_dsp_freq
+        << " clipped rf_freq " << tune_request_action->tune_result.clipped_rf_freq
+        << " actual_rf_freq = " << tune_request_action->tune_result.actual_rf_freq
+        << " actual dsp_freq= " << tune_request_action->tune_result.actual_dsp_freq);
+
+    RFNOC_LOG_TRACE("Sending tune_request to " << src.to_string()
+                                               << ", id==" << tune_request_action->id);
+    post_action(src, tune_request_action);
+}
+
 /******************************************************************************
  * Private methods
  *****************************************************************************/
@@ -945,8 +1162,8 @@ bool radio_control_impl::async_message_validator(
         return false;
     }
     // For these calculations, see below
-    const uint32_t addr_base = (addr >= regmap::SWREG_RX_ERR) ? regmap::SWREG_RX_ERR
-                                                              : regmap::SWREG_TX_ERR;
+    const uint32_t addr_base   = (addr >= regmap::SWREG_RX_ERR) ? regmap::SWREG_RX_ERR
+                                                                : regmap::SWREG_TX_ERR;
     const uint32_t chan        = (addr - addr_base) / regmap::SWREG_CHAN_OFFSET;
     const uint32_t addr_offset = addr % regmap::SWREG_CHAN_OFFSET;
     const uint32_t code        = data[0];
@@ -954,7 +1171,7 @@ bool radio_control_impl::async_message_validator(
         return false;
     }
     if (addr_base == regmap::SWREG_RX_ERR) {
-        if (chan > get_num_output_ports()) {
+        if (chan >= get_num_output_ports()) {
             return false;
         }
         switch (code) {
@@ -967,7 +1184,7 @@ bool radio_control_impl::async_message_validator(
         }
     }
     if (addr_base == regmap::SWREG_TX_ERR) {
-        if (chan > get_num_input_ports()) {
+        if (chan >= get_num_input_ports()) {
             return false;
         }
         switch (code) {
@@ -1000,10 +1217,10 @@ void radio_control_impl::async_message_handler(
     }
     // Reminder: The address is calculated as:
     // BASE + 64 * chan + addr_offset
-    // BASE == 0x0000 for RX, 0x1000 for TX
+    // BASE == 0x0000 for TX, 0x1000 for RX
     const uint32_t addr_base = (addr >= regmap::SWREG_RX_ERR) ? regmap::SWREG_RX_ERR
                                                               : regmap::SWREG_TX_ERR;
-    const uint32_t chan = (addr - addr_base) / regmap::SWREG_CHAN_OFFSET;
+    const uint32_t chan      = (addr - addr_base) / regmap::SWREG_CHAN_OFFSET;
     // Note: addr_offset is always going to be zero for now, because we only
     // have one "register" that gets hit for either RX or TX, but we'll keep it
     // in case we add other regs in the future
@@ -1020,7 +1237,7 @@ void radio_control_impl::async_message_handler(
     }
     switch (addr_base + addr_offset) {
         case regmap::SWREG_TX_ERR: {
-            if (chan > get_num_input_ports()) {
+            if (chan >= get_num_input_ports()) {
                 RFNOC_LOG_WARNING(
                     "Cannot process TX-related async message to invalid chan " << chan);
                 return;
@@ -1056,7 +1273,7 @@ void radio_control_impl::async_message_handler(
             break;
         }
         case regmap::SWREG_RX_ERR: {
-            if (chan > get_num_input_ports()) {
+            if (chan >= get_num_output_ports()) {
                 RFNOC_LOG_WARNING(
                     "Cannot process RX-related async message to invalid chan " << chan);
                 return;
@@ -1089,4 +1306,10 @@ void radio_control_impl::async_message_handler(
             RFNOC_LOG_WARNING(str(
                 boost::format("Received async message to invalid addr 0x%08X!") % addr));
     }
+}
+
+int radio_control_impl::get_max_spp(const size_t bytes)
+{
+    const int packet_samps = bytes / (_samp_width / 8);
+    return packet_samps - (packet_samps % _spc);
 }

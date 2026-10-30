@@ -4,31 +4,32 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 //
 
-#include "../rfnoc_graph_mock_nodes.hpp"
 #include <uhd/rfnoc/actions.hpp>
 #include <uhd/rfnoc/defaults.hpp>
+#include <uhd/rfnoc/detail/graph.hpp>
 #include <uhd/rfnoc/mock_block.hpp>
+#include <uhd/rfnoc/mock_nodes.hpp>
+#include <uhd/rfnoc/node_accessor.hpp>
 #include <uhd/rfnoc/switchboard_block_control.hpp>
-#include <uhdlib/rfnoc/graph.hpp>
-#include <uhdlib/rfnoc/node_accessor.hpp>
 #include <uhdlib/utils/narrow.hpp>
 #include <boost/test/unit_test.hpp>
 #include <iostream>
 
 using namespace uhd::rfnoc;
+using namespace uhd::rfnoc::test;
 
 // Redeclare this here, since it's only defined outside of UHD_API
 noc_block_base::make_args_t::~make_args_t() = default;
 
 /*
  * This class extends mock_reg_iface_t by adding poke and peek hooks that
- * monitor writes and reads to the registers implemented within the 
+ * monitor writes and reads to the registers implemented within the
  * Switchboard RFNoC block hardware and emulating the expected behavior of
  * the hardware when those registers are read and written.
  */
-const size_t NUM_INPUTS             = 4;
-const size_t NUM_OUTPUTS            = 4;
-constexpr size_t DEFAULT_MTU        = 8000;
+const size_t NUM_INPUTS      = 4;
+const size_t NUM_OUTPUTS     = 4;
+constexpr size_t DEFAULT_MTU = 8000;
 
 class switchboard_mock_reg_iface_t : public mock_reg_iface_t
 {
@@ -36,9 +37,9 @@ public:
     switchboard_mock_reg_iface_t()
     {
         for (size_t in = 0; in < NUM_INPUTS; in++)
-            output_select.push_back(0);  
+            output_select.push_back(0);
         for (size_t out = 0; out < NUM_OUTPUTS; out++)
-            input_select.push_back(0); 
+            input_select.push_back(0);
     }
 
     void _poke_cb(
@@ -116,10 +117,8 @@ BOOST_FIXTURE_TEST_CASE(swboard_test_connect, switchboard_block_fixture)
     for (size_t i = 0; i < NUM_INPUTS; i++) {
         for (size_t o = 0; o < NUM_OUTPUTS; o++) {
             test_switchboard->connect(i, o);
-            BOOST_CHECK_EQUAL(
-                reg_iface->output_select.at(i), o);
-            BOOST_CHECK_EQUAL(
-                reg_iface->input_select.at(o), i);
+            BOOST_CHECK_EQUAL(reg_iface->output_select.at(i), o);
+            BOOST_CHECK_EQUAL(reg_iface->input_select.at(o), i);
         }
     }
 }

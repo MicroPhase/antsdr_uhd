@@ -5,10 +5,17 @@
 //
 
 #include "x300_impl.hpp"
+#include "x300_regs.hpp"
 #include <uhdlib/rfnoc/device_id.hpp>
 
 using namespace uhd::rfnoc;
 using uhd::transport::link_type_t;
+
+namespace {
+// This is the first compat number that added remote streaming capabilities
+constexpr uhd::compat_num32 MIN_FPGA_COMPAT_TA_CONTROL{7, 3};
+constexpr uhd::compat_num32 MIN_FW_COMPAT_TA_ARP{6, 1};
+} // namespace
 
 static uhd::usrp::io_service_args_t get_default_io_srv_args()
 {
@@ -21,14 +28,20 @@ static uhd::usrp::io_service_args_t get_default_io_srv_args()
 }
 
 x300_impl::x300_mb_iface::x300_mb_iface(uhd::usrp::x300::conn_manager::sptr conn_mgr,
+    uhd::wb_iface::sptr zpu_ctrl,
     const double radio_clk_freq,
-    const uhd::rfnoc::device_id_t remote_dev_id)
+    const uhd::rfnoc::device_id_t remote_dev_id,
+    const uhd::compat_num32 fpga_compat,
+    const uhd::compat_num32 fw_compat)
     : _remote_dev_id(remote_dev_id)
+    , _fpga_compat(fpga_compat)
+    , _fw_compat(fw_compat)
     , _bus_clk(std::make_shared<uhd::rfnoc::clock_iface>(
           "bus_clk", uhd::usrp::x300::BUS_CLOCK_RATE, false))
     , _radio_clk(
           std::make_shared<uhd::rfnoc::clock_iface>("radio_clk", radio_clk_freq, false))
     , _conn_mgr(conn_mgr)
+    , _zpu_ctrl(zpu_ctrl)
 {
     UHD_ASSERT_THROW(_conn_mgr);
     _bus_clk->set_running(true);
@@ -37,16 +50,53 @@ x300_impl::x300_mb_iface::x300_mb_iface(uhd::usrp::x300::conn_manager::sptr conn
 
 x300_impl::x300_mb_iface::~x300_mb_iface() = default;
 
+void x300_impl::x300_mb_iface::init()
+{
+    const uint32_t rfnoc_info = _zpu_ctrl->peek32(SR_ADDR(SET0_BASE, ZPU_RB_RFNOC_INFO));
+    _rfnoc_proto_ver          = ZPU_RB_RFNOC_INFO_PROTOVER(rfnoc_info);
+    const size_t chdr_width   = ZPU_RB_RFNOC_INFO_CHDR_WIDTH(rfnoc_info);
+    _chdr_width               = bits_to_chdr_w(chdr_width);
+    const bool has_arp        = (_fw_compat >= MIN_FW_COMPAT_TA_ARP);
+    if (_fpga_compat >= MIN_FPGA_COMPAT_TA_CONTROL) {
+        _sfp_adapter_ctrl.insert({"sfp0",
+            uhd::usrp::xport_adapter_ctrl(
+                [this](const uint32_t addr, const uint32_t data) {
+                    this->_zpu_ctrl->poke32(
+                        SR_ADDR(SET0_BASE, ZPU_SR_SFP0_ADAPTER) + addr, data);
+                },
+                [this](const uint32_t addr) {
+                    return this->_zpu_ctrl->peek32(
+                        SR_ADDR(SET0_BASE, ZPU_SR_SFP0_ADAPTER) + addr);
+                },
+                has_arp,
+                "X300::SFP0::TA_CTL")});
+        _sfp_adapter_ctrl.insert({"sfp1",
+            uhd::usrp::xport_adapter_ctrl(
+                [this](const uint32_t addr, const uint32_t data) {
+                    this->_zpu_ctrl->poke32(
+                        SR_ADDR(SET0_BASE, ZPU_SR_SFP1_ADAPTER) + addr, data);
+                },
+                [this](const uint32_t addr) {
+                    return this->_zpu_ctrl->peek32(
+                        SR_ADDR(SET0_BASE, ZPU_SR_SFP1_ADAPTER) + addr);
+                },
+                has_arp,
+                "X300::SFP1::TA_CTL")});
+    } else {
+        UHD_LOG_DEBUG("X300",
+            "No transport control capabilities detected."
+            "Upgrade FPGA bitfile to enable advanced transport control capabilities.");
+    }
+}
+
 uint16_t x300_impl::x300_mb_iface::get_proto_ver()
 {
-    // TODO: Get from from a hardware register
-    return 0x0100;
+    return _rfnoc_proto_ver;
 }
 
 uhd::rfnoc::chdr_w_t x300_impl::x300_mb_iface::get_chdr_w()
 {
-    // TODO: Get from from a hardware register
-    return uhd::rfnoc::CHDR_W_64;
+    return _chdr_width;
 }
 
 uhd::endianness_t x300_impl::x300_mb_iface::get_endianness(
@@ -78,7 +128,7 @@ void x300_impl::x300_mb_iface::reset_network()
 }
 
 uhd::rfnoc::clock_iface::sptr x300_impl::x300_mb_iface::get_clock_iface(
-    const std::string& clock_name)
+    const std::string& clock_name, const uint8_t)
 {
     if (clock_name == "radio_clk") {
         return _radio_clk;
@@ -116,7 +166,7 @@ uhd::rfnoc::chdr_ctrl_xport::sptr x300_impl::x300_mb_iface::make_ctrl_transport(
     auto io_srv =
         get_io_srv_mgr()->connect_links(recv_link, send_link, link_type_t::CTRL);
     auto io_srv_mgr = this->get_io_srv_mgr();
-    auto xport = chdr_ctrl_xport::make(io_srv,
+    auto xport      = chdr_ctrl_xport::make(io_srv,
         send_link,
         recv_link,
         _pkt_factory,
@@ -203,6 +253,7 @@ uhd::rfnoc::chdr_rx_data_xport::uptr x300_impl::x300_mb_iface::make_rx_data_tran
         fc_freq,
         fc_headroom,
         lossy_xport,
+        xport_args,
         [io_srv_mgr, recv_link, send_link]() {
             io_srv_mgr->disconnect_links(recv_link, send_link);
         });
@@ -274,7 +325,7 @@ uhd::rfnoc::chdr_tx_data_xport::uptr x300_impl::x300_mb_iface::make_tx_data_tran
 
     auto io_srv_mgr = this->get_io_srv_mgr();
 
-    const auto buff_capacity = chdr_tx_data_xport::configure_sep(cfg_io_srv,
+    const auto [fc_params, strc_pyld] = chdr_tx_data_xport::configure_sep(cfg_io_srv,
         recv_link,
         send_link,
         _pkt_factory,
@@ -282,6 +333,7 @@ uhd::rfnoc::chdr_tx_data_xport::uptr x300_impl::x300_mb_iface::make_tx_data_tran
         epids,
         pyld_buff_fmt,
         mdata_buff_fmt,
+        xport_args,
         fc_freq_ratio,
         fc_headroom_ratio,
         [io_srv_mgr, recv_link, send_link]() {
@@ -305,10 +357,45 @@ uhd::rfnoc::chdr_tx_data_xport::uptr x300_impl::x300_mb_iface::make_tx_data_tran
         _pkt_factory,
         epids,
         send_link->get_num_send_frames(),
-        buff_capacity,
+        fc_params,
+        strc_pyld,
         [io_srv_mgr, recv_link, send_link]() {
             io_srv_mgr->disconnect_links(recv_link, send_link);
         });
 
     return tx_xport;
+}
+
+
+std::map<std::string, uhd::device_addr_t>
+x300_impl::x300_mb_iface::get_chdr_xport_adapters()
+{
+    std::map<std::string, uhd::device_addr_t> return_val;
+    for (auto& adapter_info : _sfp_adapter_ctrl) {
+        return_val.insert({adapter_info.first, adapter_info.second.get_capabilities()});
+    }
+    return return_val;
+}
+
+int x300_impl::x300_mb_iface::add_remote_chdr_route(const std::string& adapter_id,
+    const uhd::rfnoc::sep_id_t epid,
+    const uhd::device_addr_t& route_args)
+{
+    if (_fpga_compat < MIN_FPGA_COMPAT_TA_CONTROL) {
+        UHD_LOG_THROW(uhd::not_implemented_error,
+            "X300",
+            "FPGA bitfile does not support adding remote streaming routes!");
+    }
+    if (!_sfp_adapter_ctrl.count(adapter_id)) {
+        UHD_LOG_THROW(uhd::not_implemented_error,
+            "X300",
+            "Invalid adapter name for remote streaming: " << adapter_id);
+    }
+    _sfp_adapter_ctrl.at(adapter_id)
+        .add_remote_ep_route(epid,
+            route_args.get("dest_addr", ""),
+            route_args.get("dest_port", ""),
+            route_args.get("dest_mac_addr", ""),
+            route_args.get("stream_mode", ""));
+    return 0;
 }

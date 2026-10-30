@@ -194,7 +194,7 @@ public:
     void push_finalizer(void (*func)(void*), void* data);
 
     template <typename T>
-    void push_finalizer(clmdep_msgpack::unique_ptr<T> obj);
+    void push_finalizer(std::unique_ptr<T> obj);
 
     void clear();
 
@@ -220,7 +220,7 @@ public:
     }
 
     template <typename T, typename... Args>
-    T* allocate(Args... args);
+    T* allocate(Args&&... args);
 
     zone(zone&&) = default;
     zone& operator=(zone&&) = default;
@@ -307,7 +307,7 @@ inline void zone::push_finalizer(void (*func)(void*), void* data)
 }
 
 template <typename T>
-inline void zone::push_finalizer(clmdep_msgpack::unique_ptr<T> obj)
+inline void zone::push_finalizer(std::unique_ptr<T> obj)
 {
     m_finalizer_array.push(&zone::object_delete<T>, obj.release());
 }
@@ -343,7 +343,7 @@ inline void zone::undo_allocate(size_t size)
 
 
 template <typename T, typename... Args>
-T* zone::allocate(Args... args)
+T* zone::allocate(Args&&... args)
 {
     void* x = allocate_align(sizeof(T));
     try {
@@ -353,7 +353,7 @@ T* zone::allocate(Args... args)
         throw;
     }
     try {
-        return new (x) T(args...);
+        return new (x) T(std::forward<Args>(args)...);
     } catch (...) {
         --m_finalizer_array.m_tail;
         undo_allocate(sizeof(T));
