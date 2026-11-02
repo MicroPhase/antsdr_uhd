@@ -45,7 +45,7 @@ vivado_pid*.str
 *.su
 
 build/
-
+docs/superpowers
 # Packaged firmware images
 /firmware/build_sdimg/
 xsim.dir/
