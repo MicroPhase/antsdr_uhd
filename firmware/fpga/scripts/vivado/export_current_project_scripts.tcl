@@ -150,14 +150,19 @@ foreach bd [get_files -quiet -filter {FILE_TYPE == "Block Designs"}] {
     if {[string first "/ip/" [string map {\\ /} $path]] < 0} { lappend bd_files $path }
 }
 set bd_files [lsort -unique $bd_files]
-if {[llength $bd_files] != 1} {
-    error "expected exactly one top-level block design, found [llength $bd_files]: $bd_files"
+if {[llength $bd_files] > 1} {
+    error "expected at most one top-level block design, found [llength $bd_files]: $bd_files"
 }
-set bd_file [lindex $bd_files 0]
-open_bd_design $bd_file
-set bd_name [get_property NAME [current_bd_design]]
-set generated_bd [file join $out_dir "${bd_name}.tcl"]
-write_bd_tcl -force $generated_bd
+# RTL-only products such as U220 do not have a Block Design to export.
+set bd_file ""
+set generated_bd ""
+if {[llength $bd_files] == 1} {
+    set bd_file [lindex $bd_files 0]
+    open_bd_design $bd_file
+    set bd_name [get_property NAME [current_bd_design]]
+    set generated_bd [file join $out_dir "${bd_name}.tcl"]
+    write_bd_tcl -force $generated_bd
+}
 
 set hdl_exts [list ".v" ".sv" ".vh" ".svh" ".vhd" ".vhdl" ".ngc" ".edf" ".edif" ".mem" ".mif" ".coe"]
 set ip_exts [list ".xci" ".xcix"]
@@ -205,15 +210,19 @@ foreach item $ip_repos { puts $stream "  $item" }
 close $stream
 
 puts "Generated project-state review files:"
-puts "  $generated_bd"
+if {$generated_bd ne ""} { puts "  $generated_bd" }
 puts "  $generated_sources"
 puts "  $report"
 
 if {$apply eq "1"} {
-    set bd_target [file join $product_dir bd "${bd_name}.tcl"]
     set sources_target [file join $product_dir scripts vivado "create_${target}_sources.tcl"]
+    set apply_pairs [list [list $generated_sources $sources_target]]
+    if {$generated_bd ne ""} {
+        set bd_target [file join $product_dir bd "${bd_name}.tcl"]
+        lappend apply_pairs [list $generated_bd $bd_target]
+    }
     file mkdir [file join $out_dir backup]
-    foreach pair [list [list $generated_bd $bd_target] [list $generated_sources $sources_target]] {
+    foreach pair $apply_pairs {
         set generated [lindex $pair 0]
         set destination [lindex $pair 1]
         if {[file exists $destination]} {

@@ -56,3 +56,31 @@ project are exported instead of being silently replaced by the scripted
 project. Review the generated files and rerun with `--apply` to replace the
 tracked `bd/e200_ps_bd.tcl` and `scripts/vivado/create_e200_sources.tcl`.
 E310V2 uses the same command in its product directory.
+
+## U220 FPGA project
+
+The U220 200T FPGA project is maintained under `u220/` using the same
+reproducible Vivado layout as the E200 and E310V2 projects. U220 keeps its
+B200-compatible top-level RTL, main clock and FIFO IP, and board constraints.
+The default U220 image uses on-chip FIFOs and the FX3/GPIF USB path; the
+historical DDR3/VFIFO test subsystem is excluded. GPS and PPS/reference
+logic are retained. Shared HDL is referenced from `lib/`.
+
+The target is Vivado 2019.1 and `xc7a200tfbg484-2`. To create and build the
+project:
+
+```sh
+cd firmware/fpga/u220
+make project
+make bitstream
+make rebuild
+make export
+```
+
+U220 does not require a Block Design or HDF. Its artifacts are
+`artifacts/antsdr_u220.bit`, `artifacts/antsdr_u220.bin`, and an optional LTX.
+Recreate any older DDR-enabled project with `make rebuild` before building.
+
+Generated Vivado projects and artifacts are ignored. Only the explicit source
+manifest, Tcl recipes, IP configuration, constraints, and product-specific
+RTL are tracked.

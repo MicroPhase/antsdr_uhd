@@ -149,8 +149,10 @@ private:
         }
 
         static const std::regex servo_regex("^\\d\\d-\\d\\d-\\d\\d.*$");
-        static const std::regex gp_msg_regex("^\\$GP.*,\\*[0-9A-F]{2}$");
-        static const std::regex gn_msg_regex("^\\$GN.*,\\*[0-9A-F]{2}$");
+        // The final NMEA field may be populated (e.g. RMC mode A/N).
+        // A comma immediately before the checksum is not required.
+        static const std::regex gp_msg_regex("^\\$GP[A-Z]{3},[^*]*\\*[0-9A-F]{2}$");
+        static const std::regex gn_msg_regex("^\\$GN[A-Z]{3},[^*]*\\*[0-9A-F]{2}$");
         std::map<std::string, std::string> msgs;
 
         // Get all GPSDO messages available

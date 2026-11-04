@@ -102,3 +102,8 @@ _vmake
 /antsdr_*/artifacts/
 /antsdr_*/scripts/vivado/generated/
 .ngc2edfcache/
+
+# U220 generated project and artifacts.
+/u220/vivado/
+/u220/artifacts/
+/u220/scripts/vivado/generated/
