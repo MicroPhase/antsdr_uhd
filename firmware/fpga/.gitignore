@@ -107,3 +107,8 @@ _vmake
 /u220/vivado/
 /u220/artifacts/
 /u220/scripts/vivado/generated/
+
+# U220 100T generated project and artifacts.
+/u220-100t/vivado/
+/u220-100t/artifacts/
+/u220-100t/scripts/vivado/generated/

@@ -1,0 +1,5 @@
+# Track standalone vendor IP configurations, not Vivado output products.
+*
+!*/
+!*.xci
+!.gitignore

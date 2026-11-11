@@ -1,0 +1,22 @@
+cmake_minimum_required(VERSION 3.12)
+project(u220_sync_demo LANGUAGES CXX)
+
+find_package(PkgConfig REQUIRED)
+pkg_check_modules(UHD REQUIRED IMPORTED_TARGET uhd)
+find_package(Threads REQUIRED)
+
+foreach(mode IN ITEMS 10m pps gps)
+    add_executable(u220_test_${mode} test_${mode}.cpp)
+    target_compile_features(u220_test_${mode} PRIVATE cxx_std_17)
+    target_link_libraries(u220_test_${mode} PRIVATE PkgConfig::UHD Threads::Threads)
+endforeach()
+
+include(CTest)
+if(BUILD_TESTING)
+    add_executable(check_measurements check_measurements.cpp)
+    target_compile_features(check_measurements PRIVATE cxx_std_17)
+    add_test(NAME measurement_checks COMMAND check_measurements)
+    foreach(mode IN ITEMS 10m pps gps)
+        add_test(NAME ${mode}_help COMMAND u220_test_${mode} --help)
+    endforeach()
+endif()

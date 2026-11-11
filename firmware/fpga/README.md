@@ -84,3 +84,17 @@ Recreate any older DDR-enabled project with `make rebuild` before building.
 Generated Vivado projects and artifacts are ignored. Only the explicit source
 manifest, Tcl recipes, IP configuration, constraints, and product-specific
 RTL are tracked.
+
+## U220 100T FPGA project
+
+The `u220-100t/` variant targets Vivado 2019.1 and `xc7a100tfgg484-2`.
+It shares the U220 RTL and board constraints, with independent 100T IP
+configuration, project, and artifacts.
+
+```sh
+cd firmware/fpga/u220-100t
+make project
+make bitstream
+```
+
+See `u220-100t/README.md` for the project and output paths.
