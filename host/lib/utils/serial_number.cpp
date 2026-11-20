@@ -8,6 +8,7 @@
 #include <cstdint>
 #include <stdexcept>
 #include <string>
+#include <cstdint>
 
 namespace uhd { namespace utils {
    bool serial_numbers_match(const std::string& serial_a, const std::string& serial_b)
