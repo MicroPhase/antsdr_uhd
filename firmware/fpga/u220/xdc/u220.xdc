@@ -225,7 +225,11 @@ create_clock -period 25.000 -name codec_main_clk -waveform {0.000 12.500} [get_p
 create_generated_clock -name codec_fb_clk_p -source [get_pins u_antsdr_e200_io/oddr_clk/C] -multiply_by 1 [get_ports codec_fb_clk_p]
 create_generated_clock -name ifclk -source [get_pins gen_clks/CLK_OUT2_100_gpif] -multiply_by 1 [get_ports IFCLK]
 
-set_clock_groups -asynchronous -group [get_clocks codec_data_clk_p] -group [get_clocks -of_objects [get_pins u_antsdr_e200_io/BUFR_inst/O]]
+# The divided clock from BUFR_inst is derived from codec_data_clk_p and is
+# edge-aligned with it, so the two are synchronous. The sample registers in
+# antsdr_u205_io cross between them without a synchronizer, and that crossing
+# must be timed (setup and hold). Do not put these two clocks in an
+# asynchronous clock group.
 
 create_generated_clock -name clk_40_int -source [get_pins u_ppsloop/codec_main_clk_IBUF] -multiply_by 1 -add -master_clock codec_main_clk [get_pins u_ppsloop/x_clk_gen_40/O]
 
@@ -236,6 +240,14 @@ set_clock_groups -asynchronous -group [get_clocks -of_objects [get_pins u_antsdr
 set_clock_groups -asynchronous -group [get_clocks -of_objects [get_pins gen_clks/inst/mmcm_adv_inst/CLKOUT2]] -group [get_clocks codec_data_clk_p]
 set_clock_groups -asynchronous -group [get_clocks -of_objects [get_pins gen_clks/inst/mmcm_adv_inst/CLKOUT2]] -group [get_clocks -of_objects [get_pins u_antsdr_e200_io/BUFR_inst/O]]
 set_clock_groups -name async_clk0_clk1 -asynchronous -group [get_clocks -include_generated_clocks codec_data_clk_p] -group [get_clocks -include_generated_clocks codec_main_clk]
+
+# radio_clk comes from a BUFGMUX that selects either the 1x codec clock (SISO)
+# or the divide-by-two clock (MIMO). Name both and mark them as never present
+# at the same time, so that only paths that can really occur are timed.
+create_generated_clock -name radio_clk_siso -source [get_pins u_antsdr_e200_io/BUFGMUX_inst/I0] -divide_by 1 -master_clock codec_data_clk_p -add [get_pins u_antsdr_e200_io/BUFGMUX_inst/O]
+create_generated_clock -name radio_clk_mimo -source [get_pins u_antsdr_e200_io/BUFGMUX_inst/I1] -divide_by 1 -master_clock rx_clk_mimo_bufr -add [get_pins u_antsdr_e200_io/BUFGMUX_inst/O]
+set_clock_groups -physically_exclusive -group [get_clocks radio_clk_siso] -group [get_clocks radio_clk_mimo]
+set_clock_groups -asynchronous -group [get_clocks {radio_clk_siso radio_clk_mimo}] -group [get_clocks -of_objects [get_pins gen_clks/inst/mmcm_adv_inst/CLKOUT2]]
 
 set_false_path -from [get_clocks -of_objects [get_pins u_ppsloop/clkgen/CLKOUT0]] -to [get_clocks -of_objects [get_pins gen_clks/inst/mmcm_adv_inst/CLKOUT2]]
 
