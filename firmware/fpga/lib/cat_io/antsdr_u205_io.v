@@ -80,15 +80,25 @@ module antsdr_u205_io (
     .C(rx_clk_bufr), .CE(1'b1), .R(1'b0), .S(1'b0),
     .D(rx_frame), .Q1(rx_frame_rising), .Q2(rx_frame_falling));
 
+  // In MIMO mode the channel 0 sample is held until the channel 1 sample
+  // arrives, and all four outputs are then updated on the same rx_clk_bufr
+  // edge. radio_clk is rx_clk divided by two with an arbitrary phase relative
+  // to rx_frame, so it can sample these outputs on either rx_clk_bufr edge.
+  // Updating both channels together means it always sees a matching pair,
+  // and the crossing into radio_clk is a timed, synchronous one (see the
+  // clock constraints: the two clocks must not be declared asynchronous).
+  reg [11:0] rx_i0_hold, rx_q0_hold;
   always @(posedge rx_clk_bufr or posedge radio_rst) begin
     if (radio_rst) begin
       rx_stb <= 1'b0;
     end else begin
       if (mimo_sync) begin
         if (rx_frame_rising) begin
-          rx_i0 <= rx_i;
-          rx_q0 <= rx_q;
+          rx_i0_hold <= rx_i;
+          rx_q0_hold <= rx_q;
         end else begin
+          rx_i0 <= rx_i0_hold;
+          rx_q0 <= rx_q0_hold;
           rx_i1 <= rx_i;
           rx_q1 <= rx_q;
         end
